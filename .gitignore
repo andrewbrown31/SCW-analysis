@@ -1,3 +1,4 @@
-figs/*
+figs/
+SHARPpy/
 *.csv
 *.pyc

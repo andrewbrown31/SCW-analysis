@@ -18,55 +18,82 @@ from plot_param import plot_param
 from calc_param import *
 from barra_read import date_seq
 
-def read_erai(domain,time):
-	#Open ERA-Interim netcdf files and extract variables needed for a single time point and given spatial domain
+def read_erai(domain,times):
+	#Open ERA-Interim netcdf files and extract variables needed for a range of times and given spatial domain
+	#Option to also use one time (include hour)
 
 	ref = dt.datetime(1900,1,1,0,0,0)
-	time_hours = (time - ref).total_seconds() / (3600)
+	if len(times) > 1:
+		date_list = date_seq(times)
+	else:
+		date_list = times
+	formatted_dates = [format_dates(x) for x in date_list]
+	unique_dates = np.unique(formatted_dates)
+	time_hours = np.empty(len(date_list))
+	for t in np.arange(0,len(date_list)):
+		time_hours[t] = (date_list[t] - ref).total_seconds() / (3600)
 
-	#Load ERA-Interim reanalysis files
-	ta_file = nc.Dataset(glob.glob("/g/data/ub4/erai/netcdf/6hr/atmos/oper_an_pl/v01/ta/\
-ta_6hrs_ERAI_historical_an-pl_"+dt.datetime.strftime(time,"%Y%m")+"*.nc")[0])
-	z_file = nc.Dataset(glob.glob("/g/data/ub4/erai/netcdf/6hr/atmos/oper_an_pl/v01/z/\
-z_6hrs_ERAI_historical_an-pl_"+dt.datetime.strftime(time,"%Y%m")+"*.nc")[0])
-	ua_file = nc.Dataset(glob.glob("/g/data/ub4/erai/netcdf/6hr/atmos/oper_an_pl/v01/ua/\
-ua_6hrs_ERAI_historical_an-pl_"+dt.datetime.strftime(time,"%Y%m")+"*.nc")[0])
-	va_file = nc.Dataset(glob.glob("/g/data/ub4/erai/netcdf/6hr/atmos/oper_an_pl/v01/va/\
-va_6hrs_ERAI_historical_an-pl_"+dt.datetime.strftime(time,"%Y%m")+"*.nc")[0])
-	hur_file = nc.Dataset(glob.glob("/g/data/ub4/erai/netcdf/6hr/atmos/oper_an_pl/v01/hur/\
-hur_6hrs_ERAI_historical_an-pl_"+dt.datetime.strftime(time,"%Y%m")+"*.nc")[0])
-	uas_file = nc.Dataset(glob.glob("/g/data/ub4/erai/netcdf/6hr/atmos/oper_an_sfc/v01/uas/\
-uas_6hrs_ERAI_historical_an-sfc_"+dt.datetime.strftime(time,"%Y%m")+"*.nc")[0])
-	vas_file = nc.Dataset(glob.glob("/g/data/ub4/erai/netcdf/6hr/atmos/oper_an_sfc/v01/vas/\
-vas_6hrs_ERAI_historical_an-sfc_"+dt.datetime.strftime(time,"%Y%m")+"*.nc")[0])
-
-	lon = ta_file["lon"][:]
-	lat = ta_file["lat"][:]
-	times = ta_file["time"][:]
-	p = ta_file["lev"][:]/100
-	p_ind = np.where(p>=100)[0]
+	#Get time-invariant pressure and spatial info
+	no_p, p, p_ind = get_pressure(100)
+	p = p[p_ind]
+	lon,lat = get_lat_lon()
 	lon_ind = np.where((lon >= domain[2]) & (lon <= domain[3]))[0]
 	lat_ind = np.where((lat >= domain[0]) & (lat <= domain[1]))[0]
-	time_ind = np.where(time_hours==times)[0]
-	ta = ta_file["ta"][time_ind,p_ind,lat_ind,lon_ind] - 273.15
-	ua = ua_file["ua"][time_ind,p_ind,lat_ind,lon_ind]
-	va = va_file["va"][time_ind,p_ind,lat_ind,lon_ind]
-	hgt = z_file["z"][time_ind,p_ind,lat_ind,lon_ind] / 9.8
-	hur = hur_file["hur"][time_ind,p_ind,lat_ind,lon_ind]
-	hur[hur<0] = 0
-	dp = get_dp(ta,hur)
-	uas = uas_file["uas"][time_ind,lat_ind,lon_ind]
-	vas = vas_file["vas"][time_ind,lat_ind,lon_ind]
 	lon = lon[lon_ind]
 	lat = lat[lat_ind]
-	p = p[p_ind]
-	ta_file.close();z_file.close();ua_file.close();va_file.close();hur_file.close();uas_file.close();vas_file.close()
-	
-	return [ta,dp,hgt,p,ua,va,uas,vas,lon,lat]
-	
-def read_erai_mf(points,times):
 
-	#Open ERA-Interim netcdf files and extract variables needed for a multiple files/times given set of spatial points
+	#Initialise arrays for each variable
+	ta = np.empty((len(date_list),no_p,len(lat_ind),len(lon_ind)))
+	dp = np.empty((len(date_list),no_p,len(lat_ind),len(lon_ind)))
+	hur = np.empty((len(date_list),no_p,len(lat_ind),len(lon_ind)))
+	hgt = np.empty((len(date_list),no_p,len(lat_ind),len(lon_ind)))
+	ua = np.empty((len(date_list),no_p,len(lat_ind),len(lon_ind)))
+	va = np.empty((len(date_list),no_p,len(lat_ind),len(lon_ind)))
+	uas = np.empty((len(date_list),len(lat_ind),len(lon_ind)))
+	vas = np.empty((len(date_list),len(lat_ind),len(lon_ind)))
+
+	for date in unique_dates:
+		print(date)
+
+	#Load ERA-Interim reanalysis files
+		ta_file = nc.Dataset(glob.glob("/g/data/ub4/erai/netcdf/6hr/atmos/oper_an_pl/v01/ta/\
+ta_6hrs_ERAI_historical_an-pl_"+date+"*.nc")[0])
+		z_file = nc.Dataset(glob.glob("/g/data/ub4/erai/netcdf/6hr/atmos/oper_an_pl/v01/z/\
+z_6hrs_ERAI_historical_an-pl_"+date+"*.nc")[0])
+		ua_file = nc.Dataset(glob.glob("/g/data/ub4/erai/netcdf/6hr/atmos/oper_an_pl/v01/ua/\
+ua_6hrs_ERAI_historical_an-pl_"+date+"*.nc")[0])
+		va_file = nc.Dataset(glob.glob("/g/data/ub4/erai/netcdf/6hr/atmos/oper_an_pl/v01/va/\
+va_6hrs_ERAI_historical_an-pl_"+date+"*.nc")[0])
+		hur_file = nc.Dataset(glob.glob("/g/data/ub4/erai/netcdf/6hr/atmos/oper_an_pl/v01/hur/\
+hur_6hrs_ERAI_historical_an-pl_"+date+"*.nc")[0])
+		uas_file = nc.Dataset(glob.glob("/g/data/ub4/erai/netcdf/6hr/atmos/oper_an_sfc/v01/uas/\
+uas_6hrs_ERAI_historical_an-sfc_"+date+"*.nc")[0])
+		vas_file = nc.Dataset(glob.glob("/g/data/ub4/erai/netcdf/6hr/atmos/oper_an_sfc/v01/vas/\
+vas_6hrs_ERAI_historical_an-sfc_"+date+"*.nc")[0])
+
+		#Get times to load in from file
+		times = ta_file["time"][:]
+		time_ind = [np.where(x==times)[0][0] for x in time_hours if (x in times)]
+		date_ind = np.where(np.array(formatted_dates) == date)[0]
+
+		#Load data
+		ta[date_ind,:,:,:] = ta_file["ta"][time_ind,p_ind,lat_ind,lon_ind] - 273.15
+		ua[date_ind,:,:,:] = ua_file["ua"][time_ind,p_ind,lat_ind,lon_ind]
+		va[date_ind,:,:,:] = va_file["va"][time_ind,p_ind,lat_ind,lon_ind]
+		hgt[date_ind,:,:,:] = z_file["z"][time_ind,p_ind,lat_ind,lon_ind] / 9.8
+		hur[date_ind,:,:,:] = hur_file["hur"][time_ind,p_ind,lat_ind,lon_ind]
+		hur[hur<0] = 0
+		dp[date_ind,:,:,:] = get_dp(ta[date_ind,:,:,:],hur[date_ind,:,:,:])
+		uas[date_ind,:,:] = uas_file["uas"][time_ind,lat_ind,lon_ind]
+		vas[date_ind,:,:] = vas_file["vas"][time_ind,lat_ind,lon_ind]
+
+		ta_file.close();z_file.close();ua_file.close();va_file.close();hur_file.close();uas_file.close();vas_file.close()
+	
+	return [ta,dp,hgt,p,ua,va,uas,vas,lon,lat,date_list]
+	
+def read_erai_points(points,times):
+
+	#Open ERA-Interim netcdf files and extract variables needed for a range of times at a given set of spatial points
 
 	#Format dates and times
 	ref = dt.datetime(1900,1,1,0,0,0)

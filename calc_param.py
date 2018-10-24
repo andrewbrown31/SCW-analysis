@@ -23,100 +23,107 @@ def get_dp(ta,hur):
 	alpha = ((a * ta) / (b + ta)) + np.log(hur/100.0)
 	return (b*alpha) / (a - alpha)
 
-def get_point(point,lon,lat,ta,dp,hgt,ua,va,uas,vas,model):
+def get_point(point,lon,lat,ta,dp,hgt,ua,va,uas,vas):
 	# Return 1d arrays for all variables, at a given spatial point (now a function of p-level only)
-	if model == "barra":
-		lon_ind = np.argmin(abs(lon-point[0]))
-		lat_ind = np.argmin(abs(lat-point[1]))
-		ta = np.squeeze(ta[:,lat_ind,lon_ind])
-		dp = np.squeeze(dp[:,lat_ind,lon_ind])
-		hgt = np.squeeze(hgt[:,lat_ind,lon_ind])
-		ua = np.squeeze(ua[:,lat_ind,lon_ind])
-		va = np.squeeze(va[:,lat_ind,lon_ind])
-		uas = np.squeeze(uas[lat_ind,lon_ind])
-		vas = np.squeeze(vas[lat_ind,lon_ind])
-	elif model == "erai":
-		lon_ind = np.argmin(abs(lon-point[0]))
-		lat_ind = np.argmin(abs(lat-point[1]))
-		ta = np.squeeze(ta[:,:,lat_ind,lon_ind])
-		dp = np.squeeze(dp[:,:,lat_ind,lon_ind])
-		hgt = np.squeeze(hgt[:,:,lat_ind,lon_ind])
-		ua = np.squeeze(ua[:,:,lat_ind,lon_ind])
-		va = np.squeeze(va[:,:,lat_ind,lon_ind])
-		uas = np.squeeze(uas[:,lat_ind,lon_ind])
-		vas = np.squeeze(vas[:,lat_ind,lon_ind])
+	lon_ind = np.argmin(abs(lon-point[0]))
+	lat_ind = np.argmin(abs(lat-point[1]))
+	ta = np.squeeze(ta[:,lat_ind,lon_ind])
+	dp = np.squeeze(dp[:,lat_ind,lon_ind])
+	hgt = np.squeeze(hgt[:,lat_ind,lon_ind])
+	ua = np.squeeze(ua[:,lat_ind,lon_ind])
+	va = np.squeeze(va[:,lat_ind,lon_ind])
+	uas = np.squeeze(uas[lat_ind,lon_ind])
+	vas = np.squeeze(vas[lat_ind,lon_ind])
+
 	return [ta,dp,hgt,ua,va,uas,vas]
 
-def calc_param(ta,dp,hgt,p,ua,va,uas,vas,lon,lat,param,model):
+def calc_param(times,ta,dp,hgt,p,ua,va,uas,vas,lon,lat,param,model):
 	#Loop over lat/lon points in domain and calculate: 1) profile 2) parcel (if create_parcel is set) 3) parameter
 	#NOTE the choice of parameter may affect both steps 2) and 3)
 	param = np.array(param)
-	values = np.empty((len(lat)*len(lon),len(param)))
-	values_lat = []
-	values_lon = []
-	cnt = 0
-	for x in lon:
-		print(x)
-		for y in lat:
-			#Restrict to a single spatial point
-			point = [x,y]   
-			ta_p,dp_p,hgt_p,ua_p,va_p,uas_p,vas_p = get_point(point,lon,lat,ta,dp,hgt,ua,va,uas,vas,model)
-			#Convert u and v to kts for use in profile
-			ua_p_kts = utils.MS2KTS(ua_p)
-			va_p_kts = utils.MS2KTS(va_p)
-			#Create profile
-			prof = profile.create_profile(pres=p, hght=hgt_p, tmpc=ta_p, \
-					dwpc=dp_p, u=ua_p_kts, v=va_p_kts)
-			#Create most unstable parcel
-			mu_parcel = params.parcelx(prof, flag=3)
-			if "mu_cape" in param:
-			#CAPE for most unstable parcel
-				values[cnt,param=="mu_cape"] = mu_parcel.bplus
-			if "s06" in param:
-			#Wind shear 10 m (sfc) to 6 km
-				ua_0km = uas_p
-				ua_6km = np.interp(6000,hgt_p,ua_p)
-				va_0km = vas_p
-				va_6km = np.interp(6000,hgt_p,va_p)
-				shear = np.sqrt(np.square(ua_6km-ua_0km)+np.square(va_6km-va_0km))
-				values[cnt,param=="s06"] = shear
-			if "mu_cin" in param:
-			#CIN for most unstable parcel
-				values[cnt,param=="mu_cin"] = -1*mu_parcel.bminus				
-			if "hel03" in param:
-			#Combined (+ve and -ve) rel. helicity from 0-3 km
-				values[cnt,param=="hel03"] = winds.helicity(prof,0,3000)[0]
-			if "hel06" in param:
-			#Combined (+ve and -ve) rel. helicity from 0-6 km
-				values[cnt,param=="hel06"] = winds.helicity(prof,0,6000)[0]
-			if "ship" in param:
-			#Significant hail parameter
-				values[cnt,param=="ship"] = params.ship(prof,mupcl=mu_parcel)
-			if "lhp" in param:
-			#Large Hail Paramerer; NOTE requires convective profile (costly).
-				conf_prof = profile.create_profile(profile="convective",pres=p, hght=hgt_p, tmpc=ta_p, \
-                                        dwpc=dp_p, u=ua_p_kts, v=va_p_kts)
-				values[cnt,param=="lhp"] = params.lhp(prof)
-			if "hgz_depth" in param:
-			#Hail growzth zone (in hPa)
-				values[cnt,param=="hgz_depth"] = abs(params.hgz(prof)[1] - params.hgz(prof)[0])
-			if "dcp" in param:
-			#Derecho Composite Parameter ~ cold pool driven wind events
-				values[cnt,param=="dcp"] = params.dcp(prof)
-			if "mburst" in param:
-			#Microburst composite index
-				values[cnt,param=="mburst"] = params.mburst(prof)
-			if "mmp" in param:
-			#Mesoscale Convective System Maintanance Probability
-				values[cnt,param=="mmp"] = params.mmp(prof,mupcl=mu_parcel)
+	param_out = [0] * (len(param))
+	for i in np.arange(0,len(param)):
+		param_out[i] = np.empty((len(times),len(lat),len(lon)))
 
-			values_lat.append(y)
-			values_lon.append(x)
-			cnt = cnt+1
-	df = pd.DataFrame(values,columns=param)
-	df["lat"] = values_lat
-	df["lon"] = values_lon
-	return df	
+	for t in np.arange(0,len(times)):
+		print(times[t])
+		for x in np.arange(0,len(lon)):
+			for y in np.arange(0,len(lat)):
+				#Restrict to a single spatial point
+				point = [lon[x],lat[y]]   
+				ta_p,dp_p,hgt_p,ua_p,va_p,uas_p,vas_p = get_point(point,\
+					lon,lat,ta[t,:,:,:],dp[t,:,:,:],hgt[t,:,:,:],ua[t,:,:,:],\
+					va[t,:,:,:],uas[t,:,:],vas[t,:,:])
+				#Convert u and v to kts for use in profile
+				ua_p_kts = utils.MS2KTS(ua_p)
+				va_p_kts = utils.MS2KTS(va_p)
+				#Create profile
+				prof = profile.create_profile(pres=p, hght=hgt_p, tmpc=ta_p, \
+						dwpc=dp_p, u=ua_p_kts, v=va_p_kts)
+				#Create most unstable parcel
+				mu_parcel = params.parcelx(prof, flag=3)
+				if "mu_cape" in param:
+				#CAPE for most unstable parcel
+					param_ind = np.where(param=="mu_cape")[0][0]
+					param_out[param_ind][t,y,x] = mu_parcel.bplus
+				if "s06" in param:
+				#Wind shear 10 m (sfc) to 6 km
+					ua_0km = uas_p
+					ua_6km = np.interp(6000,hgt_p,ua_p)
+					va_0km = vas_p
+					va_6km = np.interp(6000,hgt_p,va_p)
+					shear = np.sqrt(np.square(ua_6km-ua_0km)+\
+						np.square(va_6km-va_0km))
+					param_ind = np.where(param=="s06")[0][0]
+					param_out[param_ind][t,y,x] = shear
+				if "mu_cin" in param:
+				#CIN for most unstable parcel
+					param_ind = np.where(param=="mu_cin")[0][0]
+					param_out[param_ind][t,y,x] = -1*mu_parcel.bminus
+				if "hel01" in param:
+				#Combined (+ve and -ve) rel. helicity from 0-1 km
+					param_ind = np.where(param=="hel01")[0][0]
+					param_out[param_ind][t,y,x] = winds.helicity(prof,0,1000)[0]
+				if "hel03" in param:
+				#Combined (+ve and -ve) rel. helicity from 0-3 km
+					param_ind = np.where(param=="hel03")[0][0]
+					param_out[param_ind][t,y,x] = winds.helicity(prof,0,3000)[0]
+				if "hel06" in param:
+				#Combined (+ve and -ve) rel. helicity from 0-6 km
+					param_ind = np.where(param=="hel06")[0][0]
+					param_out[param_ind][t,y,x] = winds.helicity(prof,0,6000)[0]
+				if "ship" in param:
+				#Significant hail parameter
+					param_ind = np.where(param=="ship")[0][0]
+					param_out[param_ind][t,y,x] = params.ship(prof,\
+						mupcl=mu_parcel)
+				if "lhp" in param:
+				#Large Hail Paramerer; NOTE requires convective profile (costly).
+					conf_prof = profile.create_profile(profile="convective",\
+						pres=p, hght=hgt_p, tmpc=ta_p, \
+						dwpc=dp_p, u=ua_p_kts, v=va_p_kts)
+					param_ind = np.where(param=="lhp")[0][0]
+					param_out[param_ind][t,y,x] = params.lhp(prof)
+				if "hgz_depth" in param:
+				#Hail growzth zone (in hPa)
+					param_ind = np.where(param=="hgz_depth")[0][0]
+					param_out[param_ind][t,y,x] = abs(params.hgz(prof)[1]\
+						 - params.hgz(prof)[0])
+				if "dcp" in param:
+				#Derecho Composite Parameter ~ cold pool driven wind events
+					param_ind = np.where(param=="dcp")[0][0]
+					param_out[param_ind][t,y,x] = params.dcp(prof)
+				if "mburst" in param:
+				#Microburst composite index
+					param_ind = np.where(param=="mburst")[0][0]
+					param_out[param_ind][t,y,x] = params.mburst(prof)
+				if "mmp" in param:
+				#Mesoscale Convective System Maintanance Probability
+					param_ind = np.where(param=="mmp")[0][0]
+					param_out[param_ind][t,y,x] = params.mmp(prof,\
+						mupcl=mu_parcel)
+
+	return param_out
 
 
 def calc_param_mf(times,ta,dp,hur,hgt,p,ua,va,uas,vas,lon,lat,lon_used,lat_used,param,loc_id):

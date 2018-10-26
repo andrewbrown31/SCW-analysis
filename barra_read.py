@@ -17,72 +17,95 @@ import pandas as pd
 from plot_param import plot_param
 from calc_param import *
 
-def read_barra(domain,time):
-	#Open BARRA netcdf files and extract variables needed for a single time point and given spatial domain
+def read_barra(domain,times):
+	#Open BARRA netcdf files and extract variables needed for a range of times and given
+	# spatial domain
+	#NOTE, currently this uses analysis files, with no time dimension length=1. For
+	# use with forecast files (with time dimension length >1), will need to be changed.
 
 	ref = dt.datetime(1970,1,1,0,0,0)
-	time_hours = (time - ref).total_seconds() / (3600)
+	date_list = date_seq(times)
+	if len(times) > 1:
+		date_list = date_seq(times)
+	else:
+		date_list = times
+	time_hours = np.empty(len(date_list))
+	for t in np.arange(0,len(date_list)):
+		time_hours[t] = (date_list[t] - ref).total_seconds() / (3600)
 
-	year = dt.datetime.strftime(time,"%Y")
-	month =	dt.datetime.strftime(time,"%m")
-	day = dt.datetime.strftime(time,"%d")
-	hour = dt.datetime.strftime(time,"%H")
-
-	#Load BARRA analysis files
-	ta_file = nc.Dataset(glob.glob("/g/data/ma05/BARRA_R/v1/analysis/prs/air_temp/"\
-+year+"/"+month+"/air_temp-an-prs-PT0H-BARRA_R-v1-"+year+month+day+"T"+hour+"*.nc")[0])
-	z_file = nc.Dataset(glob.glob("/g/data/ma05/BARRA_R/v1/analysis/prs/geop_ht/"\
-+year+"/"+month+"/geop_ht-an-prs-PT0H-BARRA_R-v1-"+year+month+day+"T"+hour+"*.nc")[0])
-	ua_file = nc.Dataset(glob.glob("/g/data/ma05/BARRA_R/v1/analysis/prs/wnd_ucmp/"\
-+year+"/"+month+"/wnd_ucmp-an-prs-PT0H-BARRA_R-v1-"+year+month+day+"T"+hour+"*.nc")[0])
-	va_file = nc.Dataset(glob.glob("/g/data/ma05/BARRA_R/v1/analysis/prs/wnd_vcmp/"\
-+year+"/"+month+"/wnd_vcmp-an-prs-PT0H-BARRA_R-v1-"+year+month+day+"T"+hour+"*.nc")[0])
-	hur_file = nc.Dataset(glob.glob("/g/data/ma05/BARRA_R/v1/analysis/prs/relhum/"\
-+year+"/"+month+"/relhum-an-prs-PT0H-BARRA_R-v1-"+year+month+day+"T"+hour+"*.nc")[0])
-	uas_file = nc.Dataset(glob.glob("/g/data/ma05/BARRA_R/v1/analysis/spec/uwnd10m/"\
-+year+"/"+month+"/uwnd10m-an-spec-PT0H-BARRA_R-v1-"+year+month+day+"T"+hour+"*.nc")[0])
-	vas_file = nc.Dataset(glob.glob("/g/data/ma05/BARRA_R/v1/analysis/spec/vwnd10m/"\
-+year+"/"+month+"/vwnd10m-an-spec-PT0H-BARRA_R-v1-"+year+month+day+"T"+hour+"*.nc")[0])
-
-	lon = ta_file["longitude"][:]
-	lat = ta_file["latitude"][:]
-	times = ta_file["time"][:]
-	p =ta_file["pressure"][:]
-	p_ind = np.where(p>=100)[0]
-	#ALL POINTS IN DOMAIN
+	#Get time-invariant pressure and spatial info
+	no_p, pres, p_ind = get_pressure(100)
+	pres = pres[p_ind]
+	lon,lat = get_lat_lon()
 	lon_ind = np.where((lon >= domain[2]) & (lon <= domain[3]))[0]
 	lat_ind = np.where((lat >= domain[0]) & (lat <= domain[1]))[0]
-	#RESTRICT TO ~0.77deg spacing
-	lon_ind = lon_ind[::7]
-	lat_ind = lat_ind[::7]
-	ta = ta_file["air_temp"][p_ind,lat_ind,lon_ind] - 273.15
-	ua = ua_file["wnd_ucmp"][p_ind,lat_ind,lon_ind]
-	va = va_file["wnd_vcmp"][p_ind,lat_ind,lon_ind]
-	hgt = z_file["geop_ht"][p_ind,lat_ind,lon_ind]
-	hur = hur_file["relhum"][p_ind,lat_ind,lon_ind]
-	hur[hur<0] = 0
-	dp = get_dp(ta,hur)
-	uas = uas_file["uwnd10m"][lat_ind,lon_ind]
-	vas = vas_file["vwnd10m"][lat_ind,lon_ind]
 	lon = lon[lon_ind]
 	lat = lat[lat_ind]
-	p = p[p_ind]
 
-	#Flip pressure axes for compatibility with SHARPpy
-	ta = np.flip(ta,axis=0)
-	dp = np.flip(dp,axis=0)
-	hgt = np.flip(hgt,axis=0)
-	ua = np.flip(ua,axis=0)
-	va = np.flip(va,axis=0)
-	p = np.flip(p)
+	#Initialise arrays
+	ta = np.empty((len(date_list),no_p,len(lat_ind),len(lon_ind)))
+	dp = np.empty((len(date_list),no_p,len(lat_ind),len(lon_ind)))
+	hur = np.empty((len(date_list),no_p,len(lat_ind),len(lon_ind)))
+	hgt = np.empty((len(date_list),no_p,len(lat_ind),len(lon_ind)))
+	ua = np.empty((len(date_list),no_p,len(lat_ind),len(lon_ind)))
+	va = np.empty((len(date_list),no_p,len(lat_ind),len(lon_ind)))
+	uas = np.empty((len(date_list),len(lat_ind),len(lon_ind)))
+	vas = np.empty((len(date_list),len(lat_ind),len(lon_ind)))
 
-	ta_file.close();z_file.close();ua_file.close();va_file.close();hur_file.close();uas_file.close();vas_file.close()
-	
-	return [ta,dp,hgt,p,ua,va,uas,vas,lon,lat]
+	for t in np.arange(0,len(date_list)):
+		year = dt.datetime.strftime(date_list[t],"%Y")
+		month =	dt.datetime.strftime(date_list[t],"%m")
+		day = dt.datetime.strftime(date_list[t],"%d")
+		hour = dt.datetime.strftime(date_list[t],"%H")
+		print(date_list[t])
+
+		#Load BARRA analysis files
+		ta_file = nc.Dataset(glob.glob("/g/data/ma05/BARRA_R/v1/analysis/prs/air_temp/"\
+	+year+"/"+month+"/air_temp-an-prs-PT0H-BARRA_R-v1-"+year+month+day+"T"+hour+"*.nc")[0])
+		z_file = nc.Dataset(glob.glob("/g/data/ma05/BARRA_R/v1/analysis/prs/geop_ht/"\
+	+year+"/"+month+"/geop_ht-an-prs-PT0H-BARRA_R-v1-"+year+month+day+"T"+hour+"*.nc")[0])
+		ua_file = nc.Dataset(glob.glob("/g/data/ma05/BARRA_R/v1/analysis/prs/wnd_ucmp/"\
+	+year+"/"+month+"/wnd_ucmp-an-prs-PT0H-BARRA_R-v1-"+year+month+day+"T"+hour+"*.nc")[0])
+		va_file = nc.Dataset(glob.glob("/g/data/ma05/BARRA_R/v1/analysis/prs/wnd_vcmp/"\
+	+year+"/"+month+"/wnd_vcmp-an-prs-PT0H-BARRA_R-v1-"+year+month+day+"T"+hour+"*.nc")[0])
+		hur_file = nc.Dataset(glob.glob("/g/data/ma05/BARRA_R/v1/analysis/prs/relhum/"\
+	+year+"/"+month+"/relhum-an-prs-PT0H-BARRA_R-v1-"+year+month+day+"T"+hour+"*.nc")[0])
+		uas_file = nc.Dataset(glob.glob("/g/data/ma05/BARRA_R/v1/analysis/spec/uwnd10m/"\
+	+year+"/"+month+"/uwnd10m-an-spec-PT0H-BARRA_R-v1-"+year+month+day+"T"+hour+"*.nc")[0])
+		vas_file = nc.Dataset(glob.glob("/g/data/ma05/BARRA_R/v1/analysis/spec/vwnd10m/"\
+	+year+"/"+month+"/vwnd10m-an-spec-PT0H-BARRA_R-v1-"+year+month+day+"T"+hour+"*.nc")[0])
+
+		#Get times to load in from file
+		times = ta_file["time"][:]
+
+		#Load data
+		temp_ta = ta_file["air_temp"][p_ind,lat_ind,lon_ind] - 273.15
+		temp_ua = ua_file["wnd_ucmp"][p_ind,lat_ind,lon_ind]
+		temp_va = va_file["wnd_vcmp"][p_ind,lat_ind,lon_ind]
+		temp_hgt = z_file["geop_ht"][p_ind,lat_ind,lon_ind]
+		temp_hur = hur_file["relhum"][p_ind,lat_ind,lon_ind]
+		temp_hur[temp_hur<0] = 0
+		temp_dp = get_dp(temp_ta,temp_hur)
+		uas[t,:,:] = uas_file["uwnd10m"][lat_ind,lon_ind]
+		vas[t,:,:] = vas_file["vwnd10m"][lat_ind,lon_ind]
+
+		#Flip pressure axes for compatibility with SHARPpy
+		ta[t,:,:,:] = np.flip(temp_ta,axis=0)
+		dp[t,:,:,:] = np.flip(temp_dp,axis=0)
+		hur[t,:,:,:] = np.flip(temp_hur,axis=0)
+		hgt[t,:,:,:] = np.flip(temp_hgt,axis=0)
+		ua[t,:,:,:] = np.flip(temp_ua,axis=0)
+		va[t,:,:,:] = np.flip(temp_va,axis=0)
+
+		ta_file.close();z_file.close();ua_file.close();va_file.close();hur_file.close();uas_file.close();vas_file.close()
+		
+	p = np.flip(pres)
+
+	return [ta,dp,hur,hgt,p,ua,va,uas,vas,lon,lat,date_list]
 	
 #IF WANTING TO LOOP OVER TIME, CHANGE READ_BARRA TO READ ALL TIMES IN A RANGE, THEN LOOP OVER TIME DIMENSION WITHIN CALC_PARAM
 
-def read_barra_mf(points,times):
+def read_barra_points(points,times):
 
 	#NOTE might have to change to read forecast (hourly) data instead of analysis
 	#NOTE if directly comparing with ERA-Interim, need to coarsen/interpolate first

@@ -109,7 +109,7 @@ def get_srh(u,v,hgt,hgt_top):
 		srh[i,j] = abs(np.sum(layers))
 	return srh
 
-def calc_param_wrf(times,ta,dp,hur,hgt,terrain,p,ps,ua,va,uas,vas,lon,lat,param,model,save):
+def calc_param_wrf(times,ta,dp,hur,hgt,terrain,p,ps,ua,va,uas,vas,lon,lat,param,model,save,region):
 
 	#NOTE: Consider the winds used for "0 km" in SRH, s06, etc. Could be 10 m sfc winds, 
 	# bottom pressure level (1000 hPa)? Currently, storm motion, SRH and s06 use bottom 
@@ -201,7 +201,7 @@ def calc_param_wrf(times,ta,dp,hur,hgt,terrain,p,ps,ua,va,uas,vas,lon,lat,param,
 			param_ind = np.where(param=="mmp")[0][0]
 
 	if save:
-		fname = "/g/data/eg3/ab4502/ExtremeWind/"+model+"_"+\
+		fname = "/g/data/eg3/ab4502/ExtremeWind/"+region+"/"+model+"_"+\
 			dt.datetime.strftime(times[0],"%Y%m%d")+"_"+\
 			dt.datetime.strftime(times[-1],"%Y%m%d")+".nc"
 		if os.path.isfile(fname):

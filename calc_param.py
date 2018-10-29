@@ -16,8 +16,33 @@ from metpy.units import units
 import metpy.calc as mpcalc
 import wrf
 
+#-------------------------------------------------------------------------------------------------
 
-#Functions to take reanalysis data at a single time step over some spatial domain, and calculate TS parameters
+#This file contains functions to extract thunderstorm/extreme-convective-wind-gust parameters 
+# from gridded model data, provided by *model*_read.py
+
+#There are currently three main functions:
+#	- calc_param_wrf
+#		Extract parameters in a vectorised fashion, such that calculations are done once
+#		for a spatial domain at each time step. Uses wrf-python for CAPE and
+#		user-written functions for winds.
+#
+#	- calc_param_sharppy
+#		Extract parameters by looping over time, latitude and longitude, and creating 
+#		"profiles" with the SHARPpy package. Too slow to run for the whole reanalysis 
+#		period
+#
+#	- calc_param_points
+#		Extract parameters by looping over time, at a set of points provided by the 
+#		user to the function. Currently, both wrf-python and SHARPpy can be used to 
+#		calculate the parameters, by commenting/un-commenting lines of code.
+#
+#NOTE: "metpy" by unicode is used in some places for calculating specific humidity from
+# thermodynamic properties
+#
+#NOTE: Currently, user defined wind functions used in calc_param_wrf use the bottom available
+# pressure level as "0km"
+#-------------------------------------------------------------------------------------------------
 
 
 def get_dp(ta,hur):
@@ -29,7 +54,8 @@ def get_dp(ta,hur):
 	return (b*alpha) / (a - alpha)
 
 def get_point(point,lon,lat,ta,dp,hgt,ua,va,uas,vas):
-	# Return 1d arrays for all variables, at a given spatial point (now a function of p-level only)
+	# Return 1d arrays for all variables, at a given spatial point (now a function
+	# of p-level only)
 	lon_ind = np.argmin(abs(lon-point[0]))
 	lat_ind = np.argmin(abs(lat-point[1]))
 	ta = np.squeeze(ta[:,lat_ind,lon_ind])
@@ -42,13 +68,59 @@ def get_point(point,lon,lat,ta,dp,hgt,ua,va,uas,vas):
 
 	return [ta,dp,hgt,ua,va,uas,vas]
 
+def get_storm_motion(u,v,hgt,hgt_top):
+	#Get storm motion vector [lat, lon] based on 3d input of u, v, hgt and p [levels,lat,lon]
+	u_storm = np.empty((u.shape[1],u.shape[2]))
+	v_storm = np.empty((u.shape[1],u.shape[2]))
+	x = np.arange(0,hgt_top+10,10)
+	for i in np.arange(0,u.shape[1]):
+	    for j in np.arange(0,u.shape[2]):
+		xp = hgt[:,i,j]
+		u_interp = np.interp(x,xp,u[:,i,j])
+		v_interp = np.interp(x,xp,v[:,i,j])
+		u_storm[i,j] = np.mean(u_interp)
+		v_storm[i,j] = np.mean(v_interp)
+	return [u_storm,v_storm]
+
+def get_shear(u,v,hgt,hgt_bot,hgt_top):
+	#Get bulk wind shear [lat, lon] based on 3d input of u, v, hgt [levels,lat,lon]
+	shear = np.empty((u.shape[1],u.shape[2]))
+	for i in np.arange(0,u.shape[1]):
+	    for j in np.arange(0,u.shape[2]):
+		xp = hgt[:,i,j]
+		u_interp = np.interp([hgt_bot,hgt_top],xp,u[:,i,j])
+		v_interp = np.interp([hgt_bot,hgt_top],xp,v[:,i,j])
+		shear[i,j] = np.sqrt(np.square(u_interp[1]-u_interp[0])+np.square(v_interp[1]\
+				-v_interp[0]))		
+	return shear
+
+def get_srh(u,v,hgt,hgt_top):
+	#Get storm relative helicity [lat, lon] based on 3d input of u, v, and storm motion u and
+	# v components
+	u_storm, v_storm = get_storm_motion(u,v,hgt,hgt_top)
+	srh = np.empty(u[0].shape)
+	for i in np.arange(0,u[0].shape[0]):
+	    for j in np.arange(0,u[0].shape[1]):
+		u_hgt = u[(hgt[:,i,j] <= hgt_top),i,j]
+		v_hgt = v[(hgt[:,i,j] <= hgt_top),i,j]
+		sru = u_hgt - u_storm[i,j]
+		srv = v_hgt - v_storm[i,j]
+		layers = (sru[1:] * srv[:-1]) - (sru[:-1] * srv[1:])
+		srh[i,j] = abs(np.sum(layers))
+	return srh
+
 def calc_param_wrf(times,ta,dp,hur,hgt,terrain,p,ps,ua,va,uas,vas,lon,lat,param,model,save):
+
+	#NOTE: Consider the winds used for "0 km" in SRH, s06, etc. Could be 10 m sfc winds, 
+	# bottom pressure level (1000 hPa)? Currently, storm motion, SRH and s06 use bottom 
+	# pressure level
+
 	#Use 3d_cape in wrf-python to calculate MUCAPE (vectorised). Use this to calculate other
 	# params
 
 	#Input vars are of shape [time, levels, lat, lon]
 	#Output is a list of numpy arrays of length=len(params) with dimensions [time,lat,lon]
-	#Option to save as a netcdf file
+	#Boolean option to save as a netcdf file
 
 	#Assign p levels to a 4d array
 	p_3d = np.empty(ta.shape)
@@ -57,90 +129,76 @@ def calc_param_wrf(times,ta,dp,hur,hgt,terrain,p,ps,ua,va,uas,vas,lon,lat,param,
 			for k in np.arange(0,ta.shape[3]):
 				p_3d[i,:,j,k] = p
 
+	#Initialise output list
 	param = np.array(param)
 	param_out = [0] * (len(param))
 	for i in np.arange(0,len(param)):
 		param_out[i] = np.empty((len(times),len(lat),len(lon)))
 
+	#For each time
 	for t in np.arange(0,len(times)):
 		print(times[t])
+
+		#Calculate q
 		hur_unit = units.percent*hur[t,:,:,:]
 		ta_unit = units.degC*ta[t,:,:,:]
 		p_unit = units.hectopascals*p_3d[t,:,:,:]
 		q = mpcalc.mixing_ratio_from_relative_humidity(hur_unit,\
 		ta_unit,p_unit)
 		q = np.array(q)
+
+		#Get CAPE
 		cape = wrf.cape_3d(p_3d[t,:,:,:],ta[t,:,:,:]+273.15,q\
 			,hgt[t,:,:,:],terrain,ps[t,:,:],False,meta=False,missing=0)
 
+		#Get other parameters...
 		if "relhum850-500" in param:
 			param_ind = np.where(param=="relhum850-500")[0][0]
 			param_out[param_ind][t,y,x] = \
 				np.mean(hur_p[(p_p<=851) & (p_p>=499)])
 		if "mu_cape" in param:
 		#CAPE for most unstable parcel
+		#cape.data has cape values for each pressure level, as if they were each parcels.
+		# Taking the max gives MUCAPE approximation
 			param_ind = np.where(param=="mu_cape")[0][0]
 			param_out[param_ind][t,:,:] = np.max(cape.data[0],axis=0)
 		if "s06" in param:
 		#Wind shear 10 m (sfc) to 6 km
-			ua_0km = uas[t]
-			va_0km = vas[t]
-			ua_6km = np.empty(ua_0km.shape)
-			va_6km = np.empty(va_0km.shape)
-			for i in np.arange(0,len(lat)):
-			    for j in np.arange(0,len(lon)):
-				ua_6km[i,j] = np.interp(6000,hgt[t,:,i,j],ua[t,:,i,j])
-				va_6km[i,j] = np.interp(6000,hgt[t,:,i,j],va[t,:,i,j])
-			shear = np.sqrt(np.square(ua_6km-ua_0km)+\
-					np.square(va_6km-va_0km))
 			param_ind = np.where(param=="s06")[0][0]
-			param_out[param_ind][t,:,:] = shear
+			param_out[param_ind][t,:,:] = get_shear(ua[t],va[t],hgt[t],0,6000)
 		if "mu_cin" in param:
 		#CIN for most unstable parcel
 			param_ind = np.where(param=="mu_cin")[0][0]
-			param_out[param_ind][t,y,x] = -1*mu_parcel.bminus
-		if "hel01" in param:
+		if "srh01" in param:
 		#Combined (+ve and -ve) rel. helicity from 0-1 km
-			param_ind = np.where(param=="hel01")[0][0]
-			param_out[param_ind][t,y,x] = winds.helicity(prof,0,1000)[0]
-		if "hel03" in param:
+			param_ind = np.where(param=="srh01")[0][0]
+			param_out[param_ind][t,:,:] = get_srh(ua[t],va[t],hgt[t],1000)
+		if "srh03" in param:
 		#Combined (+ve and -ve) rel. helicity from 0-3 km
-			param_ind = np.where(param=="hel03")[0][0]
-			param_out[param_ind][t,y,x] = winds.helicity(prof,0,3000)[0]
-		if "hel06" in param:
+			param_ind = np.where(param=="srh03")[0][0]
+			param_out[param_ind][t,:,:] = get_srh(ua[t],va[t],hgt[t],3000)
+		if "srh06" in param:
 		#Combined (+ve and -ve) rel. helicity from 0-6 km
-			param_ind = np.where(param=="hel06")[0][0]
-			param_out[param_ind][t,y,x] = winds.helicity(prof,0,6000)[0]
+			param_ind = np.where(param=="srh06")[0][0]
+			param_out[param_ind][t,:,:] = get_srh(ua[t],va[t],hgt[t],6000)
 		if "ship" in param:
 		#Significant hail parameter
 			param_ind = np.where(param=="ship")[0][0]
-			param_out[param_ind][t,y,x] = params.ship(prof,\
-				mupcl=mu_parcel)
 		if "lhp" in param:
 		#Large Hail Paramerer; NOTE requires convective profile (costly).
-			conf_prof = profile.create_profile(profile="convective",\
-				pres=p, hght=hgt_p, tmpc=ta_p, \
-				dwpc=dp_p, u=ua_p_kts, v=va_p_kts)
 			param_ind = np.where(param=="lhp")[0][0]
-			param_out[param_ind][t,y,x] = params.lhp(prof)
 		if "hgz_depth" in param:
 		#Hail growzth zone (in hPa)
 			param_ind = np.where(param=="hgz_depth")[0][0]
-			param_out[param_ind][t,y,x] = abs(params.hgz(prof)[1]\
-				 - params.hgz(prof)[0])
 		if "dcp" in param:
 		#Derecho Composite Parameter ~ cold pool driven wind events
 			param_ind = np.where(param=="dcp")[0][0]
-			param_out[param_ind][t,y,x] = params.dcp(prof)
 		if "mburst" in param:
 		#Microburst composite index
 			param_ind = np.where(param=="mburst")[0][0]
-			param_out[param_ind][t,y,x] = params.mburst(prof)
 		if "mmp" in param:
 		#Mesoscale Convective System Maintanance Probability
 			param_ind = np.where(param=="mmp")[0][0]
-			param_out[param_ind][t,y,x] = params.mmp(prof,\
-				mupcl=mu_parcel)
 
 	if save:
 		fname = "/g/data/eg3/ab4502/ExtremeWind/"+model+"_"+\

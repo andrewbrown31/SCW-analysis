@@ -137,6 +137,7 @@ def read_barra_points(points,times):
 	va = np.empty((len(date_list),no_p,len(points)))
 	uas = np.empty((len(date_list),len(points)))
 	vas = np.empty((len(date_list),len(points)))
+	ps = np.empty((len(date_list),len(points)))
 
 	for t in np.arange(0,len(date_list)):
 		year = dt.datetime.strftime(date_list[t],"%Y")
@@ -160,6 +161,8 @@ def read_barra_points(points,times):
 	+year+"/"+month+"/uwnd10m-an-spec-PT0H-BARRA_R-v1-"+year+month+day+"T"+hour+"*.nc")[0])
 		vas_file = nc.Dataset(glob.glob("/g/data/ma05/BARRA_R/v1/analysis/spec/vwnd10m/"\
 	+year+"/"+month+"/vwnd10m-an-spec-PT0H-BARRA_R-v1-"+year+month+day+"T"+hour+"*.nc")[0])
+		ps_file = nc.Dataset(glob.glob("/g/data/ma05/BARRA_R/v1/analysis/spec/sfc_pres/"\
+	+year+"/"+month+"/sfc_pres-an-spec-PT0H-BARRA_R-v1-"+year+month+day+"T"+hour+"*.nc")[0])
 
 		times = ta_file["time"][:]
 		
@@ -179,28 +182,31 @@ def read_barra_points(points,times):
 			dp[t,:,point] = get_dp(ta[t,:,point],hur[t,:,point])
 			uas[t,point] = uas_file["uwnd10m"][lat_ind,lon_ind]
 			vas[t,point] = vas_file["vwnd10m"][lat_ind,lon_ind]
+			ps[t,point] = ps_file["sfc_pres"][lat_ind,lon_ind]/100 
 			p[t,:,point] = pres[p_ind]
 
 		ta_file.close();z_file.close();ua_file.close();va_file.close();
-		hur_file.close();uas_file.close();vas_file.close()
+		hur_file.close();uas_file.close();vas_file.close();ps_file.close()
 	
 	#Flip pressure axes for compatibility with SHARPpy
-	ta = np.flip(ta,axis=1)
-	dp = np.flip(dp,axis=1)
-	hur = np.flip(hur,axis=1)
-	hgt = np.flip(hgt,axis=1)
-	ua = np.flip(ua,axis=1)
-	va = np.flip(va,axis=1)
-	p = np.flip(p,axis=1)
+	ta = np.fliplr(ta)
+	dp = np.fliplr(dp)
+	hur = np.fliplr(hur)
+	hgt = np.fliplr(hgt)
+	ua = np.fliplr(ua)
+	va = np.fliplr(va)
+	p = np.fliplr(p)
 
 	#Save lat/lon as array
 	lon = np.empty((len(points)))
 	lat = np.empty((len(points)))
+	terrain = np.empty((len(points)))
 	for point in np.arange(0,len(points)):
 		lon[point] = points[point][0]
 		lat[point] = points[point][1]
+		terrain[point] = get_terrain(lat_ind[point],lon_ind[point])
 
-	return [ta,dp,hur,hgt,p,ua,va,uas,vas,lon,lat,lon_used,lat_used,date_list]
+	return [ta,dp,hur,hgt,terrain,p,ps,ua,va,uas,vas,lon,lat,lon_used,lat_used,date_list]
 
 def date_seq(times):
 	start_time = times[0]

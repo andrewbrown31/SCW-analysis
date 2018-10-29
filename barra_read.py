@@ -41,6 +41,7 @@ def read_barra(domain,times):
 	lat_ind = np.where((lat >= domain[0]) & (lat <= domain[1]))[0]
 	lon = lon[lon_ind]
 	lat = lat[lat_ind]
+	terrain = get_terrain(lat_ind,lon_ind)
 
 	#Initialise arrays
 	ta = np.empty((len(date_list),no_p,len(lat_ind),len(lon_ind)))
@@ -51,6 +52,7 @@ def read_barra(domain,times):
 	va = np.empty((len(date_list),no_p,len(lat_ind),len(lon_ind)))
 	uas = np.empty((len(date_list),len(lat_ind),len(lon_ind)))
 	vas = np.empty((len(date_list),len(lat_ind),len(lon_ind)))
+	ps = np.empty((len(date_list),len(lat_ind),len(lon_ind)))
 
 	for t in np.arange(0,len(date_list)):
 		year = dt.datetime.strftime(date_list[t],"%Y")
@@ -74,6 +76,8 @@ def read_barra(domain,times):
 	+year+"/"+month+"/uwnd10m-an-spec-PT0H-BARRA_R-v1-"+year+month+day+"T"+hour+"*.nc")[0])
 		vas_file = nc.Dataset(glob.glob("/g/data/ma05/BARRA_R/v1/analysis/spec/vwnd10m/"\
 	+year+"/"+month+"/vwnd10m-an-spec-PT0H-BARRA_R-v1-"+year+month+day+"T"+hour+"*.nc")[0])
+		ps_file = nc.Dataset(glob.glob("/g/data/ma05/BARRA_R/v1/analysis/spec/sfc_pres/"\
+	+year+"/"+month+"/sfc_pres-an-spec-PT0H-BARRA_R-v1-"+year+month+day+"T"+hour+"*.nc")[0])
 
 		#Get times to load in from file
 		times = ta_file["time"][:]
@@ -88,20 +92,21 @@ def read_barra(domain,times):
 		temp_dp = get_dp(temp_ta,temp_hur)
 		uas[t,:,:] = uas_file["uwnd10m"][lat_ind,lon_ind]
 		vas[t,:,:] = vas_file["vwnd10m"][lat_ind,lon_ind]
+		ps[t,:,:] = ps_file["sfc_pres"][lat_ind,lon_ind]/100 
 
 		#Flip pressure axes for compatibility with SHARPpy
-		ta[t,:,:,:] = np.flip(temp_ta,axis=0)
-		dp[t,:,:,:] = np.flip(temp_dp,axis=0)
-		hur[t,:,:,:] = np.flip(temp_hur,axis=0)
-		hgt[t,:,:,:] = np.flip(temp_hgt,axis=0)
-		ua[t,:,:,:] = np.flip(temp_ua,axis=0)
-		va[t,:,:,:] = np.flip(temp_va,axis=0)
+		ta[t,:,:,:] = np.flipud(temp_ta)
+		dp[t,:,:,:] = np.flipud(temp_dp)
+		hur[t,:,:,:] = np.flipud(temp_hur)
+		hgt[t,:,:,:] = np.flipud(temp_hgt)
+		ua[t,:,:,:] = np.flipud(temp_ua)
+		va[t,:,:,:] = np.flipud(temp_va)
 
-		ta_file.close();z_file.close();ua_file.close();va_file.close();hur_file.close();uas_file.close();vas_file.close()
+		ta_file.close();z_file.close();ua_file.close();va_file.close();hur_file.close();uas_file.close();vas_file.close();ps_file.close()
 		
-	p = np.flip(pres)
+	p = np.flipud(pres)
 
-	return [ta,dp,hur,hgt,p,ua,va,uas,vas,lon,lat,date_list]
+	return [ta,dp,hur,hgt,terrain,p,ps,ua,va,uas,vas,lon,lat,date_list]
 	
 #IF WANTING TO LOOP OVER TIME, CHANGE READ_BARRA TO READ ALL TIMES IN A RANGE, THEN LOOP OVER TIME DIMENSION WITHIN CALC_PARAM
 
@@ -239,4 +244,10 @@ def get_lat_lon_inds(points,lon,lat):
 		lon_used[point] = lon[dist_lon]
 		lat_used[point] = lat[dist_lat]
 	return [lon_ind, lat_ind, lon_used, lat_used]
+
+def get_terrain(lat_ind,lon_ind):
+	terrain_file = nc.Dataset("/g/data/ma05/BARRA_R/v1/static/topog-an-slv-PT0H-BARRA_R-v1.nc")
+	terrain = terrain_file.variables["topog"][lat_ind,lon_ind]
+	terrain_file.close()
+	return terrain
 

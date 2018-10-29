@@ -5,13 +5,15 @@ import matplotlib.pyplot as plt
 from mpl_toolkits.basemap import Basemap
 from matplotlib.mlab import griddata
 import matplotlib.cm as cm
+import netCDF4 as nc
 
-#Plot parameters from a dataframe with parameter and lat lon data 
 
 def plot_param(df,param,domain,time,model):
 
+#Plot parameters from a dataframe with parameter and lat lon data 
+
 	m = Basemap(llcrnrlon = domain[2], llcrnrlat = domain[0], urcrnrlon = domain[3], \
-				urcrnrlat = domain[1], projection="merc", resolution = "i")
+				urcrnrlat = domain[1], projection="cyl", resolution = "i")
 	no_lon = len(np.unique(df["lon"]))
 	no_lat = len(np.unique(df["lat"]))
 	x = np.reshape(df["lon"],(no_lon,no_lat))
@@ -62,11 +64,43 @@ def plot_param(df,param,domain,time,model):
 p+"_"+dt.datetime.strftime(time,"%Y%m%d_%H%M")+".png",bbox_inches="tight")
 		plt.close()
 
-#Try plotting profile
-#plt.plot(prof.tmpc, prof.hght, 'r-')
-#plt.plot(prof.dwpc, prof.hght, 'g-')
-##plt.barbs(40*np.ones(len(prof.hght)), prof.hght, prof.u, prof.v)
-#plt.xlabel("Temperature [C]")
-#plt.ylabel("Height [m above MSL]")
-#plt.grid()
-#plt.show()
+def plot_netcdf(fname,param,outname):
+
+#Load a single netcdf file and plot the time mean
+
+	f = nc.Dataset(fname)
+	values = np.mean(f.variables[param][:],axis=0)
+	lon = f.variables["lon"][:]
+	lat = f.variables["lat"][:]
+	x,y = np.meshgrid(lon,lat)
+	times = f.variables["time"][:]
+
+	if param == "mu_cape":
+		cmap = cm.YlGnBu
+		levels = np.linspace(0,1000,11)
+		cb_lab = "J/Kg"
+	if param == "s06":
+		cmap = cm.Reds
+		levels = np.linspace(0,30,7)
+		cb_lab = "m/s"
+
+	m = Basemap(llcrnrlon = lon.min(), llcrnrlat = lat.min(), urcrnrlon = lon.max(), \
+				urcrnrlat = lat.max(), projection="cyl", resolution = "l")
+	m.drawcoastlines()
+	m.drawmeridians(np.arange(lon.min().round(),lon.max().round(),5),\
+			labels=[True,False,False,True])
+	m.drawparallels(np.arange(lat.min().round(),lat.max().round(),5),\
+			labels=[True,False,True,False])
+	m.contourf(x,y,values,latlon=True,levels=levels,cmap=cmap,extend="both")
+	cb = plt.colorbar()
+	cb.set_label(cb_lab)
+	plt.savefig("/home/548/ab4502/working/ExtremeWind/figs/mean/"+outname,bbox_inches="tight")
+	plt.close()
+
+if __name__ == "__main__":
+
+
+	fname = '/g/data/eg3/ab4502/ExtremeWind/aus/barra_20121101_20121201.nc'
+	param = "mu_cape"
+	outname = "barra_wrf3d_mu_cape_20121101_20121201.png"
+	plot_netcdf(fname,param,outname)

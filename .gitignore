@@ -1,5 +1,6 @@
 figs/
 SHARPpy/
+SkewT/
 *.csv
 *.pyc
 *.swp

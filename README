@@ -1,0 +1,18 @@
+Python scripts which perform the following tasks
+
+	- Read reanalysis files from two different datasets (ERA-Interim, BARRA) stored on the raijin data server 
+		barra_read.py
+		erai_read.py
+
+	- Calculate various thunderstorm/tornado parameters
+		calc_barra.py
+		calc_erai.py
+		calc_model.py
+		calc_param.py
+
+	- Read observational sondes for comparison
+		obs_read.py
+
+	- Plot things
+		plot_param.py
+		plot_timeseries.py

@@ -93,7 +93,7 @@ ps_6hrs_ERAI_historical_an-sfc_"+date+"*.nc")[0])
 		vas[date_ind,:,:] = vas_file["vas"][time_ind,lat_ind,lon_ind]
 		ps[date_ind,:,:] = ps_file["ps"][time_ind,lat_ind,lon_ind] / 100
 
-		ta_file.close();z_file.close();ua_file.close();va_file.close();hur_file.close();uas_file.close();vas_file.close()
+		ta_file.close();z_file.close();ua_file.close();va_file.close();hur_file.close();uas_file.close();vas_file.close();ps_file.close()
 	
 	return [ta,dp,hur,hgt,terrain,p,ps,ua,va,uas,vas,lon,lat,date_list]
 	

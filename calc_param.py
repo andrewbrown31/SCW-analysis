@@ -45,7 +45,8 @@ import wrf
 #
 #NOTE: When taking mean wind over a layer, does a weighted mean need to be used? Currently, 
 # get_mean_wind interpolates heights to be evenly spaced, which I think may get around the
-# weighting issue anyway (problem is caused by values clustered towards lower levels).
+# weighting issue anyway (problem is caused by values clustered towards lower levels). In addition,
+# be careful averaging in vertical (i.e. getting relhum, etc)
 #
 #NOTE: Should add in dependencies to if statements within calc_param_wrf. For example, if "ship"
 # is included in the parameter list, then "mu_cape" must also be present, etc. Add something 
@@ -107,28 +108,48 @@ def get_shear_hgt(u,v,hgt,hgt_bot,hgt_top):
 	#Get bulk wind shear [lat, lon] between two heights, based on 3d input of u, v, and 
 	#hgt [levels,lat,lon]
 	#Note lowest possible height is equal to bottom pressure level (1000 hPa)
-	shear = np.empty((u.shape[1],u.shape[2]))
-	for i in np.arange(0,u.shape[1]):
-	    for j in np.arange(0,u.shape[2]):
-		xp = hgt[:,i,j]
-		u_interp = np.interp([hgt_bot,hgt_top],xp,u[:,i,j])
-		v_interp = np.interp([hgt_bot,hgt_top],xp,v[:,i,j])
-		shear[i,j] = np.sqrt(np.square(u_interp[1]-u_interp[0])+np.square(v_interp[1]\
-				-v_interp[0]))		
+
+	u_bot = np.array(wrf.interplevel(u, hgt, hgt_bot))
+	v_bot = np.array(wrf.interplevel(v, hgt, hgt_bot))
+	u_top = np.array(wrf.interplevel(u, hgt, hgt_top))
+	v_top = np.array(wrf.interplevel(v, hgt, hgt_top))
+
+	#For values where hgt_bot is less than min(hgt) or hgt_top is greater than max(hgt)
+	# fill with lowest/highest level
+	u_bot[hgt[0] >= hgt_bot] = u[0,hgt[0] >= hgt_bot]
+	u_top[hgt[-1] <= hgt_top] = u[-1,hgt[-1] <= hgt_bot]
+	v_bot[hgt[0] >= hgt_bot] = v[0,hgt[0] >= hgt_bot]
+	v_top[hgt[-1] <= hgt_top] = v[-1,hgt[-1] <= hgt_bot]
+
+	shear = np.array(np.sqrt(np.square(u_top-u_bot)+np.square(v_top-v_bot)))
+
 	return shear
 
-def get_shear_p(u,v,p,p_bot,p_top):
+def get_shear_p(u,v,p,p_bot,p_top,lev):
 	#Get bulk wind shear [lat, lon] between two pressure levels, based on 3d input of u, v, and 
 	#p [levels,lat,lon]
 	#p_bot and p_top given in hPa
-	shear = np.empty((u.shape[1],u.shape[2]))
-	for i in np.arange(0,u.shape[1]):
-	    for j in np.arange(0,u.shape[2]):
-		xp = np.flipud(p[:,i,j])
-		u_interp = np.interp([p_top,p_bot],xp,np.flipud(u[:,i,j]))
-		v_interp = np.interp([p_top,p_bot],xp,np.flipud(v[:,i,j]))
-		shear[i,j] = np.sqrt(np.square(u_interp[1]-u_interp[0])+np.square(v_interp[1]\
-				-v_interp[0]))		
+
+	if p_bot < 1000:
+		ValueError("Bottom pressure level can't be below bottom model level (1000 hPa)")
+	if p_bot > 100:
+		ValueError("Top pressure level can't be above top model level (100 hPa)")
+
+	if p_bot in lev:
+		u_bot = u[p_bot==lev,:,:]
+		v_bot = v[p_bot==lev,:,:]
+	else:
+		u_bot = wrf.interpz3d(u, p, p_bot)
+		v_bot = wrf.interpz3d(v, p, p_bot)
+	if p_top in lev:
+		u_top = u[p_top==lev,:,:]
+		v_top = v[p_top==lev,:,:]
+	else:
+		u_top = wrf.interpz3d(u, p, p_top)
+		v_top = wrf.interpz3d(v, p, p_top)
+	
+	shear = np.array(np.sqrt(np.square(u_top-u_bot)+np.square(v_top-v_bot)))
+
 	return shear
 
 def get_srh(u,v,hgt,hgt_top):
@@ -148,11 +169,11 @@ def get_srh(u,v,hgt,hgt_top):
 		srh[i,j] = abs(np.sum(layers))
 	return srh
 
-def get_tornado_pot(mlcape,lcl,mlcin,u,v,p,hgt):
+def get_tornado_pot(mlcape,lcl,mlcin,u,v,p,hgt,lev):
 	#From SHARPpy, but using approximations from EWD. Mixed layer cape approximated by 
 	#using 950 hPa parcel. Mixed layer lcl approximated by using maximum theta-e parcel
 	#Include scaling/limits from SPC
-	shear = get_shear_p(u,v,p,1000,500)
+	shear = get_shear_p(u,v,p,1000,500,lev)
 	srh = get_srh(u,v,hgt,1000)
 	
 	mlcape = mlcape/1500
@@ -191,10 +212,10 @@ def get_lr_p(t,p_1d,hgt,p_bot,p_top):
 	#Get lapse rate (C/km) between two pressure levels
 	#p_bot and p_top (hPa) must correspond to reanalysis pressure levels
 
-	hgt_pbot = hgt[p_1d==p_bot] / 1000
-	hgt_ptop = hgt[p_1d==p_top] / 1000
-	t_pbot = t[p_1d==p_bot]
-	t_ptop = t[p_1d==p_top]
+	hgt_pbot = hgt[abs(p_1d-p_bot)<.0001] / 1000
+	hgt_ptop = hgt[abs(p_1d-p_top)<.0001] / 1000
+	t_pbot = t[abs(p_1d-p_bot)<.0001]
+	t_ptop = t[abs(p_1d-p_top)<.0001]
 	
 	return np.squeeze(- (t_ptop - t_pbot) / (hgt_ptop - hgt_pbot))
 
@@ -202,12 +223,10 @@ def get_lr_hgt(t,hgt,hgt_bot,hgt_top):
 	#Get lapse rate (C/km) between two pressure levels
 	#p_bot and p_top (hPa) must correspond to reanalysis pressure levels
 
-	t_bot = np.empty((t.shape[1],t.shape[2]))
-	t_top = np.empty((t.shape[1],t.shape[2]))
-	for i in np.arange(0,t.shape[1]):
-	    for j in np.arange(0,t.shape[2]):
-		t_bot[i,j] = np.interp(hgt_bot,hgt[:,i,j],t[:,i,j])
-		t_top[i,j] = np.interp(hgt_top,hgt[:,i,j],t[:,i,j])
+	t_bot = wrf.interpz3d(t,hgt,hgt_bot,meta=False)
+	t_top = wrf.interpz3d(t,hgt,hgt_top,meta=False)
+	t_bot[hgt[0] >= hgt_bot] = t[0,hgt[0] >= hgt_bot]
+	t_top[hgt[-1] <= hgt_top] = t[-1,hgt[-1] <= hgt_bot]
 
 	return np.squeeze(- (t_top - t_bot) / ((hgt_top - hgt_bot)/1000))
 
@@ -225,7 +244,7 @@ def get_ship(mucape,muq,t,u,v,hgt,p_1d):
 	
 	shr06 = get_srh(u,v,hgt,6000)
 	lr75 = get_lr_p(t,p_1d,hgt,750,500)
-	h5_temp = np.squeeze(t[p_1d == 500])
+	h5_temp = np.squeeze(t[abs(p_1d-500)<.0001])
 	muq = muq*1000		#This equation assumes mixing ratio as g/kg *I think*
 	frz_lvl = get_t_hgt(t,hgt,0)
 
@@ -280,6 +299,25 @@ def get_mmp(u,v,mu_cape,t,hgt):
 	mmp[mu_cape<100] = 0
 
 	return mmp
+
+def critical_angle(u,v,hgt,u_sfc,v_sfc):
+	#From SHARPpy
+	#Angle between storm relative winds at 10 m and 10-500 m wind shear vector
+	#Used in junjuction with thunderstorm/supercell indices
+	u_storm, v_storm = get_mean_wind(u,v,hgt,0,6000,False,None)
+	u_500 = wrf.interpz3d(u,hgt,500)
+	v_500 = wrf.interpz3d(v,hgt,500)
+
+	shear_u = u_500 - u_sfc
+	shear_v = v_500 - v_sfc
+	srw_u = u_storm - u_sfc
+	srw_v = v_storm - v_sfc
+
+	dot = shear_u * srw_u + shear_v * srw_v
+	shear_mag = np.sqrt(np.square(shear_u)+np.square(shear_v))
+	srw_mag = np.sqrt(np.square(srw_u)+np.square(srw_v))
+
+	return (np.degrees(np.arccos(dot / (shear_mag * srw_mag))))
 
 def calc_param_wrf(times,ta,dp,hur,hgt,terrain,p,ps,ua,va,uas,vas,lon,lat,param,model,save,region):
 
@@ -344,7 +382,7 @@ def calc_param_wrf(times,ta,dp,hur,hgt,terrain,p,ps,ua,va,uas,vas,lon,lat,param,
 			start = dt.datetime.now()
 			param_ind = np.where(param=="relhum850-500")[0][0]
 			param_out[param_ind][t,:,:] = \
-				np.mean(hur[t,(p<=851) & (p>=499),:,:])
+				np.mean(hur[t,(p<=851) & (p>=499),:,:],axis=0)
 			if t == 0:
 				print("RelHum: "+str(dt.datetime.now()-start))
 		if "mu_cape" in param:
@@ -432,7 +470,7 @@ def calc_param_wrf(times,ta,dp,hur,hgt,terrain,p,ps,ua,va,uas,vas,lon,lat,param,
 		# lcl.
 			start = dt.datetime.now()
 			param_ind = np.where(param=="stp")[0][0]
-			stp = get_tornado_pot(ml_cape,lcl,ml_cin,ua[t],va[t],p_3d[t],hgt[t])
+			stp = get_tornado_pot(ml_cape,lcl,ml_cin,ua[t],va[t],p_3d[t],hgt[t],p)
 			param_out[param_ind][t,:,:] = stp
 			if t == 0:
 				print("STP: "+str(dt.datetime.now()-start))

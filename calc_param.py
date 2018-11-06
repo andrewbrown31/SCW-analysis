@@ -40,13 +40,9 @@ import wrf
 #NOTE: "metpy" by unicode is used in some places for calculating specific humidity from
 # thermodynamic properties
 #
-#NOTE: Currently, user defined wind functions used in calc_param_wrf use the bottom available
-# pressure level as "0km"
-#
 #NOTE: When taking mean wind over a layer, does a weighted mean need to be used? Currently, 
-# get_mean_wind interpolates heights to be evenly spaced, which I think may get around the
-# weighting issue anyway (problem is caused by values clustered towards lower levels). In addition,
-# be careful averaging in vertical (i.e. getting relhum, etc)
+# get_mean_wind takes a vertical average between two pressure levels. This could bias the mean 
+# towards heights where there are more model pressure levels.
 #
 #NOTE: Should add in dependencies to if statements within calc_param_wrf. For example, if "ship"
 # is included in the parameter list, then "mu_cape" must also be present, etc. Add something 
@@ -81,27 +77,59 @@ def get_point(point,lon,lat,ta,dp,hgt,ua,va,uas,vas):
 
 	return [ta,dp,hgt,ua,va,uas,vas]
 
-def get_mean_wind(u,v,hgt,hgt_bot,hgt_top,density_weighted,density):
+def get_mean_wind(u,v,hgt,hgt_bot,hgt_top,density_weighted,density,method):
 	#Get mean wind components [lat, lon] based on 3d input of u, v, hgt and p [levels,lat,lon]
-	#Note lowest possible height is equal to bottom pressure level (1000 hPa)
-	u_mean = np.empty((u.shape[1],u.shape[2]))
-	v_mean = np.empty((u.shape[1],u.shape[2]))
-	for i in np.arange(0,u.shape[1]):
-	    for j in np.arange(0,u.shape[2]):
-		if hgt_bot == 0:
-			x = np.arange(hgt[:,i,j].min().round(-1),hgt_top+10,10)
-		else:
-			x = np.arange(hgt_bot,hgt_top+10,10)
-		xp = hgt[:,i,j]
-		u_interp = np.interp(x,xp,u[:,i,j])
-		v_interp = np.interp(x,xp,v[:,i,j])
-		if density_weighted:
-			temp_density = np.interp(x,xp,density[:,i,j])
-			u_mean[i,j] = (np.sum(temp_density*u_interp)) / (np.sum(temp_density))
-			v_mean[i,j] = (np.sum(temp_density*v_interp)) / (np.sum(temp_density))
-		else:
-			u_mean[i,j] = np.mean(u_interp)
-			v_mean[i,j] = np.mean(v_interp)
+
+	#papprox - Find the pressure levels which correspond to avg height closest to hgt_bot and
+	# height top, take arithmatic mean between pressure levels
+	#interp - Interpolate u and v to evenly spaced height levels between the lowest height 
+	# for each point (1000 hPa), and the top height. Then take arithmatic average 
+	# (with option for density weighted.
+	#papprox_hgt - Get all winds on pressure levels between hgt_bot and hgt_top (avg hgt for
+	# whole domain), then add winds interpolated to hgt_bot and hgt_top. Arithmatic avg.
+
+	if method=="papprox":
+		bot_ind = np.argmin(abs(np.mean(hgt,axis=(1,2)) - hgt_bot))
+		top_ind = np.argmin(abs(np.mean(hgt,axis=(1,2)) - hgt_top))
+		hgt_inds = np.arange(bot_ind,top_ind+1,1)
+		u_mean = np.mean(u[hgt_inds],axis=0)
+		v_mean = np.mean(v[hgt_inds],axis=0)
+	elif method=="papprox_hgt":
+		avg_hgt = np.mean(hgt,axis=(1,2))
+		hgt_inds = np.where((avg_hgt<hgt_top)&(avg_hgt>hgt_bot))[0]
+		#Get u and v for pressure levels
+		u_p = u[hgt_inds]; v_p = v[hgt_inds]
+		#Get u and v at top and bottom height
+		u_top = np.expand_dims(np.array(wrf.interplevel(u, hgt, hgt_top)),0)
+		v_top = np.expand_dims(np.array(wrf.interplevel(v, hgt, hgt_top)),0)
+		u_bot = np.expand_dims(np.array(wrf.interplevel(u, hgt, hgt_bot,missing=np.nan)),0)
+		v_bot = np.expand_dims(np.array(wrf.interplevel(v, hgt, hgt_bot,missing=np.nan)),0)
+		total_u = np.concatenate((u_p,u_top,u_bot),axis=0)
+		total_v = np.concatenate((v_p,v_top,v_bot),axis=0)
+		u_mean = np.nanmean(total_u,axis=0)
+		v_mean = np.nanmean(total_v,axis=0)
+	elif method=="interp":
+		u_mean = np.empty((u.shape[1],u.shape[2]))
+		v_mean = np.empty((u.shape[1],u.shape[2]))
+		for i in np.arange(0,u.shape[1]):
+		    for j in np.arange(0,u.shape[2]):
+			if hgt_bot == 0:
+				x = np.arange(hgt[:,i,j].min().round(-1),hgt_top+10,10)
+			else:
+				x = np.arange(hgt_bot,hgt_top+10,10)
+			xp = hgt[:,i,j]
+			u_interp = np.interp(x,xp,u[:,i,j])
+			v_interp = np.interp(x,xp,v[:,i,j])
+			if density_weighted:
+				temp_density = np.interp(x,xp,density[:,i,j])
+				u_mean[i,j] = (np.sum(temp_density*u_interp)) / \
+					(np.sum(temp_density))
+				v_mean[i,j] = (np.sum(temp_density*v_interp)) / \
+					(np.sum(temp_density))
+			else:
+				u_mean[i,j] = np.mean(u_interp)
+				v_mean[i,j] = np.mean(v_interp)
+
 	return [u_mean,v_mean]
 
 def get_shear_hgt(u,v,hgt,hgt_bot,hgt_top):
@@ -152,32 +180,44 @@ def get_shear_p(u,v,p,p_bot,p_top,lev):
 
 	return shear
 
-def get_srh(u,v,hgt,hgt_top):
+def get_srh(u,v,hgt,hgt_top,papprox):
 	#Get storm relative helicity [lat, lon] based on 3d input of u, v, and storm motion u and
 	# v components
 	# Is between the bottom pressure level (1000 hPa), approximating 0 m, and hgt_top (m)
 	#Storm motion approxmiated by using mean 0-6 km wind
-	u_storm, v_storm = get_mean_wind(u,v,hgt,0,6000,False,None)
-	srh = np.empty(u[0].shape)
-	for i in np.arange(0,u[0].shape[0]):
-	    for j in np.arange(0,u[0].shape[1]):
-		u_hgt = u[(hgt[:,i,j] <= hgt_top),i,j]
-		v_hgt = v[(hgt[:,i,j] <= hgt_top),i,j]
-		sru = u_hgt - u_storm[i,j]
-		srv = v_hgt - v_storm[i,j]
+	u_storm, v_storm = get_mean_wind(u,v,hgt,0,6000,False,None,"papprox_hgt")
+
+	if papprox:
+		top_ind = np.argmin(abs(np.mean(hgt,axis=(1,2)) - hgt_top))
+		hgt_inds = np.arange(0,top_ind+1,1)
+		u_hgt = u[hgt_inds]
+		v_hgt = v[hgt_inds]
+		sru = u_hgt - u_storm
+		srv = v_hgt - v_storm
 		layers = (sru[1:] * srv[:-1]) - (sru[:-1] * srv[1:])
-		srh[i,j] = abs(np.sum(layers))
+		srh = abs(np.sum(layers,axis=0))
+
+	else:
+		srh = np.empty(u[0].shape)
+		for i in np.arange(0,u[0].shape[0]):
+		    for j in np.arange(0,u[0].shape[1]):
+			u_hgt = u[(hgt[:,i,j] <= hgt_top),i,j]
+			v_hgt = v[(hgt[:,i,j] <= hgt_top),i,j]
+			sru = u_hgt - u_storm[i,j]
+			srv = v_hgt - v_storm[i,j]
+			layers = (sru[1:] * srv[:-1]) - (sru[:-1] * srv[1:])
+			srh[i,j] = abs(np.sum(layers))
+
 	return srh
 
-def get_tornado_pot(mlcape,lcl,mlcin,u,v,p,hgt,lev):
+def get_tornado_pot(mlcape,lcl,mlcin,u,v,p,hgt,lev,srh01):
 	#From SHARPpy, but using approximations from EWD. Mixed layer cape approximated by 
 	#using 950 hPa parcel. Mixed layer lcl approximated by using maximum theta-e parcel
 	#Include scaling/limits from SPC
 	shear = get_shear_p(u,v,p,1000,500,lev)
-	srh = get_srh(u,v,hgt,1000)
 	
 	mlcape = mlcape/1500
-	srh = srh/150
+	srh01 = srh01/150
 
 	shear[shear<12.5] = 0
 	shear[shear>30] = 1.5
@@ -191,17 +231,16 @@ def get_tornado_pot(mlcape,lcl,mlcin,u,v,p,hgt,lev):
 	mlcin[mlcin>200] = 0
 	mlcin[(mlcin<=200) & (mlcin>=50)] = (200 - mlcin[(mlcin<=200) & (mlcin>=50)]) / 150
 
-	return (mlcape*srh*shear*lcl*mlcin)
+	return (mlcape*srh01*shear*lcl*mlcin)
 
-def get_supercell_pot(mucape,u,v,hgt,ta_unit,p_unit,q_unit):
+def get_supercell_pot(mucape,u,v,hgt,ta_unit,p_unit,q_unit,srh03):
 	#From EWD. MUCAPE approximated by treating each vertical grid point as a parcel, 
 	# finding the CAPE of each parcel, and taking the maximum CAPE
 
-	srh03 = get_srh(u,v,hgt,3000)
 	density = mpcalc.density(p_unit,ta_unit,q_unit)
 	density = np.array(density)
-	mean_u6000, mean_v6000 = get_mean_wind(u,v,hgt,0,6000,True,density)
-	mean_u500, mean_v500 = get_mean_wind(u,v,hgt,0,500,True,density)
+	mean_u6000, mean_v6000 = get_mean_wind(u,v,hgt,0,6000,True,density,"papprox_hgt")
+	mean_u500, mean_v500 = get_mean_wind(u,v,hgt,0,500,True,density,"papprox_hgt")
 
 	len6000 = np.sqrt(np.square(mean_u6000)+np.square(mean_v6000))
 	len500 = np.sqrt(np.square(mean_u500)+np.square(mean_v500))
@@ -232,17 +271,19 @@ def get_lr_hgt(t,hgt,hgt_bot,hgt_top):
 
 def get_t_hgt(t,hgt,t_value):
 	#Get the height [lev,lat,lon] at which temperature [lev,lat,lon] is equal to t_value
-	t_hgt = np.empty((t.shape[1],t.shape[2]))
-	for i in np.arange(0,t.shape[1]):
-	    for j in np.arange(0,t.shape[2]):
-		t_hgt[i,j] = np.interp(t_value,np.flipud(t[:,i,j]),np.flipud(hgt[:,i,j]))
+
+	t_hgt = np.array(wrf.interpz3d(hgt, t, 0))
+
+	#t_hgt = np.empty((t.shape[1],t.shape[2]))
+	#for i in np.arange(0,t.shape[1]):
+	#    for j in np.arange(0,t.shape[2]):
+	#	t_hgt[i,j] = np.interp(t_value,np.flipud(t[:,i,j]),np.flipud(hgt[:,i,j]))
 	return t_hgt
 
-def get_ship(mucape,muq,t,u,v,hgt,p_1d):
+def get_ship(mucape,muq,t,u,v,hgt,p_1d,shr06):
 	#From EWD (no freezing level involved), but using SPC intended values:
 	# https://github.com/sharppy/SHARPpy/blob/master/sharppy/sharptab/params.py
 	
-	shr06 = get_srh(u,v,hgt,6000)
 	lr75 = get_lr_p(t,p_1d,hgt,750,500)
 	h5_temp = np.squeeze(t[abs(p_1d-500)<.0001])
 	muq = muq*1000		#This equation assumes mixing ratio as g/kg *I think*
@@ -271,7 +312,7 @@ def get_mmp(u,v,mu_cape,t,hgt):
 	# loop, calling function get_shear_hgt which interpolates over lat/lon
 
 	#Get max wind shear
-	lowers = np.arange(100,1000+100,100)
+	lowers = np.arange(100,1000+250,250)
 	uppers = np.arange(6000,10000+1000,1000)
 	no_shears = len(lowers)*len(uppers)
 	shear_3d = np.empty((no_shears,u.shape[1],u.shape[2]))
@@ -284,7 +325,7 @@ def get_mmp(u,v,mu_cape,t,hgt):
 
 	lr38 = get_lr_hgt(t,hgt,3000,8000)
 
-	u_mean, v_mean = get_mean_wind(u,v,hgt,3000,12000,False,None)
+	u_mean, v_mean = get_mean_wind(u,v,hgt,3000,12000,False,None,"papprox_hgt")
 	mean_wind = np.sqrt(np.square(u_mean)+np.square(v_mean))
 
 	a_0 = 13.0 # unitless
@@ -304,7 +345,7 @@ def critical_angle(u,v,hgt,u_sfc,v_sfc):
 	#From SHARPpy
 	#Angle between storm relative winds at 10 m and 10-500 m wind shear vector
 	#Used in junjuction with thunderstorm/supercell indices
-	u_storm, v_storm = get_mean_wind(u,v,hgt,0,6000,False,None)
+	u_storm, v_storm = get_mean_wind(u,v,hgt,0,6000,False,None,"papprox_hgt")
 	u_500 = wrf.interpz3d(u,hgt,500)
 	v_500 = wrf.interpz3d(v,hgt,500)
 
@@ -413,25 +454,36 @@ def calc_param_wrf(times,ta,dp,hur,hgt,terrain,p,ps,ua,va,uas,vas,lon,lat,param,
 			param_out[param_ind][t,:,:] = ml_cin
 		if "srh01" in param:
 		#Combined (+ve and -ve) rel. helicity from 0-1 km
+			start = dt.datetime.now()
 			param_ind = np.where(param=="srh01")[0][0]
-			param_out[param_ind][t,:,:] = get_srh(ua[t],va[t],hgt[t],1000)
+			srh01 = get_srh(ua[t],va[t],hgt[t],1000,True)
+			param_out[param_ind][t,:,:] = srh01
+			if t == 0:
+				print("SRH: "+str(dt.datetime.now()-start))
 		if "srh03" in param:
 		#Combined (+ve and -ve) rel. helicity from 0-3 km
 			start = dt.datetime.now()
+			srh03 = get_srh(ua[t],va[t],hgt[t],3000,True)
 			param_ind = np.where(param=="srh03")[0][0]
-			param_out[param_ind][t,:,:] = get_srh(ua[t],va[t],hgt[t],3000)
+			param_out[param_ind][t,:,:] = srh03
 			if t == 0:
 				print("SRH: "+str(dt.datetime.now()-start))
 		if "srh06" in param:
 		#Combined (+ve and -ve) rel. helicity from 0-6 km
+			start = dt.datetime.now()
 			param_ind = np.where(param=="srh06")[0][0]
-			param_out[param_ind][t,:,:] = get_srh(ua[t],va[t],hgt[t],6000)
+			s06 = get_srh(ua[t],va[t],hgt[t],6000,True)
+			param_out[param_ind][t,:,:] = s06
+			if t == 0:
+				print("SRH: "+str(dt.datetime.now()-start))
 		if "ship" in param:
 		#Significant hail parameter
+			if "srh06" not in param:
+				raise NameError("To calculate ship, srh06 must be included")
 			start = dt.datetime.now()
 			param_ind = np.where(param=="ship")[0][0]
 			muq = mu_cape_inds.choose(q)
-			ship = get_ship(mu_cape,muq,ta[t],ua[t],va[t],hgt[t],p)
+			ship = get_ship(mu_cape,muq,ta[t],ua[t],va[t],hgt[t],p,s06)
 			param_out[param_ind][t,:,:] = ship
 			if t == 0:
 				print("SHIP: "+str(dt.datetime.now()-start))
@@ -456,10 +508,12 @@ def calc_param_wrf(times,ta,dp,hur,hgt,terrain,p,ps,ua,va,uas,vas,lon,lat,param,
 				print("MMP: "+str(dt.datetime.now()-start))
 		if "scp" in param:
 		#Supercell composite parameter (EWD)
+			if "srh03" not in param:
+				raise NameError("To calculate ship, srh03 must be included")
 			start = dt.datetime.now()
 			param_ind = np.where(param=="scp")[0][0]
 			scell_pot = get_supercell_pot(mu_cape,ua[t],va[t],hgt[t],ta_unit,p_unit,\
-					q_unit)
+					q_unit,srh03)
 			param_out[param_ind][t,:,:] = scell_pot
 			if t == 0:
 				print("SCP: "+str(dt.datetime.now()-start))
@@ -468,12 +522,22 @@ def calc_param_wrf(times,ta,dp,hur,hgt,terrain,p,ps,ua,va,uas,vas,lon,lat,param,
 		#NOTE: LCL here is for "maximum" parcel. I.e., the parcel with heighest equivalent
 		# potential temperature in the lowest 3000 m. STP however, calls for mixed layer
 		# lcl.
+			if "srh01" not in param:
+				raise NameError("To calculate ship, srh01 must be included")
 			start = dt.datetime.now()
 			param_ind = np.where(param=="stp")[0][0]
-			stp = get_tornado_pot(ml_cape,lcl,ml_cin,ua[t],va[t],p_3d[t],hgt[t],p)
+			stp = get_tornado_pot(ml_cape,lcl,ml_cin,ua[t],va[t],p_3d[t],hgt[t],p,srh01)
 			param_out[param_ind][t,:,:] = stp
 			if t == 0:
 				print("STP: "+str(dt.datetime.now()-start))
+		if "crt" in param:
+		#Critical tornado angle
+			start = dt.datetime.now()
+			param_ind = np.where(param=="crt")[0][0]
+			param_out[param_ind][t,:,:] = critical_angle(ua[t],va[t],hgt[t],\
+					uas[t],vas[t])
+			if t == 0:
+				print("CRT: "+str(dt.datetime.now()-start))
 
 	if save:
 		fname = "/g/data/eg3/ab4502/ExtremeWind/"+region+"/"+model+"_"+\

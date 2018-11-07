@@ -1,4 +1,4 @@
-Python scripts which perform the following tasks
+Python scripts which perform the following tasks as part of the ElectraNet project
 
 	- Read reanalysis files from two different datasets (ERA-Interim, BARRA) stored on the raijin data server 
 		barra_read.py
@@ -6,7 +6,7 @@ Python scripts which perform the following tasks
 
 	- Calculate various thunderstorm/tornado parameters
 		calc_barra.py
-		calc_model.py
+		calc_model.py (DRIVER FUNCTION TO CREATE NETCDF4 FILES)
 
 	- Read observational sondes for comparison
 		obs_read.py

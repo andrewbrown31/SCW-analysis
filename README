@@ -6,9 +6,7 @@ Python scripts which perform the following tasks
 
 	- Calculate various thunderstorm/tornado parameters
 		calc_barra.py
-		calc_erai.py
 		calc_model.py
-		calc_param.py
 
 	- Read observational sondes for comparison
 		obs_read.py

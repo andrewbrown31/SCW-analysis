@@ -29,6 +29,7 @@ def read_barra(domain,times):
 		date_list = date_seq(times)
 	else:
 		date_list = times
+	date_list = remove_corrupt_dates(date_list)
 	time_hours = np.empty(len(date_list))
 	for t in np.arange(0,len(date_list)):
 		time_hours[t] = (date_list[t] - ref).total_seconds() / (3600)
@@ -122,6 +123,7 @@ def read_barra_points(points,times):
 	
 	ref = dt.datetime(1970,1,1,0,0,0)
 	date_list = date_seq(times)
+	date_list = remove_corrupt_dates(date_list)
 
 	#Get time-invariant pressure and spatial info
 	no_p, pres, p_ind = get_pressure(100)
@@ -257,3 +259,10 @@ def get_terrain(lat_ind,lon_ind):
 	terrain_file.close()
 	return terrain
 
+
+def remove_corrupt_dates(date_list):
+	corrupt_dates = [dt.datetime(2014,11,22,06,0)]
+	date_list = np.array(date_list)
+	for i in np.arange(0,len(corrupt_dates)):
+		date_list = date_list[~(date_list==corrupt_dates[i])]
+	return date_list

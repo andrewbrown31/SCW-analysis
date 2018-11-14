@@ -65,41 +65,62 @@ def calc_model(model,out_name,method,time,param,issave,region,cape_method):
 
 	if model=="barra":
 		print("\n	INFO: READING IN BARRA DATA...\n")
-		#NOTE: read_barra_points needs to be fixed (see changes in read_erai_points)
 		ta,dp,hur,hgt,terrain,p,ps,ua,va,uas,vas,lon,lat,lon_used,lat_used,date_list= \
-			read_barra_points(points,time)
+			read_barra_points(points,times)
 	elif model=="erai":
 		print("\n	INFO: READING IN ERA-Interim DATA...\n")
 		ta,dp,hur,hgt,terrain,p,ps,ua,va,uas,vas,lon,lat,lon_used,lat_used,\
-			date_list = read_erai_points(region,time)
+			date_list = read_erai_points(points,times)
 	else:
 		raise NameError("""model"" must be ""erai"" or ""barra""")
 
 	df = calc_param_points(date_list,ta,dp,hur,hgt,terrain,p,ps,ua,va,uas,vas,lon,lat,\
-			lon_used,lat_used,param,loc_id)
+			lon_used,lat_used,param,loc_id,cape_method)
 
 	if issave:
 		df.to_csv("/g/data/eg3/ab4502/ExtremeWind/"+region+"/data_"+out_name+"_"+\
-			dt.datetime.strftime(time[0],"%Y%m%d")+"_"+\
-			dt.datetime.strftime(time[1],"%Y%m%d")+".csv",float_format="%.3f")	
+			dt.datetime.strftime(times[0],"%Y%m%d")+"_"+\
+			dt.datetime.strftime(times[1],"%Y%m%d")+".csv",float_format="%.3f")	
 
 if __name__ == "__main__":
 
-	model = "erai"
-	cape_method = "wrf"
-	out_name = model+"_"+cape_method
+#--------------------------------------------------------------------------------------------------
+# 	SETTINGS
+#--------------------------------------------------------------------------------------------------
 
-	method = "domain"
-	region = "aus"
-		
+	model = "erai"
+	cape_method = "points_wrf"
+
+	method = "points"
+	region = "adelaideAP"
+
+	experiment = ""
+
+	#ADELAIDE = UTC + 10:30
+	#times = [dt.datetime(2010,1,1,6,0,0),dt.datetime(2015,12,31,0,0,0)]
+	times = [dt.datetime(2014,11,22,0,0,0),dt.datetime(2014,11,23,0,0,0)]
+		#[dt.datetime(2014,9,28,0,0,0),dt.datetime(2014,9,29,0,0,0)]]
+	issave = True
+
+#--------------------------------------------------------------------------------------------------
+#	RUN CODE
+#--------------------------------------------------------------------------------------------------
+
 	print("\n	CALCULATING THUNDERSTORM/TORNADO PARAMETERS FOR "+model+" USING "+cape_method+"\n 	FOR "+method+" IN "+region)
 
-	time = [dt.datetime(2015,10,27,6,0,0),dt.datetime(2015,10,27,6,0,0)]
+	out_name = model+"_"+cape_method+experiment
+
 	if cape_method == "wrf":
 		param = ["ml_cape","ml_cin","mu_cin","mu_cape","s06","srh01","srh03","srh06","scp",\
 			"stp","ship","mmp","relhum850-500","crt","non_sc_stp","vo","lr1000","lcl"]
 	elif cape_method == "SHARPpy":
-		param = ["mu_cin","mu_cape","s06","srh01","srh03","srh06","scp",\
-			"ship","mmp","relhum850-500"]
-	issave = True
-	calc_model(model,out_name,method,time,param,issave,region,cape_method)	
+		param = ["mu_cin","mu_cape","s06","s0850","srh01","srh03","srh06","scp",\
+			"ship","mmp","relhum850-500","stp"]
+	elif cape_method == "points_wrf":
+		param = ["ml_cape","ml_cin","mu_cin","mu_cape","s06","srh01","srh03","srh06","scp",\
+			"stp","ship","mmp","relhum850-500","crt","lr1000","lcl","cape*s06"]
+	elif cape_method == "points_SHARPpy":
+		param = ["mu_cape","s06","cape*s06"]	
+
+	#for time in times:
+	calc_model(model,out_name,method,times,param,issave,region,cape_method)	

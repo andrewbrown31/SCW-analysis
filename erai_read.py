@@ -174,7 +174,7 @@ ps_6hrs_ERAI_historical_an-sfc_"+date+"*.nc")[0])
 			vas[date_ind,point] = vas_file["vas"][time_ind,lat_ind[point]\
 						,lon_ind[point]]
 			ps[date_ind,point] = ps_file["ps"][time_ind,lat_ind[point]\
-						,lon_ind[point]]
+						,lon_ind[point]] /100
 			p[date_ind,:,point] = pres[p_ind]
 
 		ta_file.close();z_file.close();ua_file.close();va_file.close();hur_file.close();uas_file.close();vas_file.close();ps_file.close()

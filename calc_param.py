@@ -156,9 +156,10 @@ def get_shear_hgt(u,v,hgt,hgt_bot,hgt_top,uas=None,vas=None):
 	#Get bulk wind shear [lat, lon] between two heights, based on 3d input of u, v, and 
 	#hgt [levels,lat,lon]
 	#Note lowest possible height is equal to bottom pressure level (1000 hPa), unless hgt_bot
-	# is specified as less than or equal to 10 m, where sfc winds are then used 
+	# is specified as less than or equal to 10 m, and 10 m winds are provided, in which case
+	# sfc winds are then used 
 
-	if hgt_bot <= 10:
+	if (hgt_bot <= 10) & ~(uas is None):
 		u_bot = uas
 		v_bot = vas
 	else:
@@ -530,6 +531,9 @@ def calc_param_wrf(times,ta,dp,hur,hgt,terrain,p,ps,ua,va,uas,vas,lon,lat,param,
 		if "relhum850-500" in param:
 			param_ind = np.where(param=="relhum850-500")[0][0]
 			param_out[param_ind][t,:,:] = get_mean_var_p(hur[t],p,850,500)
+		if "relhum1000-700" in param:
+			param_ind = np.where(param=="relhum1000-700")[0][0]
+			param_out[param_ind][t,:,:] = get_mean_var_p(hur[t],p,1000,700)
 		if "mu_cape" in param:
 		#CAPE for most unstable parcel
 		#cape.data has cape values for each pressure level, as if they were each parcels.
@@ -541,26 +545,43 @@ def calc_param_wrf(times,ta,dp,hur,hgt,terrain,p,ps,ua,va,uas,vas,lon,lat,param,
 		#Currently using a parcel at 950 hPa to define ml_cape
 			param_ind = np.where(param=="ml_cape")[0][0]
 			param_out[param_ind][t,:,:] = ml_cape
+		if "ssfc6" in param:
+		#Wind shear 10 m (sfc) to 6 km
+			param_ind = np.where(param=="ssfc6")[0][0]
+			ssfc6 = get_shear_hgt(ua[t],va[t],hgt[t],0,6000,\
+				uas[t],vas[t])
+			param_out[param_ind][t,:,:] = ssfc6
+		if "ssfc3" in param:
+		#Wind shear 10 m (sfc) to 3 km
+			param_ind = np.where(param=="ssfc3")[0][0]
+			ssfc3 = get_shear_hgt(ua[t],va[t],hgt[t],0,3000,\
+				uas[t],vas[t])
+			param_out[param_ind][t,:,:] = ssfc3
+		if "ssfc1" in param:
+		#Wind shear 10 m (sfc) to 1 km
+			param_ind = np.where(param=="ssfc1")[0][0]
+			ssfc1 = get_shear_hgt(ua[t],va[t],hgt[t],0,1000,\
+				uas[t],vas[t])
+			param_out[param_ind][t,:,:] = ssfc1
 		if "s06" in param:
 		#Wind shear sfc to 6 km
 			start = dt.datetime.now()
 			param_ind = np.where(param=="s06")[0][0]
-			param_out[param_ind][t,:,:] = get_shear_hgt(ua[t],va[t],hgt[t],0,6000,\
-				uas[t],vas[t])
+			param_out[param_ind][t,:,:] = get_shear_hgt(ua[t],va[t],hgt[t],0,6000)
 			if t == 0:
 				print("S06: "+str(dt.datetime.now()-start))
-		if "s0850" in param:
+		if "ssfc850" in param:
 		#Wind shear sfc to 850 hPa
 			start = dt.datetime.now()
-			param_ind = np.where(param=="s06")[0][0]
+			param_ind = np.where(param=="ssfc850")[0][0]
 			param_out[param_ind][t,:,:] = get_shear_p(ua[t],va[t],p_3d[t],"sfc",850,p,\
 				uas[t],vas[t])
 			if t == 0:
 				print("S06: "+str(dt.datetime.now()-start))
-		if "s0500" in param:
+		if "ssfc500" in param:
 		#Wind shear sfc to 500 m
 			start = dt.datetime.now()
-			param_ind = np.where(param=="s0500")[0][0]
+			param_ind = np.where(param=="ssfc500")[0][0]
 			param_out[param_ind][t,:,:] = get_shear_hgt(ua[t],va[t],hgt[t],0,500,\
 				uas[t],vas[t])
 			if t == 0:
@@ -705,6 +726,9 @@ def calc_param_wrf(times,ta,dp,hur,hgt,terrain,p,ps,ua,va,uas,vas,lon,lat,param,
 		if "cape*s06" in param:
 			param_ind = np.where(param=="cape*s06")[0][0]
 			param_out[param_ind][t,:,:] = mu_cape * np.power(s06,1.67)
+		if "cape*ssfc6" in param:
+			param_ind = np.where(param=="cape*ssfc6")[0][0]
+			param_out[param_ind][t,:,:] = mu_cape * np.power(ssfc6,1.67)
 
 	if save:
 		save_netcdf(region,model,times,lat,lon,param,param_out)
@@ -913,6 +937,8 @@ def calc_param_points(times,ta,dp,hur,hgt,terrain,p,ps,ua,va,uas,vas,lon,lat,lon
 				#	np.mean(hur_p[(p_p<=851) & (p_p>=499)])
 				#param_ind = np.where(param=="relhum850-500")[0][0]
 				values[cnt,param=="relhum850-500"] = get_mean_var_p(hur_p,p_p,850,500)
+			if "relhum1000-700" in param:
+				values[cnt,param=="relhum1000-700"] = get_mean_var_p(hur_p,p_p,1000,700)
 			if "mu_cape" in param:
 			#CAPE for most unstable parcel
 				#values[cnt,param=="mu_cape"] = mu_parcel.bplus
@@ -920,22 +946,31 @@ def calc_param_points(times,ta,dp,hur,hgt,terrain,p,ps,ua,va,uas,vas,lon,lat,lon
 				values[cnt,param=="mu_cape"] = mu_cape
 			if "ml_cape" in param:
 				values[cnt,param=="ml_cape"] = ml_cape
-			if "s06" in param:
+			if "ssfc6" in param:
 			#Wind shear 10 m (sfc) to 6 km
-				#ua_0km = uas_p
-				#ua_6km = np.interp(6000,hgt_p,ua_p)
-				#va_0km = vas_p
-				#va_6km = np.interp(6000,hgt_p,va_p)
-				#shear = np.sqrt(np.square(ua_6km-ua_0km)+np.square(va_6km-va_0km))
-				s06 = get_shear_hgt(ua_p,va_p,hgt_p,0,6000,\
+				ssfc6 = get_shear_hgt(ua_p,va_p,hgt_p,0,6000,\
 					uas_p,vas_p)
+				values[cnt,param=="ssfc6"] = ssfc6
+			if "ssfc3" in param:
+			#Wind shear 10 m (sfc) to 3 km
+				ssfc3 = get_shear_hgt(ua_p,va_p,hgt_p,0,3000,\
+					uas_p,vas_p)
+				values[cnt,param=="ssfc3"] = ssfc3
+			if "ssfc1" in param:
+			#Wind shear 10 m (sfc) to 1 km
+				ssfc1 = get_shear_hgt(ua_p,va_p,hgt_p,0,1000,\
+					uas_p,vas_p)
+				values[cnt,param=="ssfc1"] = ssfc1
+			if "s06" in param:
+			#Wind shear 100 hPa to 6 km
+				s06 = get_shear_hgt(ua_p,va_p,hgt_p,0,6000)
 				values[cnt,param=="s06"] = s06
-			if "s0850" in param:
-				values[cnt,param=="s0850"] = get_shear_p(ua_p,va_p,p_p,"sfc",850,\
-					uas_p,vas_p)
+			if "ssfc850" in param:
+				values[cnt,param=="ssfc850"] = get_shear_p(ua_p,va_p,p_p,"sfc",850,\
+					p_p,uas_p,vas_p)
 			if "s0500" in param:
 				values[cnt,param=="s0500"] = get_shear_p(ua_p,va_p,p_p,"sfc",500,\
-					uas_p,vas_p)
+					p_p,uas_p,vas_p)
 			if "lr1000" in param:
 			#Lapse rate bottom pressure level to 1000 m
 				lr1000 = get_lr_hgt(ta_p,hgt_p,0,1000)
@@ -1005,6 +1040,8 @@ def calc_param_points(times,ta,dp,hur,hgt,terrain,p,ps,ua,va,uas,vas,lon,lat,lon
 				values[cnt,param=="crt"] = critical_angle(ua_p,va_p,hgt_p,uas_p,vas_p)
 			if "cape*s06" in param:
 				values[cnt,param=="cape*s06"] = mu_cape * np.power(s06,1.67)
+			if "cape*ssfc6" in param:
+				values[cnt,param=="cape*ssfc6"] = mu_cape * np.power(ssfc6,1.67)
 
 			values_lat.append(lat[point])
 			values_lon.append(lon[point])
@@ -1070,56 +1107,90 @@ def nc_attributes(param):
 	if param=="ml_cape":
 		units = "J/kg"
 		long_name = "mixed_layer_cape"
-	if param=="ml_cin":
+	elif param=="ml_cin":
 		units = "J/kg"
 		long_name = "mixed_layer_cin"
-	if param=="mu_cape":
+	elif param=="mu_cape":
 		units = "J/kg"
 		long_name = "most_unstable_cape"
-	if param=="mu_cin":
+	elif param=="mu_cin":
 		units = "J/kg"
 		long_name = "most_unstable_cin"
-	if param=="s06":
+	elif param=="ssfc850":
+		units = "m/s"
+		long_name = "bulk_wind_shear_sfc-850hPa"
+	elif param=="s06":
 		units = "m/s"
 		long_name = "bulk_wind_shear_0-6km"
-	if param=="srh01":
+	elif param=="s03":
+		units = "m/s"
+		long_name = "bulk_wind_shear_0-3km"
+	elif param=="s01":
+		units = "m/s"
+		long_name = "bulk_wind_shear_0-1km"
+	elif param=="ssfc500":
+		units = "m/s"
+		long_name = "bulk_wind_shear_sfc-6km"
+	elif param=="ssfc6":
+		units = "m/s"
+		long_name = "bulk_wind_shear_sfc-500m"
+	elif param=="ssfc3":
+		units = "m/s"
+		long_name = "bulk_wind_shear_sfc-3km"
+	elif param=="ssfc1":
+		units = "m/s"
+		long_name = "bulk_wind_shear_sfc-1km"
+	elif param=="srh01":
 		units = "m^2/s^2"
 		long_name = "storm_relative_helicity_0-1km"
-	if param=="srh03":
+	elif param=="srh03":
 		units = "m^2/s^2"
 		long_name = "storm_relative_helicity_0-3km"
-	if param=="srh06":
+	elif param=="srh06":
 		units = "m^2/s^2"
 		long_name = "storm_relative_helicity_0-6 km"
-	if param=="scp":
+	elif param=="scp":
 		units = ""
 		long_name = "supercell_composite_parameter"
-	if param=="stp":
+	elif param=="stp":
 		units = ""
 		long_name = "significant_tornado_parameter"
-	if param=="ship":
+	elif param=="ship":
 		units = ""
 		long_name = "significant_hail_parameter"
-	if param=="mmp":
+	elif param=="mmp":
 		units = ""
 		long_name = "mcs_maintanance_probability"
-	if param=="relhum850-500":
+	elif param=="relhum850-500":
 		units = "%"
 		long_name = "avg_relative_humidity_850-500hPa"
-	if param=="crt":
+	elif param=="relhum1000-700":
+		units = "%"
+		long_name = "avg_relative_humidity_850-500hPa"
+	elif param=="crt":
 		units = "degrees"
 		long_name = "tornado_critical_angle"
-	if param=="non_sc_stp":
+	elif param=="non_sc_stp":
 		units = ""
 		long_name = "non-supercell_significant_tornado_parameter"
-	if param=="vo":
+	elif param=="vo":
 		units = "s^-1"
 		long_name = "relative_vorticity"
-	if param=="lr1000":
+	elif param=="lr1000":
 		units = "degC/km"
 		long_name = "lapse_rate_sfc-1000m"
-	if param=="lcl":
+	elif param=="lcl":
 		units = "m"
 		long_name = "most_unstable_lifting_condensation_level"
+	elif param == "cape*s06":
+		units = ""
+		long_name = "cape*s06"
+	elif param == "cape*ssfc6":
+		units = ""
+		long_name = "cape*ssfc6"
+	else:
+		units = ""
+		long_name = ""
+		print("WARNING: "+param+" HAS NO UNITS OR LONG NAME CODED IN NC_ATTRIBUTES()")
 
 	return [units,long_name]

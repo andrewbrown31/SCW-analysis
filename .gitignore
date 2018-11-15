@@ -1,6 +1,8 @@
 figs/
 SHARPpy/
 SkewT/
+jobs/
 *.csv
 *.pyc
 *.swp
+*.csh

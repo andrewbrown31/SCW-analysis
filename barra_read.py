@@ -24,9 +24,9 @@ def read_barra(domain,times):
 	# use with forecast files (with time dimension length >1), will need to be changed.
 
 	ref = dt.datetime(1970,1,1,0,0,0)
-	date_list = date_seq(times)
+	date_list = date_seq(times,"hours",6)
 	if len(times) > 1:
-		date_list = date_seq(times)
+		date_list = date_seq(times,"hours",6)
 	else:
 		date_list = times
 	date_list = remove_corrupt_dates(date_list)
@@ -60,7 +60,7 @@ def read_barra(domain,times):
 		month =	dt.datetime.strftime(date_list[t],"%m")
 		day = dt.datetime.strftime(date_list[t],"%d")
 		hour = dt.datetime.strftime(date_list[t],"%H")
-		print(date_list[t])
+		#print(date_list[t])
 
 		#Load BARRA analysis files
 		ta_file = nc.Dataset(glob.glob("/g/data/ma05/BARRA_R/v1/analysis/prs/air_temp/"\
@@ -114,7 +114,6 @@ def read_barra(domain,times):
 def read_barra_points(points,times):
 
 	#NOTE might have to change to read forecast (hourly) data instead of analysis
-	#NOTE if directly comparing with ERA-Interim, need to coarsen/interpolate first
 
 	# points = [(x1,y1),(x2,y2),...,(xn,yn)]
 	# times = [start_time, end_time]
@@ -122,7 +121,7 @@ def read_barra_points(points,times):
 	#Open BARRA netcdf files and extract variables needed for a multiple files/times given set of spatial points
 	
 	ref = dt.datetime(1970,1,1,0,0,0)
-	date_list = date_seq(times)
+	date_list = date_seq(times,"hours",6)
 	date_list = remove_corrupt_dates(date_list)
 
 	#Get time-invariant pressure and spatial info
@@ -170,11 +169,6 @@ def read_barra_points(points,times):
 		
 		for point in np.arange(0,len(points)):
 
-			#NOTE THIS COULD BE MORE SOPHISTICATED THAN JUST NEAREST POINT
-			# SHOULD PROABLY MAKE SURE IT'S NOT AN OCEAN POINT AT LEAST
-			# IF COMPARING WITH ERA-INTERIM DIRECTLY, MIGHT NEED TO COARSEN GRID FIRST
-			#lon_ind = np.argmin(abs(lon-points[point][0]))
-			#lat_ind = np.argmin(abs(lat-points[point][1]))
 			ta[t,:,point] = ta_file["air_temp"][p_ind,lat_ind,lon_ind] - 273.15
 			ua[t,:,point] = ua_file["wnd_ucmp"][p_ind,lat_ind,lon_ind]
 			va[t,:,point] = va_file["wnd_vcmp"][p_ind,lat_ind,lon_ind]
@@ -210,13 +204,14 @@ def read_barra_points(points,times):
 
 	return [ta,dp,hur,hgt,terrain,p,ps,ua,va,uas,vas,lon,lat,lon_used,lat_used,date_list]
 
-def date_seq(times):
+def date_seq(times,delta_type,delta):
 	start_time = times[0]
 	end_time = times[1]
 	current_time = times[0]
 	date_list = [current_time]
 	while (current_time < end_time):
-		current_time = current_time + dt.timedelta(hours = 6)
+		if delta_type == "hours":
+			current_time = current_time + dt.timedelta(hours = delta)	
 		date_list.append(current_time)
 	return date_list
 

@@ -25,7 +25,7 @@ def read_erai(domain,times):
 
 	ref = dt.datetime(1900,1,1,0,0,0)
 	if len(times) > 1:
-		date_list = date_seq(times)
+		date_list = date_seq(times,"hours",6)
 	else:
 		date_list = times
 	formatted_dates = [format_dates(x) for x in date_list]
@@ -56,7 +56,7 @@ def read_erai(domain,times):
 	ps = np.empty((len(date_list),len(lat_ind),len(lon_ind)))
 
 	for date in unique_dates:
-		print(date)
+		#print(date)
 
 	#Load ERA-Interim reanalysis files
 		ta_file = nc.Dataset(glob.glob("/g/data/ub4/erai/netcdf/6hr/atmos/oper_an_pl/v01/ta/\
@@ -104,7 +104,7 @@ def read_erai_points(points,times):
 
 	#Format dates and times
 	ref = dt.datetime(1900,1,1,0,0,0)
-	date_list = date_seq(times)
+	date_list = date_seq(times,"hours",6)
 	formatted_dates = [format_dates(x) for x in date_list]
 	unique_dates = np.unique(formatted_dates)
 	time_hours = np.empty(len(date_list))

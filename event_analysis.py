@@ -1,10 +1,14 @@
+import os
 from obs_read import *
 import matplotlib.pyplot as plt
-from plot_param import contour_properties
 
-def load_netcdf_points(fname,points,loc_id):
+def load_netcdf_points(fname,points,loc_id,model,smooth,ad_data=False):
 	#Load a single netcdf file created by calc_param.py, and create dataframe for a 
-	# list of lat/lon points
+	# list of lat/lon points (names given by loc_id)
+	#If model = barra and smooth = False, the closest point in BARRA to "point" is taken. 
+	# Otherwise, smooth = "mean" takes the mean over ~0.75 degrees (same as ERA-Interim),
+	# or smooth = "max" takes the max over the same area for all variables 
+	
 
 	#Load netcdf file containing convective parameters saved by calc_param.py
 	f = nc.Dataset(fname)
@@ -20,11 +24,15 @@ def load_netcdf_points(fname,points,loc_id):
 		lsm = nc.Dataset("/g/data/ma05/BARRA_R/v1/static/lnd_mask-an-slv-PT0H-BARRA_R-v1.nc").variables["lnd_mask"][:]
 	lon = f.variables["lon"][:]
 	lat = f.variables["lat"][:]
-	lsm_new = lsm[((lat_orig<=lat[0]) & (lat_orig>=lat[-1]))]
-	lsm_new = lsm_new[:,((lon_orig>=lon[0]) & (lon_orig<=lon[-1]))]
 	x,y = np.meshgrid(lon,lat)
-	x[lsm_new==0] = np.nan
-	y[lsm_new==0] = np.nan
+	if ad_data:
+		lsm_new = lsm[((lat_orig>=lat[0]) & (lat_orig<=lat[-1]))]
+		lsm_new = lsm_new[:,((lon_orig>=lon[0]) & (lon_orig<=lon[-1]))]
+	else:
+		lsm_new = lsm[((lat_orig<=lat[0]) & (lat_orig>=lat[-1]))]
+		lsm_new = lsm_new[:,((lon_orig>=lon[0]) & (lon_orig<=lon[-1]))]
+		x[lsm_new==0] = np.nan
+		y[lsm_new==0] = np.nan
 	lat_ind = np.empty(len(points))
 	lon_ind = np.empty(len(points))
 	lat_used = np.empty(len(points))
@@ -39,7 +47,12 @@ def load_netcdf_points(fname,points,loc_id):
 		lat_used[point] = lat[dist_lat]
 
 	#Create dataframe the same format as output from calc_param_points
-	times = nc.num2date(f.variables["time"][:],f.variables["time"].units)
+	if ad_data:
+		times = f.variables["time"][:]
+		times = [dt.datetime(int(fname[-7:-3]),1,1,0,0,0) + dt.timedelta(hours=6*x) \
+			for x in times]
+	else:
+		times = nc.num2date(f.variables["time"][:],f.variables["time"].units)
 	var = np.array([str(f.variables.items()[i][0]) for i in np.arange(0,\
 		len(f.variables.items()))])
 	var = var[~(var=="time") & ~(var=="lat") & ~(var=="lon")]
@@ -56,6 +69,21 @@ def load_netcdf_points(fname,points,loc_id):
 		print(lon_used[point],lat_used[point])
 		for t in np.arange(len(times)):
 			for v in np.arange(0,len(var)):
+			    if smooth=="mean":
+				#SMOOTH OVER ~1 degree
+				lat_points = np.arange(lat_ind[point]-4,lat_ind[point]+5)
+				lon_points = np.arange(lat_ind[point]-4,lat_ind[point]+5)
+				values[cnt,v] = np.mean(f.variables[var[v]][t,\
+					int(lat_points[0]):int(lat_points[-1]),\
+					int(lon_points[0]):int(lon_points[-1])])
+			    elif smooth=="max":
+				#Max OVER ~1 degree 
+				lat_points = np.arange(lat_ind[point]-4,lat_ind[point]+5)
+				lon_points = np.arange(lat_ind[point]-4,lat_ind[point]+5)
+				values[cnt,v] = np.max(f.variables[var[v]][t,\
+					int(lat_points[0]):int(lat_points[-1]),\
+					int(lon_points[0]):int(lon_points[-1])])
+			    elif smooth==False:
 				values[cnt,v] = f.variables[var[v]][t,lat_ind[point],lon_ind[point]]
 			values_lat.append(points[point][1])
 			values_lon.append(points[point][0])
@@ -85,97 +113,8 @@ def load_netcdf_points(fname,points,loc_id):
 
 	return df	
 
-def plot_scatter(model,convective,threshold=False):
-	#Plot scatter plots of reanalysis/observed convective indices (see load_*dataset*_df()) 
-	# against AWS max gust strength (see read_aws())
-	#Set convective argument to True to restrict data to times when CAPE > 100
-	#Set threshold to an integer to restrict gust data to values over the threshold. 
-	# Otherwise, False
-
-	#Read AWS data
-	print("Loading AWS...");aws = read_aws()
-
-	#Load Parameters
-	print("Loading Parameters...")
-	if model == "erai":
-		erai_df = load_erai_df()
-	elif model == "barra":
-		erai_df = load_barra_df()
-	elif model == "obs":
-		erai_df = load_obs_df()
-	else:
-		raise NameError("Invalid model selection")
-	
-	#Create df of aws closest to reanalysis times
-	print("Matching ERA-Interim with AWS observations...")
-	#time_ind = []
-	#for i in np.arange(0,erai_df.shape[0]):
-	#	time_ind.append((aws["date"] - erai_df["date"][i]).abs().values.argmin())
-	#time_ind = np.array(time_ind)
-
-	#aws_erai = aws.loc[time_ind]
-	#aws_erai.index = np.arange(0,aws_erai.shape[0])
-
-	#Re-sample AWS to 6-hourly by taking maximum
-	aws_erai = aws.resample("6H",on="date").max()
-	aws_erai = aws_erai[(aws_erai.index <= erai_df["date"].max())]
-	aws_erai = aws_erai[(aws_erai.index >= erai_df["date"].min())]
-	erai_df = erai_df[(erai_df["date"] <= aws_erai.index.max())]
-	erai_df = erai_df[(erai_df["date"] >= aws_erai.index.min())]
-	erai_df.index = erai_df["date"]
-
-	#Remove corrupted date
-	if model == "barra":
-		aws_erai = aws_erai[~(aws_erai.index == dt.datetime(2014,11,22,06,0))]
-
-	#Eliminate NaNs
-	na_ind = ~(aws_erai.wind_gust.isna())
-	aws_erai = aws_erai[na_ind]
-	erai_df = erai_df[na_ind]
-	if convective:
-		#Create CAPE >= 100 (Convective events)
-		aws_erai = aws_erai[(erai_df.mu_cape>=100)]
-		erai_df = erai_df[(erai_df.mu_cape>=100)]
-	if threshold:
-		thresh_inds = (aws_erai.wind_gust >= threshold)
-		aws_erai = aws_erai[thresh_inds]
-		erai_df = erai_df[thresh_inds]
-
-	param_list = ["ml_cape","ml_cin","mu_cin","mu_cape","s06","srh01","srh03","srh06","scp",\
-		"stp","ship","mmp","relhum850-500","crt","lr1000","lcl","cape*s06","lr1000",\
-		"lcl"]
-	
-	
-	for param in param_list:
-			
-		plt.figure()
-		x = np.array(erai_df[param])
-		y = np.array(aws_erai.wind_gust)
-		if param == "lcl":
-			nan_ind = np.isnan(x)
-			x = x[~nan_ind]
-			y = y[~nan_ind]
-		m,b = np.polyfit(x,y,deg=1)
-		r = np.corrcoef(x,y)[0,1]
-		plt.hist2d(x,y,bins=50)
-		plt.colorbar()
-		plt.plot(x, b+m*x,"k")
-		plt.xlabel(param)
-		plt.ylabel("AWS Wind Gust (m/s")
-		plt.title(str(r))
-		outname = "/home/548/ab4502/working/ExtremeWind/figs/2dhist/"+model+"_"+param
-		if convective:
-			outname = outname + "_conv"	
-		if threshold:
-			outname = outname + "_" + str(threshold)	
-		outname = outname + ".png"
-		plt.savefig(outname,bbox_inches="tight")
-		plt.close()
-	
-	return [aws_erai]
-
-def load_erai_df():
-	erai_df = pd.read_csv("/g/data/eg3/ab4502/ExtremeWind/adelaideAP/data_erai_points_wrf_20100101_20151231.csv")
+def load_erai_df(location=False):
+	erai_df = pd.read_csv("/g/data/eg3/ab4502/ExtremeWind/points/erai_points_2010_2015.csv")
 	#erai_df = pd.read_csv("/g/data/eg3/ab4502/ExtremeWind/adelaideAP/data_erai_points_SHARPpy_20100101_20151231.csv")
 	#Create datetime column in reanalysis dataframe
 	erai_dt = []
@@ -184,10 +123,27 @@ def load_erai_df():
 				int(erai_df["day"][i]),int(erai_df["hour"][i]),\
 				int(erai_df["minute"][i])))
 	erai_df["date"] = erai_dt
+
+	if location != False:
+		erai_df = erai_df[erai_df["loc_id"]==location]
+	else:
+		print("INFO: RETURNING ALL LOCATIONS AVAILABLE...")
 	return erai_df
 
-def load_barra_df():
-	barra_df = pd.read_csv("/g/data/eg3/ab4502/ExtremeWind/adelaideAP/data_barra_points_wrf_20100101_20151231.csv")
+def load_ADversion_df(location=False):
+	erai_df = pd.read_csv("/g/data/eg3/ab4502/ExtremeWind/points/erai_points_ADdata_2010_2015.csv")
+	erai_dt = []
+	for i in np.arange(0,erai_df.shape[0]):
+		erai_dt.append(dt.datetime(int(erai_df["year"][i]),int(erai_df["month"][i]),\
+				int(erai_df["day"][i]),int(erai_df["hour"][i]),\
+				int(erai_df["minute"][i])))
+	erai_df["date"] = erai_dt
+	if location != False:
+		erai_df = erai_df[erai_df["loc_id"]==location]
+	return erai_df
+
+def load_barra_df(location=False):
+	barra_df = pd.read_csv("/g/data/eg3/ab4502/ExtremeWind/points/barra_points_max_2010_2015.csv")
 	#Create datetime column in reanalysis dataframe
 	barra_dt = []
 	for i in np.arange(0,barra_df.shape[0]):
@@ -195,9 +151,11 @@ def load_barra_df():
 				int(barra_df["day"][i]),int(barra_df["hour"][i]),\
 				int(barra_df["minute"][i])))
 	barra_df["date"] = barra_dt
+	if location != False:
+		barra_df = barra_df[barra_df["loc_id"]==location]
 	return barra_df
 
-def load_obs_df():
+def load_obs_df(location=False):
 	obs_df = pd.read_csv("/g/data/eg3/ab4502/ExtremeWind/adelaideAP/data_obs_points_wrf_20100101_20151231.csv")
 	#Create datetime column in reanalysis dataframe
 	obs_dt = []
@@ -206,195 +164,96 @@ def load_obs_df():
 				int(obs_df["day"][i]),int(obs_df["hour"][i]),\
 				int(obs_df["minute"][i])))
 	obs_df["date"] = obs_dt
+	if location != False:
+		obs_df = obs_df[obs_df["loc_id"]==location]
 	return obs_df
 
-def plot_distributions(model):
-	#Read wind events, reanalysis point data for Adelaide AP
-	df_wind = read_synoptic_wind_gusts(" Adelaide AP")
-	if model == "barra":
-		model_df = load_barra_df()
-	elif model == "erai":
-		model_df = load_erai_df()
-	elif model == "obs":
-		model_df = load_obs_df()
-	else:
-		raise NameError("Invalid model selection")
+def load_jdh_points_barra():
+	#FOR THE BARRA SA_SMALL DATSET, DRIVE LOAD_NETCDF_POINTS FOR LOACATIONS FOUND IN THE JDH
+	# DATASET 2010-2015
+	ls = os.listdir("/g/data/eg3/ab4502/ExtremeWind/sa_small/barra/")
+	ls_full = ["/g/data/eg3/ab4502/ExtremeWind/sa_small/barra/"+ls[i] \
+			for i in np.arange(0,len(ls))]
+	loc_id = ["Port Augusta","Marree","Munkora","Woomera","Robe","Loxton","Coonawarra",\
+			"Renmark","Clare HS","Adelaide AP","Coober Pedy AP","Whyalla",\
+			"Padthaway South","Nuriootpa","Rayville Park","Mount Gambier",\
+			"Naracoorte","The Limestone","Parafield","Austin Plains","Roseworthy",\
+			"Tarcoola","Edinburgh"]
+	points = [(137.78,-32.54),(138.0684,-29.6587),(140.3273,-36.1058),(138.82,-31.15),\
+			(139.8054,-37.1776),(140.5978,-34.439),(140.8254,-37.2906),\
+			(140.6766,-34.1983),(138.5933,-33.8226),(138.53,-34.96),\
+			(-29.0347,134.7222),(-33.0539,137.5206),(-36.6539,140.5212),\
+			(-34.4761,139.0056),(-33.7676,138.2182),(-37.7473,140.7739),\
+			(-36.9813,140.7270),(-36.9655,139.7164),(-34.7977,138.6281),\
+			(-35.3778,140.5378),(-34.5106,138.6763),(-30.7051,134.5786),\
+			(-34.7111,138.6222)]
+	df = pd.DataFrame()
+	for i in np.arange(0,len(ls_full)):
+		print(ls[i])
+		df = df.append(load_netcdf_points(ls_full[i],points,loc_id,"barra",smooth="mean"))
+	return df
 
-	#Create df of reanalysis closest to wind times
-	time_ind = []
-	for i in np.arange(0,df_wind.shape[0]):
-		time_ind.append((df_wind["dates_utc"][i] - model_df.date).abs().values.argmin())
-	time_ind = np.array(time_ind)
+def load_jdh_points_erai():
+	#FOR THE ERA-Interim SA_SMALL DATSET, DRIVE LOAD_NETCDF_POINTS FOR LOACATIONS 
+	#FOUND IN THE JDH DATASET
+	ls = os.listdir("/g/data/eg3/ab4502/ExtremeWind/sa_small/erai/")
+	ls_full = ["/g/data/eg3/ab4502/ExtremeWind/sa_small/erai/"+ls[i] \
+			for i in np.arange(0,len(ls))]
+	#loc_id = ["Port Augusta","Marree","Munkora","Woomera","Robe","Loxton","Coonawarra",\
+	#		"Renmark","Clare HS","Adelaide AP"]
+	#points = [(137.78,-32.54),(138.0684,-29.6587),(140.3273,-36.1058),(138.82,-31.15),\
+	#		(139.8054,-37.1776),(140.5978,-34.439),(140.8254,-37.2906),\
+	#		(140.6766,-34.1983),(138.5933,-33.8226),(138.53,-34.96)]
+	#A LIST OF ALL STATIONS MENTIONED IN JDH DATASET:
+	loc_id = ["Port Augusta","Marree","Munkora","Woomera","Robe","Loxton","Coonawarra",\
+			"Renmark","Clare HS","Adelaide AP","Coober Pedy AP","Whyalla",\
+			"Padthaway South","Nuriootpa","Rayville Park","Mount Gambier",\
+			"Naracoorte","The Limestone","Parafield","Austin Plains","Roseworthy",\
+			"Tarcoola","Edinburgh"]
+	points = [(137.78,-32.54),(138.0684,-29.6587),(140.3273,-36.1058),(138.82,-31.15),\
+			(139.8054,-37.1776),(140.5978,-34.439),(140.8254,-37.2906),\
+			(140.6766,-34.1983),(138.5933,-33.8226),(138.53,-34.96),\
+			(134.7222,-29.0347),(137.5206,-33.0539),(140.5212,-36.6539),\
+			(139.0056,-34.4761),(138.2182,-33.7676),(140.7739,-37.7473),\
+			(140.7270,-36.9813),(139.7164,-36.9655),(138.6281,-34.7977),\
+			(140.5378,-35.3778),(138.6763,-34.5106),(134.5786,-30.7051),\
+			(138.6222,-34.7111)]
+	df = pd.DataFrame()
+	for i in np.arange(0,len(ls_full)):
+		if int(ls_full[i][50:54]) >= 2010:
+			print(ls[i])
+			df = df.append(load_netcdf_points(ls_full[i],points,loc_id,"erai",\
+			smooth=False))
+	df.to_csv("/g/data/eg3/ab4502/ExtremeWind/points/erai_points_2010_2015.csv")
+		#float_format="%.3f")
+	return df
 
-	wind_erai = model_df.loc[time_ind]
+def load_AD_data():
+	#Load Andrew Dowdy's CAPE/S06 data
+	ls = os.listdir("/g/data/eg3/ab4502/ExtremeWind/ad_data/mu_cape/")
+	ls_full = ["/g/data/eg3/ab4502/ExtremeWind/ad_data/mu_cape/"+ls[i] \
+			for i in np.arange(0,len(ls))]
+	loc_id = ["Port Augusta","Marree","Munkora","Woomera","Robe","Loxton","Coonawarra",\
+			"Renmark","Clare HS","Adelaide AP"]
+	points = [(137.78,-32.54),(138.0684,-29.6587),(140.3273,-36.1058),(138.82,-31.15),\
+			(139.8054,-37.1776),(140.5978,-34.439),(140.8254,-37.2906),\
+			(140.6766,-34.1983),(138.5933,-33.8226),(138.53,-34.96)]
+	df = pd.DataFrame()
+	for i in np.arange(0,len(ls_full)):
+		if int(ls_full[i][-7:-3]) >= 2010:
+			print(ls[i])
+			df = df.append(load_netcdf_points(ls_full[i],points,loc_id,"erai",\
+				smooth=False,ad_data=True))
+	df.to_csv("/g/data/eg3/ab4502/ExtremeWind/points/erai_points_ADdata_mu_cape_2010_2015.csv",\
+		float_format="%.3f")
+	return df
 
-	#Plot distributions
+if __name__ == "__main__":
 
-	ms=1
-
-	plt.figure()
-	param = "mu_cape"
-	plt.hist(model_df[param],bins=np.linspace(0,1000,100),log=True)
-	plt.plot(wind_erai[param],np.ones(wind_erai.shape[0])*10,"rx",markeredgewidth=ms)
-	[cmap,levels,cb_lab] = contour_properties(param)
-	plt.title(param)
-	plt.xlabel(cb_lab)	
-	plt.savefig("/home/548/ab4502/working/ExtremeWind/figs/distributions/"+model+"_"+param+\
-			"_adelaideAP.png",bbox_inches="tight")
-
-	plt.figure()
-	param = "ml_cape"
-	plt.hist(model_df[param],bins=np.linspace(0,1000,100),log=True)
-	plt.plot(wind_erai[param],np.ones(wind_erai.shape[0])*10,"rx",markeredgewidth=ms)
-	[cmap,levels,cb_lab] = contour_properties(param)
-	plt.title(param)
-	plt.xlabel(cb_lab)	
-	plt.savefig("/home/548/ab4502/working/ExtremeWind/figs/distributions/"+model+"_"+param+\
-			"_adelaideAP.png",bbox_inches="tight")
-
-	plt.figure()
-	param = "mu_cin"
-	plt.hist(model_df[param],bins=np.linspace(0,600,100),log=True)
-	plt.plot(wind_erai[param],np.ones(wind_erai.shape[0])*10,"rx",markeredgewidth=ms)
-	[cmap,levels,cb_lab] = contour_properties(param)
-	plt.title(param)
-	plt.xlabel(cb_lab)	
-	plt.savefig("/home/548/ab4502/working/ExtremeWind/figs/distributions/"+model+"_"+param+\
-			"_adelaideAP.png",bbox_inches="tight")
-
-	plt.figure()
-	param = "ml_cin"
-	plt.hist(model_df[param],bins=np.linspace(0,600,100),log=True)
-	plt.plot(wind_erai[param],np.ones(wind_erai.shape[0])*10,"rx",markeredgewidth=ms)
-	[cmap,levels,cb_lab] = contour_properties(param)
-	plt.title(param)
-	plt.xlabel(cb_lab)	
-	plt.savefig("/home/548/ab4502/working/ExtremeWind/figs/distributions/"+model+"_"+param+\
-			"_adelaideAP.png",bbox_inches="tight")
-
-	plt.figure()
-	param = "scp"
-	plt.hist(model_df[param],bins=np.linspace(0,1,100),log=True)
-	plt.plot(wind_erai[param],np.ones(wind_erai.shape[0])*10,"rx",markeredgewidth=ms)
-	[cmap,levels,cb_lab] = contour_properties(param)
-	plt.title(param)
-	plt.xlabel(cb_lab)	
-	plt.savefig("/home/548/ab4502/working/ExtremeWind/figs/distributions/"+model+"_"+param+\
-			"_adelaideAP.png",bbox_inches="tight")
-
-	plt.figure()
-	param = "stp"
-	plt.hist(model_df[param],bins=np.linspace(0,1,100),log=True)
-	plt.plot(wind_erai[param],np.ones(wind_erai.shape[0])*10,"rx",markeredgewidth=ms)
-	[cmap,levels,cb_lab] = contour_properties(param)
-	plt.title(param)
-	plt.xlabel(cb_lab)	
-	plt.savefig("/home/548/ab4502/working/ExtremeWind/figs/distributions/"+model+"_"+param+\
-			"_adelaideAP.png",bbox_inches="tight")
-
-	plt.figure()
-	param = "mmp"
-	plt.hist(model_df[param],bins=np.linspace(0,1,100),log=True)
-	plt.plot(wind_erai[param],np.ones(wind_erai.shape[0])*10,"rx",markeredgewidth=ms)
-	[cmap,levels,cb_lab] = contour_properties(param)
-	plt.title(param)
-	plt.xlabel(cb_lab)	
-	plt.savefig("/home/548/ab4502/working/ExtremeWind/figs/distributions/"+model+"_"+param+\
-			"_adelaideAP.png",bbox_inches="tight")
-
-	plt.figure()
-	param = "lr1000"
-	plt.hist(model_df[param],bins=np.linspace(0,10,100),log=False)
-	plt.plot(wind_erai[param],np.ones(wind_erai.shape[0])*10,"rx",markeredgewidth=ms)
-	[cmap,levels,cb_lab] = contour_properties(param)
-	plt.title(param)
-	plt.xlabel(cb_lab)	
-	plt.savefig("/home/548/ab4502/working/ExtremeWind/figs/distributions/"+model+"_"+param+\
-			"_adelaideAP.png",bbox_inches="tight")
-
-#	plt.figure()
-#	param = "ship"
-#	plt.hist(model_df[param],bins=np.linspace(0,1,100),log=True)
-#	plt.plot(wind_erai[param],np.ones(wind_erai.shape[0])*10,"rx",markeredgewidth=ms)
-#	[cmap,levels,cb_lab] = contour_properties(param)
-#	plt.title(param)
-#	plt.xlabel(cb_lab)	
-
-	plt.figure()
-	param = "srh01"
-	plt.hist(model_df[param],bins=np.linspace(0,300,100),log=False)
-	plt.plot(wind_erai[param],np.ones(wind_erai.shape[0])*10,"rx",markeredgewidth=ms)
-	[cmap,levels,cb_lab] = contour_properties(param)
-	plt.title(param)
-	plt.xlabel(cb_lab)	
-	plt.savefig("/home/548/ab4502/working/ExtremeWind/figs/distributions/"+model+"_"+param+\
-			"_adelaideAP.png",bbox_inches="tight")
-
-	plt.figure()
-	param = "srh03"
-	plt.hist(model_df[param],bins=np.linspace(0,300,100),log=False)
-	plt.plot(wind_erai[param],np.ones(wind_erai.shape[0])*10,"rx",markeredgewidth=ms)
-	[cmap,levels,cb_lab] = contour_properties(param)
-	plt.title(param)
-	plt.xlabel(cb_lab)	
-	plt.savefig("/home/548/ab4502/working/ExtremeWind/figs/distributions/"+model+"_"+param+\
-			"_adelaideAP.png",bbox_inches="tight")
-
-	plt.figure()
-	param = "srh06"
-	plt.hist(model_df[param],bins=np.linspace(0,300,100),log=False)
-	plt.plot(wind_erai[param],np.ones(wind_erai.shape[0])*10,"rx",markeredgewidth=ms)
-	[cmap,levels,cb_lab] = contour_properties(param)
-	plt.title(param)
-	plt.xlabel(cb_lab)	
-	plt.savefig("/home/548/ab4502/working/ExtremeWind/figs/distributions/"+model+"_"+param+\
-			"_adelaideAP.png",bbox_inches="tight")
-
-	plt.figure()
-	param = "s06"
-	plt.hist(model_df[param],bins=np.linspace(0,75,100),log=True)
-	plt.plot(wind_erai[param],np.ones(wind_erai.shape[0])*10,"rx",markeredgewidth=ms)
-	[cmap,levels,cb_lab] = contour_properties(param)
-	plt.title(param)
-	plt.xlabel(cb_lab)	
-	plt.savefig("/home/548/ab4502/working/ExtremeWind/figs/distributions/"+model+"_"+param+\
-			"_adelaideAP.png",bbox_inches="tight")
-
-	plt.figure()
-	param = "crt"
-	vals = model_df[~(model_df[param].isna())][param]
-	plt.hist(vals,bins=np.linspace(0,180,100),log=False)
-	plt.plot(wind_erai[param],np.ones(wind_erai.shape[0])*10,"rx",markeredgewidth=ms)
-	[cmap,levels,cb_lab] = contour_properties(param)
-	plt.title(param)
-	plt.xlabel(cb_lab)	
-	plt.savefig("/home/548/ab4502/working/ExtremeWind/figs/distributions/"+model+"_"+param+\
-			"_adelaideAP.png",bbox_inches="tight")
-
-	plt.figure()
-	param = "relhum850-500"
-	vals = model_df[~(model_df[param].isna())][param]
-	plt.hist(vals,bins=np.linspace(0,100,100),log=False)
-	plt.plot(wind_erai[param],np.ones(wind_erai.shape[0])*10,"rx",markeredgewidth=ms)
-	[cmap,levels,cb_lab] = contour_properties(param)
-	plt.title(param)
-	plt.xlabel(cb_lab)	
-	plt.savefig("/home/548/ab4502/working/ExtremeWind/figs/distributions/"+model+"_"+param+\
-			"_adelaideAP.png",bbox_inches="tight")
-
-	plt.figure()
-	param = "cape*s06"
-	plt.hist(model_df[param],bins=np.linspace(0,100000,100),log=True)
-	plt.plot(wind_erai[param],np.ones(wind_erai.shape[0])*10,"rx",markeredgewidth=ms)
-	[cmap,levels,cb_lab] = contour_properties(param)
-	plt.title(param)
-	plt.xlabel(cb_lab)	
-	plt.savefig("/home/548/ab4502/working/ExtremeWind/figs/distributions/"+model+"_"+param+\
-			"_adelaideAP.png",bbox_inches="tight")
-
-
-model = "erai"
-#aws_model,model_df = plot_scatter(model)
-plot_scatter(model,False,False)
-#df = load_netcdf_points("/g/data/eg3/ab4502/ExtremeWind/aus/erai_wrf_20160928_20160930.nc",\
-		#[(138.5204, -34.5924)],["Adelaide AP"])
+	model = "barra"
+	#aws_model,model_df = plot_scatter(model)
+	#plot_scatter(model,False,False)
+	#df = load_AD_data()
+	#df.to_csv("/g/data/eg3/ab4502/ExtremeWind/points/barra_points_mean_2010_2015.csv",\
+	#	float_format="%.3f")
+	df = load_jdh_points_erai()

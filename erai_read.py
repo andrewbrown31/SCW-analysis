@@ -97,6 +97,62 @@ ps_6hrs_ERAI_historical_an-sfc_"+date+"*.nc")[0])
 	
 	return [ta,dp,hur,hgt,terrain,p,ps,ua,va,uas,vas,lon,lat,date_list]
 	
+def read_erai_fc(domain,times):
+	#Open ERA-Interim forecast netcdf files and extract variables needed for a range of times 
+	# and given spatial domain
+	#Option to also use one time (include hour)
+
+	ref = dt.datetime(1900,1,1,0,0,0)
+	if len(times) > 1:
+		date_list = date_seq(times,"hours",6)
+	else:
+		date_list = times
+
+	#If the last date in the list is the start of the next month, don't include in date stamp
+	# list for file names
+	if (date_list[-1].day==1) & (date_list[-1].hour==0):
+		formatted_dates = [format_dates(x) for x in date_list[0:-1]]
+	else:
+		formatted_dates = [format_dates(x) for x in date_list]
+	unique_dates = np.unique(formatted_dates)
+
+	time_hours = np.empty(len(date_list))
+	for t in np.arange(0,len(date_list)):
+		time_hours[t] = (date_list[t] - ref).total_seconds() / (3600)
+
+	#Get time-invariant pressure and spatial info
+	lon,lat = get_lat_lon()
+	lon_ind = np.where((lon >= domain[2]) & (lon <= domain[3]))[0]
+	lat_ind = np.where((lat >= domain[0]) & (lat <= domain[1]))[0]
+	lon = lon[lon_ind]
+	lat = lat[lat_ind]
+	terrain = reform_terrain(lon,lat)
+
+	#Initialise arrays for each variable
+	wg10 = np.empty((0,len(lat_ind),len(lon_ind)))
+	cape = np.empty((0,len(lat_ind),len(lon_ind)))
+
+	for date in unique_dates:
+		#print(date)
+
+	#Load ERA-Interim reanalysis files
+		wg10_file = nc.Dataset(glob.glob("/g/data/ub4/erai/netcdf/3hr/atmos/oper_fc_sfc/v01/wg10/\
+wg10_3hrs_ERAI_historical_fc-sfc_"+date+"*.nc")[0])
+		cape_file = nc.Dataset(glob.glob("/g/data/ub4/erai/netcdf/3hr/atmos/oper_fc_sfc/v01/cape/\
+cape_3hrs_ERAI_historical_fc-sfc_"+date+"*.nc")[0])
+
+		#Get times to load in from file
+		times = wg10_file["time"][:]
+		time_ind = [np.where(x==times)[0][0] for x in time_hours if (x in times)]
+
+		#Load data
+		wg10 = np.append(wg10,wg10_file["wg10"][time_ind,lat_ind,lon_ind],axis=0)
+		cape = np.append(cape,cape_file["cape"][time_ind,lat_ind,lon_ind],axis=0)
+
+		wg10_file.close();cape_file.close()
+	
+	return [wg10,cape,lon,lat,date_list]
+
 def read_erai_points(points,times):
 
 	#Open ERA-Interim netcdf files and extract variables needed for a range of 

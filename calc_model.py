@@ -1,5 +1,5 @@
 from calc_param import *
-from erai_read import read_erai, read_erai_points
+from erai_read import read_erai, read_erai_points, read_erai_fc
 from barra_read import read_barra, read_barra_points
 
 def calc_model(model,out_name,method,time,param,issave,region,cape_method):
@@ -42,19 +42,27 @@ def calc_model(model,out_name,method,time,param,issave,region,cape_method):
 		print("\n	INFO: READING IN ERA-Interim DATA...\n")
 		ta,dp,hur,hgt,terrain,p,ps,ua,va,uas,vas,lon,lat,date_list = \
 			read_erai(domain,time)
+	elif model=="erai_fc":
+		print("\n	INFO: READING IN ERA-Interim DATA...\n")
+		wg10,cape,lon,lat,date_list = \
+			read_erai_fc(domain,time)
+		param = ["wg10","cape"]
+		param_out = [wg10,cape]
+		save_netcdf(region,model,date_list,lat,lon,param,param_out)	
 	else:
-		raise NameError("""model"" must be ""erai"" or ""barra""")
+		raise NameError("""model"" must be ""erai"", ""erai_fc"" or ""barra""")
 
 	#Calculate parameters
 	print("\n	INFO: CALCULATING PARAMETERS\n")
-	if cape_method == "SHARPpy":
-		param_out = calc_param_sharppy(date_list,ta,dp,hur,hgt,p,ua,va,uas,vas,\
-			lon,lat,param,out_name,issave,region)
-	elif cape_method == "wrf":
-		param_out = calc_param_wrf(date_list,ta,dp,hur,hgt,terrain,p,ps,ua,va,\
-			uas,vas,lon,lat,param,out_name,issave,region)
-	else:
-		raise NameError("""cape_method"" must be ""SHARPpy"" or ""wrf""")
+	if model != "erai_fc":
+		if cape_method == "SHARPpy":
+			param_out = calc_param_sharppy(date_list,ta,dp,hur,hgt,p,ua,va,uas,vas,\
+				lon,lat,param,out_name,issave,region)
+		elif cape_method == "wrf":
+			param_out = calc_param_wrf(date_list,ta,dp,hur,hgt,terrain,p,ps,ua,va,\
+				uas,vas,lon,lat,param,out_name,issave,region)
+		else:
+			raise NameError("""cape_method"" must be ""SHARPpy"" or ""wrf""")
 
    elif method == "points":
 	if region == "adelaideAP":
@@ -88,11 +96,11 @@ def barra_driver():
 	model = "barra"
 	cape_method = "wrf"
 	method = "domain"
-	region = "sa_small"
+	region = "sa_large"
 	param = ["ml_cape","ml_cin","mu_cin","mu_cape","srh01","srh03","srh06","scp",\
 		"stp","ship","mmp","relhum850-500","crt","non_sc_stp","vo","lr1000","lcl",\
 		"relhum1000-700","ssfc6","ssfc3","ssfc1","s06","ssfc850","ssfc500",\
-		"cape*s06","cape*ssfc6"]
+		"cape*s06","cape*ssfc6","td950","td850","td800","cape700"]
 	dates = []
 	for y in [2010,2011,2012,2013,2014,2015]:
 		for m in [1,2,3,4,5,6,7,8,9,10,11,12]:
@@ -117,9 +125,9 @@ def erai_driver():
 	param = ["ml_cape","ml_cin","mu_cin","mu_cape","srh01","srh03","srh06","scp",\
 		"stp","ship","mmp","relhum850-500","crt","non_sc_stp","vo","lr1000","lcl",\
 		"relhum1000-700","ssfc6","ssfc3","ssfc1","s06","ssfc850","ssfc500",\
-		"cape*s06","cape*ssfc6"]
+		"cape*s06","cape*ssfc6","td950","td850","td800","cape700"]
 	dates = []
-	for y in np.arange(2005,2010):
+	for y in np.arange(2010,2018):
 		for m in [1,2,3,4,5,6,7,8,9,10,11,12]:
 		    if (m != 12):
 			dates.append([dt.datetime(y,m,1,0,0,0),\
@@ -131,13 +139,34 @@ def erai_driver():
 		print(str(dates[t][0])+" - "+str(dates[t][1]))
 		calc_model(model,model,method,dates[t],param,True,region,cape_method)	
 
+def erai_fc_driver():
+	#Drive calc_model() for 2010-2015 forcaset data in ERA-Interim, for the sa_small domain
+
+	model = "erai_fc"
+	cape_method = "wrf"
+	method = "domain"
+	region = "sa_small"
+	param = ["wg10","cape"]
+	dates = []
+	for y in np.arange(1979,2010):
+		for m in [1,2,3,4,5,6,7,8,9,10,11,12]:
+		    if (m != 12):
+			dates.append([dt.datetime(y,m,1,6,0,0),\
+				dt.datetime(y,m+1,1,0,0,0)])
+		    else:
+			dates.append([dt.datetime(y,m,1,0,0,0),\
+				dt.datetime(y+1,1,1,0,0,0)])
+	for t in np.arange(0,len(dates)):
+		print(str(dates[t][0])+" - "+str(dates[t][1]))
+		calc_model(model,model,method,dates[t],param,True,region,cape_method)	
+
 if __name__ == "__main__":
 
 #--------------------------------------------------------------------------------------------------
 # 	SETTINGS
 #--------------------------------------------------------------------------------------------------
 
-	model = "erai"
+	model = "erai_fc"
 	cape_method = "wrf"
 
 	method = "domain"
@@ -147,7 +176,7 @@ if __name__ == "__main__":
 
 	#ADELAIDE = UTC + 10:30
 	#times = [dt.datetime(2010,1,1,6,0,0),dt.datetime(2015,12,31,0,0,0)]
-	times = [dt.datetime(2010,1,1,6,0,0),dt.datetime(2010,1,1,6,0,0)]
+	times = [dt.datetime(2010,1,1,0,0,0),dt.datetime(2010,1,31,18,0,0)]
 		#[dt.datetime(2014,9,28,0,0,0),dt.datetime(2014,9,29,0,0,0)]]
 	issave = True
 
@@ -184,4 +213,4 @@ if __name__ == "__main__":
 	#for time in times:
 	#calc_model(model,out_name,method,times,param,issave,region,cape_method)	
 	#barra_driver()
-	erai_driver()
+	erai_fc_driver()

@@ -235,6 +235,28 @@ def get_shear_p(u,v,p,p_bot,p_top,lev,uas=None,vas=None):
 
 	return shear
 
+def get_td_diff(t,td,p,p_level):
+	#Difference between dew point temp and air temp at p_level
+	#Represents downdraft potential. See diagram in Gilmore and Wicker (1998)
+
+	if t.ndim == 1:
+		t_plevel = np.interp(p_level,p,t)
+	else:
+	    if p_level in p:
+		t_plevel = t[p[:,0,0]==p_level]
+	    else:
+		t_plevel = np.array(wrf.interpz3d(t, p, p_level))
+
+	if t.ndim == 1:
+		td_plevel = np.interp(p_level,p,td)
+	else:
+	    if p_level in p:
+		td_plevel = td[p[:,0,0]==p_level]
+	    else:
+		td_plevel = np.array(wrf.interpz3d(td, p, p_level))
+	
+	return (t_plevel - td_plevel)
+
 def get_srh(u,v,hgt,hgt_top,papprox,storm_bot,storm_top,p=None):
 	#Get storm relative helicity [lat, lon] based on 3d input of u, v, and storm motion u and
 	# v components
@@ -510,7 +532,9 @@ def calc_param_wrf(times,ta,dp,hur,hgt,terrain,p,ps,ua,va,uas,vas,lon,lat,param,
 		p_unit = units.hectopascals*p_3d[t,:,:,:]
 		q_unit = mpcalc.mixing_ratio_from_relative_humidity(hur_unit,\
 			ta_unit,p_unit)
+		theta_unit = mpcalc.potential_temperature(p_unit,ta_unit)
 		q = np.array(q_unit)
+		theta = np.array(theta_unit)
 
 		#Get CAPE
 		cape_3d = wrf.cape_3d(p_3d[t,:,:,:],ta[t,:,:,:]+273.15,q\
@@ -524,6 +548,7 @@ def calc_param_wrf(times,ta,dp,hur,hgt,terrain,p,ps,ua,va,uas,vas,lon,lat,param,
 		mu_cin = mu_cape_inds.choose(cape_3d.data[1])
 		ml_cape = cape_3d.data[0,2,:,:]
 		ml_cin = cape_3d.data[1,2,:,:]
+		cape700 = np.max(cape_3d.data[0][p<=700],axis=0)
 		#if t == 0:
 			#print("CAPE/CIN: "+str(dt.datetime.now()-start))
 
@@ -540,6 +565,10 @@ def calc_param_wrf(times,ta,dp,hur,hgt,terrain,p,ps,ua,va,uas,vas,lon,lat,param,
 		# Taking the max gives MUCAPE approximation
 			param_ind = np.where(param=="mu_cape")[0][0]
 			param_out[param_ind][t,:,:] = mu_cape
+		if "cape700" in param:
+		# Max CAPE above 700 hPa
+			param_ind = np.where(param=="cape700")[0][0]
+			param_out[param_ind][t,:,:] = cape700
 		if "ml_cape" in param:
 		#CAPE for mixed layer
 		#Currently using a parcel at 950 hPa to define ml_cape
@@ -567,7 +596,8 @@ def calc_param_wrf(times,ta,dp,hur,hgt,terrain,p,ps,ua,va,uas,vas,lon,lat,param,
 		#Wind shear sfc to 6 km
 			start = dt.datetime.now()
 			param_ind = np.where(param=="s06")[0][0]
-			param_out[param_ind][t,:,:] = get_shear_hgt(ua[t],va[t],hgt[t],0,6000)
+			s06 = get_shear_hgt(ua[t],va[t],hgt[t],0,6000)
+			param_out[param_ind][t,:,:] = s06
 			#if t == 0:
 				#print("S06: "+str(dt.datetime.now()-start))
 		if "ssfc850" in param:
@@ -628,14 +658,14 @@ def calc_param_wrf(times,ta,dp,hur,hgt,terrain,p,ps,ua,va,uas,vas,lon,lat,param,
 		#Combined (+ve and -ve) rel. helicity from 0-6 km
 			start = dt.datetime.now()
 			param_ind = np.where(param=="srh06")[0][0]
-			s06 = get_srh(ua[t],va[t],hgt[t],6000,True,850,700,p)
-			param_out[param_ind][t,:,:] = s06
+			srh06 = get_srh(ua[t],va[t],hgt[t],6000,True,850,700,p)
+			param_out[param_ind][t,:,:] = srh06
 			#if t == 0:
 				#print("SRH: "+str(dt.datetime.now()-start))
 		if "ship" in param:
 		#Significant hail parameter
-			if "srh06" not in param:
-				raise NameError("To calculate ship, srh06 must be included")
+			if "s06" not in param:
+				raise NameError("To calculate ship, s06 must be included")
 			start = dt.datetime.now()
 			param_ind = np.where(param=="ship")[0][0]
 			muq = mu_cape_inds.choose(q)
@@ -729,6 +759,15 @@ def calc_param_wrf(times,ta,dp,hur,hgt,terrain,p,ps,ua,va,uas,vas,lon,lat,param,
 		if "cape*ssfc6" in param:
 			param_ind = np.where(param=="cape*ssfc6")[0][0]
 			param_out[param_ind][t,:,:] = mu_cape * np.power(ssfc6,1.67)
+		if "td850" in param:
+			param_ind = np.where(param=="td850")[0][0]
+			param_out[param_ind][t,:,:] = get_td_diff(ta[t],dp[t],p_3d[t],850)
+		if "td800" in param:
+			param_ind = np.where(param=="td800")[0][0]
+			param_out[param_ind][t,:,:] = get_td_diff(ta[t],dp[t],p_3d[t],800)
+		if "td950" in param:
+			param_ind = np.where(param=="td950")[0][0]
+			param_out[param_ind][t,:,:] = get_td_diff(ta[t],dp[t],p_3d[t],950)
 
 	if save:
 		save_netcdf(region,model,times,lat,lon,param,param_out)
@@ -1069,9 +1108,14 @@ def calc_param_points(times,ta,dp,hur,hgt,terrain,p,ps,ua,va,uas,vas,lon,lat,lon
 	return df	
 
 def save_netcdf(region,model,times,lat,lon,param,param_out):
-	fname = "/g/data/eg3/ab4502/ExtremeWind/"+region+"/"+model+"/"+model+"_"+\
-		dt.datetime.strftime(times[0],"%Y%m%d")+"_"+\
-		dt.datetime.strftime(times[-1],"%Y%m%d")+".nc"
+	if model == "erai_fc":	#Last time of fc data is the first time of the following month
+		fname = "/g/data/eg3/ab4502/ExtremeWind/"+region+"/"+model+"/"+model+"_"+\
+			dt.datetime.strftime(times[0],"%Y%m%d")+"_"+\
+			dt.datetime.strftime(times[-2],"%Y%m%d")+".nc"
+	else:
+		fname = "/g/data/eg3/ab4502/ExtremeWind/"+region+"/"+model+"/"+model+"_"+\
+			dt.datetime.strftime(times[0],"%Y%m%d")+"_"+\
+			dt.datetime.strftime(times[-1],"%Y%m%d")+".nc"
 	if os.path.isfile(fname):
 		os.remove(fname)
 	param_file = nc.Dataset(fname,"w",format="NETCDF4_CLASSIC")
@@ -1188,6 +1232,12 @@ def nc_attributes(param):
 	elif param == "cape*ssfc6":
 		units = ""
 		long_name = "cape*ssfc6"
+	elif param == "wg10":
+		units = "m/s"
+		long_name = "wind_gust_10m"
+	elif param == "cape":
+		units = "J/kg"
+		long_name = "most_unstable_cape"
 	else:
 		units = ""
 		long_name = ""

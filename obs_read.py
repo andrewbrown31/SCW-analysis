@@ -62,7 +62,7 @@ def calc_obs():
 
 	return params_df
 
-def read_aws(loc):
+def read_aws(loc,resample=False):
 	names = ["hm","stn_no","stn_name","lat","lon","date_str","wind_gust","quality","aws_flag",\
 			"#"]
 	if loc == "Adelaide AP":
@@ -125,9 +125,157 @@ def read_aws(loc):
 		aws_dt.append(dt.datetime((aws["year"][i]),(aws["month"][i]),\
 			(aws["day"][i]),(aws["hour"][i]),(aws["minute"][i])))
 	aws["date"] = aws_dt
+
+	if resample:
+		aws = aws.resample("6H",on="date",base=3,\
+			loffset=dt.timedelta(hours=3),\
+			closed="right").max()
+
 	return aws
 
-def read_aws_all():
+def read_aws_daily(loc):
+	#Read daily AWS data which has been downloaded for 1979-2017
+
+	names = ["hm","stn_no","stn_name","lat","lon","date_str","wind_gust","quality",\
+			"#"]
+	if loc == "Adelaide AP":
+		fname = "/short/eg3/ab4502/ExtremeWind/aws/daily_1979_2017/DC02D_Data_023034_999999999565266.txt"
+	elif loc == "Woomera":
+		fname = "/short/eg3/ab4502/ExtremeWind/aws/daily_1979_2017/DC02D_Data_016001_999999999565266.txt"
+	elif loc == "Coober Pedy AP":
+		fname = "/short/eg3/ab4502/ExtremeWind/aws/daily_1979_2017/DC02D_Data_016090_999999999565266.txt"
+	elif loc == "Port Augusta":
+		fname = "/short/eg3/ab4502/ExtremeWind/aws/daily_1979_2017/DC02D_Data_018201_999999999565266.txt"
+	elif loc == "Clare HS":
+		fname = "/short/eg3/ab4502/ExtremeWind/aws/daily_1979_2017/DC02D_Data_021131_999999999565266.txt"
+	elif loc == "Marree":
+		fname = "/short/eg3/ab4502/ExtremeWind/aws/daily_1979_2017/DC02D_Data_017126_999999999565266.txt"
+	elif loc == "Munkora":
+		fname = "/short/eg3/ab4502/ExtremeWind/aws/daily_1979_2017/DC02D_Data_025557_999999999565266.txt"
+	elif loc == "Robe":
+		fname = "/short/eg3/ab4502/ExtremeWind/aws/daily_1979_2017/DC02D_Data_026105_999999999565266.txt"
+	elif loc == "Loxton":
+		fname = "/short/eg3/ab4502/ExtremeWind/aws/daily_1979_2017/DC02D_Data_024024_999999999565266.txt"
+	elif loc == "Coonawarra":
+		fname = "/short/eg3/ab4502/ExtremeWind/aws/daily_1979_2017/DC02D_Data_026091_999999999565266.txt"
+	elif loc == "Renmark":
+		fname = "/short/eg3/ab4502/ExtremeWind/aws/daily_1979_2017/DC02D_Data_024048_999999999565266.txt"
+	elif loc == "Whyalla":
+		fname = "/short/eg3/ab4502/ExtremeWind/aws/daily_1979_2017/DC02D_Data_018120_999999999565266.txt"
+	elif loc == "Padthaway South":
+		fname = "/short/eg3/ab4502/ExtremeWind/aws/daily_1979_2017/DC02D_Data_026100_999999999565266.txt"
+	elif loc == "Nuriootpa":
+		fname = "/short/eg3/ab4502/ExtremeWind/aws/daily_1979_2017/DC02D_Data_023373_999999999565266.txt"
+	elif loc == "Rayville Park":
+		fname = "/short/eg3/ab4502/ExtremeWind/aws/daily_1979_2017/DC02D_Data_021133_999999999565266.txt"
+	elif loc == "Mount Gambier":
+		fname = "/short/eg3/ab4502/ExtremeWind/aws/daily_1979_2017/DC02D_Data_026021_999999999565266.txt"
+	elif loc == "Naracoorte":
+		fname = "/short/eg3/ab4502/ExtremeWind/aws/daily_1979_2017/DC02D_Data_026099_999999999565266.txt"
+	elif loc == "The Limestone":
+		fname = "/short/eg3/ab4502/ExtremeWind/aws/daily_1979_2017/DC02D_Data_026095_999999999565266.txt"
+	elif loc == "Parafield":
+		fname = "/short/eg3/ab4502/ExtremeWind/aws/daily_1979_2017/DC02D_Data_023013_999999999565266.txt"
+	elif loc == "Austin Plains":
+		fname = "/short/eg3/ab4502/ExtremeWind/aws/daily_1979_2017/DC02D_Data_025562_999999999565266.txt"
+	elif loc == "Roseworthy":
+		fname = "/short/eg3/ab4502/ExtremeWind/aws/daily_1979_2017/DC02D_Data_023122_999999999565266.txt"
+	elif loc == "Tarcoola":
+		fname = "/short/eg3/ab4502/ExtremeWind/aws/daily_1979_2017/DC02D_Data_016098_999999999565266.txt"
+	elif loc == "Edinburgh":
+		fname = "/short/eg3/ab4502/ExtremeWind/aws/daily_1979_2017/DC02D_Data_023083_999999999565266.txt"
+	elif loc == "Port Augusta Power Station":
+		fname = "/short/eg3/ab4502/ExtremeWind/aws/daily_1979_2017/DC02D_Data_019066_999999999565467.txt"
+	
+	aws = pd.read_csv(fname\
+				,names=names,dtype={"wind_gust":float},\
+				na_values={"wind_gust":'     '})
+	aws["day"] = aws.date_str.str.slice(0,2).astype("int")
+	aws["month"] = aws.date_str.str.slice(3,5).astype("int")
+	aws["year"] = aws.date_str.str.slice(6,10).astype("int")
+	aws_dt = []
+	for i in np.arange(0,aws.shape[0]):
+		aws_dt.append(dt.datetime((aws["year"][i]),(aws["month"][i]),\
+			(aws["day"][i])))
+	aws["date"] = aws_dt
+	
+	return aws
+
+def read_aws_1979(loc,resample=False):
+	#Read half-hourly AWS data which has been downloaded for 1979-2017 (although, half 
+	# hourly measurments for wind gusts only start in the 1990s)
+
+	names = ["hm","stn_no","stn_name","lat","lon","date_str","wind_gust","quality","aws_flag",\
+			"#"]
+	if loc == "Adelaide AP":
+		fname = "/short/eg3/ab4502/ExtremeWind/aws/half_hourly_1979_2017/HM01X_Data_023034_999999999565453.txt"
+	elif loc == "Woomera":
+		fname = "/short/eg3/ab4502/ExtremeWind/aws/half_hourly_1979_2017/HM01X_Data_016001_999999999565453.txt"
+	elif loc == "Coober Pedy AP":
+		fname = "/short/eg3/ab4502/ExtremeWind/aws/half_hourly_1979_2017/HM01X_Data_016090_999999999565453.txt"
+	elif loc == "Port Augusta":
+		fname = "/short/eg3/ab4502/ExtremeWind/aws/half_hourly_1979_2017/HM01X_Data_018201_999999999565453.txt"
+	elif loc == "Clare HS":
+		fname = "/short/eg3/ab4502/ExtremeWind/aws/half_hourly_1979_2017/HM01X_Data_021131_999999999565453.txt"
+	elif loc == "Marree":
+		fname = "/short/eg3/ab4502/ExtremeWind/aws/half_hourly_1979_2017/HM01X_Data_017126_999999999565453.txt"
+	elif loc == "Munkora":
+		fname = "/short/eg3/ab4502/ExtremeWind/aws/half_hourly_1979_2017/HM01X_Data_025557_999999999565453.txt"
+	elif loc == "Robe":
+		fname = "/short/eg3/ab4502/ExtremeWind/aws/half_hourly_1979_2017/HM01X_Data_026105_999999999565453.txt"
+	elif loc == "Loxton":
+		fname = "/short/eg3/ab4502/ExtremeWind/aws/half_hourly_1979_2017/HM01X_Data_024024_999999999565453.txt"
+	elif loc == "Coonawarra":
+		fname = "/short/eg3/ab4502/ExtremeWind/aws/half_hourly_1979_2017/HM01X_Data_026091_999999999565453.txt"
+	elif loc == "Renmark":
+		fname = "/short/eg3/ab4502/ExtremeWind/aws/half_hourly_1979_2017/HM01X_Data_024048_999999999565453.txt"
+	elif loc == "Whyalla":
+		fname = "/short/eg3/ab4502/ExtremeWind/aws/half_hourly_1979_2017/HM01X_Data_018120_999999999565453.txt"
+	elif loc == "Padthaway South":
+		fname = "/short/eg3/ab4502/ExtremeWind/aws/half_hourly_1979_2017/HM01X_Data_026100_999999999565453.txt"
+	elif loc == "Nuriootpa":
+		fname = "/short/eg3/ab4502/ExtremeWind/aws/half_hourly_1979_2017/HM01X_Data_023373_999999999565453.txt"
+	elif loc == "Rayville Park":
+		fname = "/short/eg3/ab4502/ExtremeWind/aws/half_hourly_1979_2017/HM01X_Data_021133_999999999565453.txt"
+	elif loc == "Mount Gambier":
+		fname = "/short/eg3/ab4502/ExtremeWind/aws/half_hourly_1979_2017/HM01X_Data_026021_999999999565453.txt"
+	elif loc == "Naracoorte":
+		fname = "/short/eg3/ab4502/ExtremeWind/aws/half_hourly_1979_2017/HM01X_Data_026099_999999999565453.txt"
+	elif loc == "The Limestone":
+		fname = "/short/eg3/ab4502/ExtremeWind/aws/half_hourly_1979_2017/HM01X_Data_026095_999999999565453.txt"
+	elif loc == "Parafield":
+		fname = "/short/eg3/ab4502/ExtremeWind/aws/half_hourly_1979_2017/HM01X_Data_023013_999999999565453.txt"
+	elif loc == "Austin Plains":
+		fname = "/short/eg3/ab4502/ExtremeWind/aws/half_hourly_1979_2017/HM01X_Data_025562_999999999565453.txt"
+	elif loc == "Roseworthy":
+		fname = "/short/eg3/ab4502/ExtremeWind/aws/half_hourly_1979_2017/HM01X_Data_023122_999999999565453.txt"
+	elif loc == "Tarcoola":
+		fname = "/short/eg3/ab4502/ExtremeWind/aws/half_hourly_1979_2017/HM01X_Data_016098_999999999565453.txt"
+	elif loc == "Edinburgh":
+		fname = "/short/eg3/ab4502/ExtremeWind/aws/half_hourly_1979_2017/HM01X_Data_023083_999999999565453.txt"
+	
+	aws = pd.read_csv(fname\
+				,header=1,names=names,dtype={"wind_gust":float},\
+				na_values={"wind_gust":'     '})
+	aws["day"] = aws.date_str.str.slice(0,2).astype("int")
+	aws["month"] = aws.date_str.str.slice(3,5).astype("int")
+	aws["year"] = aws.date_str.str.slice(6,10).astype("int")
+	aws["hour"] = aws.date_str.str.slice(11,13).astype("int")
+	aws["minute"] = aws.date_str.str.slice(14,16).astype("int")
+	aws_dt = []
+	for i in np.arange(0,aws.shape[0]):
+		aws_dt.append(dt.datetime((aws["year"][i]),(aws["month"][i]),\
+			(aws["day"][i]),(aws["hour"][i]),(aws["minute"][i])))
+	aws["date"] = aws_dt
+
+	if resample:
+		aws = aws.resample("6H",on="date",base=3,\
+			loffset=dt.timedelta(hours=3),\
+			closed="right").max()
+
+	return aws
+
+def read_aws_all(resample=False):
 	#locs = ["Adelaide AP","Woomera","Coober Pedy AP","Port Augusta","Clare HS"]
 	locs = ["Port Augusta","Marree","Munkora","Woomera","Robe","Loxton","Coonawarra",\
 			"Renmark","Clare HS","Adelaide AP","Coober Pedy AP","Whyalla",\
@@ -137,14 +285,23 @@ def read_aws_all():
 	aws = pd.DataFrame()
 	for loc in locs:
 		print(loc)
-		temp_aws = read_aws(loc)
+		if resample:
+			temp_aws = read_aws(loc,True)
+		else:
+			temp_aws = read_aws(loc,False)
 		temp_aws["stn_name"] = loc
 		aws = aws.append(temp_aws)
-	aws.to_pickle("/short/eg3/ab4502/ExtremeWind/aws/all_wind_gusts_sa_2010_2015.pkl")
+	if resample:
+		aws.to_pickle("/short/eg3/ab4502/ExtremeWind/aws/all_wind_gusts_sa_6hr_2010_2015.pkl")
+	else:
+		aws.to_pickle("/short/eg3/ab4502/ExtremeWind/aws/all_wind_gusts_sa_2010_2015.pkl")
 	return aws
 
-def load_aws_all():
-	aws = pd.read_pickle("/short/eg3/ab4502/ExtremeWind/aws/all_wind_gusts_sa_2010_2015.pkl")
+def load_aws_all(resample=False):
+	if resample:
+		aws = pd.read_pickle("/short/eg3/ab4502/ExtremeWind/aws/all_wind_gusts_sa_6hr_2010_2015.pkl")
+	else:
+		aws = pd.read_pickle("/short/eg3/ab4502/ExtremeWind/aws/all_wind_gusts_sa_2010_2015.pkl")
 	return aws
 
 def uv(df):
@@ -211,16 +368,20 @@ def read_non_synoptic_wind_gusts():
 
 	#Fix data points (2010-2015) for which day and month are the wrong way around in JDH data
 	#Checked for Woomera, Adelaide AP and Port Augusta
-	df_full.dates[df_full["dates"]==dt.datetime(2010,7,12)] = dt.datetime(2010,12,7)
-	df_full.dates[df_full["dates"]==dt.datetime(2014,6,10)] = dt.datetime(2014,10,6)
-	df_full.dates[df_full["dates"]==dt.datetime(2015,7,12)] = dt.datetime(2015,12,7)
+	df_full.dates.loc[df_full["dates"]==dt.datetime(2010,7,12)] = dt.datetime(2010,12,7)
+	df_full.dates.loc[df_full["dates"]==dt.datetime(2014,6,10)] = dt.datetime(2014,10,6)
+	df_full.dates.loc[df_full["dates"]==dt.datetime(2015,7,12)] = dt.datetime(2015,12,7)
 
 	#THINK JDH DATA MAY ALREADY BE IN UTC
 	#df_full["dates_utc_start"] = [x - dt.timedelta(hours=10,minutes=30) \
 	#		for x in df_full["dates"]]
 	df_full.index = df_full["dates"]
 	df_full = df_full.sort_index()
-	#df_full["dates_utc_end"] = [x + dt.timedelta(hours=24) for x in df_full["dates_utc_start"]]
+	
+	#Rename a few stations
+	df_full.station.loc[df_full.station=="Adelaide Airport"] = "Adelaide AP"
+	df_full.station.loc[df_full.station=="Mt Gambier"] = "Mount Gambier"
+	df_full.station.loc[df_full.station=="Coober Pedy"] = "Coober Pedy AP"
 
 	return df_full
 
@@ -280,6 +441,14 @@ def load_lightning(smoothing=True):
 		df = pd.read_pickle("/g/data/eg3/ab4502/ExtremeWind/ad_data/lightning_sa_smoothed.pkl")
 	else:
 		df = pd.read_pickle("/g/data/eg3/ab4502/ExtremeWind/ad_data/lightning_sa.pkl")
+	return df
+
+def load_wind_sa():
+	#Load wind_SA.csv into a dataframe
+	df = pd.read_csv("/short/eg3/ab4502/ExtremeWind/wind_sa.csv",usecols=np.arange(0,12)\
+		,header=0,skiprows=[966])
+	df["date"] = [dt.datetime.strptime(df["Date time commenced"][i],"%Y-%m-%d %H:%M:%S") \
+			for i in np.arange(0,df.shape[0])]
 	return df
 
 if __name__ == "__main__":

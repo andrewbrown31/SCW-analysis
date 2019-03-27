@@ -1,4 +1,5 @@
 from erai_read import read_erai, read_erai_points, read_erai_fc
+import glob
 import datetime as dt
 import numpy as np
 import netCDF4 as nc
@@ -78,6 +79,34 @@ def append_dp():
 		
 		param_file.close()
 
+def rename_barra_wg():
+
+	fnames = np.sort(glob.glob("/g/data/eg3/ab4502/ExtremeWind/sa_small/barra_r_fc/barra_r_fc_2003*"))
+	for fname in fnames:
+		print(fname)
+		f = nc.Dataset(fname,"a")
+		wg = f.variables["wg"]
+		t = f.variables["time"]
+		lat = f.variables["lat"]
+		lon = f.variables["lon"]
+		max_wg10_var = f.createVariable("max_wg10",wg[:].dtype,("time","lat","lon"))
+		max_wg10_var.long_name = wg.long_name
+		max_wg10_var.units = wg.units
+		max_wg10_var[:] = wg[:]
+		f.close()
+
+def add_units():
+
+	fnames = np.sort(glob.glob("/g/data/eg3/ab4502/ExtremeWind/sa_small/barra_r_fc/barra_r_fc_2003*"))
+	for fname in fnames:
+		f = nc.Dataset(fname,"a")
+		max_wg10 = f.variables["max_wg10"]
+		wg = f.variables["wg"]
+		max_wg10.units = wg.units
+		f.close()
+	
+
 if __name__ == "__main__":
 	#append_dp()
-	append_capeS06()
+	#append_capeS06()
+	rename_barra_wg()

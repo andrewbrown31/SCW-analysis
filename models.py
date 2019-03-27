@@ -43,30 +43,38 @@ def load_data(season=False):
 	
 	return erai_df
 
-def random_forest(train,test):
+def load_jdh_events():
+
+	df,jdh_df,non_jdh_df = analyse_jdh_events()
+	df_warm = df[np.in1d(df.month,np.array([10,11,12,1,2,3]))]
+	df_cool = df[np.in1d(df.month,np.array([4,5,6,7,8,9]))]
+
+	return (df,df_warm,df_cool)
+
+def random_forest(train,test,features):
 	rfc = RandomForestClassifier()
-	rf_model = rfc.fit(train.drop(columns="events"),train["events"])
-	probs = rf_model.predict_proba(test.drop(columns="events"))
+	rf_model = rfc.fit(train[features],train["events"])
+	probs = rf_model.predict_proba(test[features])
 	obs = np.array(test["events"])
-	preds = rf_model.predict(test.drop(columns="events"))
+	preds = rf_model.predict(test[features])
 
 	return (probs,preds,obs)	
 
-def decision_tree(train,test):
+def decision_tree(train,test,features):
 	tree = DecisionTreeClassifier()
-	tree_model = tree.fit(train.drop(columns="events"),train["events"])
-	probs = tree_model.predict_proba(test.drop(columns="events"))
+	tree_model = tree.fit(train[features],train["events"])
+	probs = tree_model.predict_proba(test[features])
 	obs = np.array(test["events"])
-	preds = tree_model.predict(test.drop(columns="events"))
+	preds = tree_model.predict(test[features])
 	
 	return (probs,preds,obs)	
 
-def logit(train,test):
+def logit(train,test,features):
 	logit = LogisticRegression()
-	logit_model = logit.fit(train.drop(columns="events"),train["events"])
-	probs = logit_model.predict_proba(test.drop(columns="events"))
+	logit_model = logit.fit(train[features],train["events"])
+	probs = logit_model.predict_proba(test[features])
 	obs = np.array(test["events"])
-	preds = logit_model.predict(test.drop(columns="events"))
+	preds = logit_model.predict(test[features])
 	
 	return (probs,preds,obs)	
 
@@ -80,13 +88,16 @@ def print_stats(preds,obs,model):
 		str(false_alarm)+"\nCORRECT NEGATIVE = "+str(correct_negative)+"\n")
 
 if __name__=="__main__":
-	erai_df = load_data(season=False)	#season can be False, warm or cold
-	train,test = train_test_split(erai_df)
-	probs,preds,obs = random_forest(train,test)
+	#erai_df = load_data(season=False)	#season can be False, warm or cold
+	df,warm_df,cool_df = load_jdh_events()
+	train,test = train_test_split(df.rename(columns={"jdh":"events"}))
+	feats = ["mu_cape","mu_cin","relhum850-500",\
+			"s06","wg10"]
+	probs,preds,obs = random_forest(train,test,feats)
 	print_stats(preds,obs,"RF")
-	probs,preds,obs = logit(train,test)
+	probs,preds,obs = logit(train,test,feats)
 	print_stats(preds,obs,"LOGISTIC REGRESSION")
-	probs,preds,obs = decision_tree(train,test)
+	probs,preds,obs = decision_tree(train,test,feats)
 	print_stats(preds,obs,"DECISION TREE")
 
 

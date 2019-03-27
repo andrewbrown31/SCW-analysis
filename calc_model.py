@@ -1,6 +1,12 @@
-from calc_param import *
+import numpy as np
+from calc_param import calc_param_sharppy, calc_param_wrf
 from erai_read import read_erai, read_erai_points, read_erai_fc
 from barra_read import read_barra, read_barra_points
+from barra_ad_read import read_barra_ad
+from barra_r_fc_read import read_barra_r_fc
+from event_analysis import load_array_points
+import datetime as dt
+from calc_param import *
 
 def calc_model(model,out_name,method,time,param,issave,region,cape_method):
 
@@ -23,7 +29,7 @@ def calc_model(model,out_name,method,time,param,issave,region,cape_method):
 #	parameters.
 
    if method == "domain":
- 	if region == "aus":
+	if region == "aus":
 	    start_lat = -44.525; end_lat = -9.975; start_lon = 111.975; end_lon = 156.275
 	elif region == "sa_small":
 	    start_lat = -38; end_lat = -26; start_lon = 132; end_lon = 142
@@ -49,6 +55,19 @@ def calc_model(model,out_name,method,time,param,issave,region,cape_method):
 		param = ["wg10","cape"]
 		param_out = [wg10,cape]
 		save_netcdf(region,model,date_list,lat,lon,param,param_out)	
+	elif model=="barra_ad":
+		print("\n	INFO: READING IN BARRA-AD DATA...\n")
+		max_max_wg,wg,ta,dp,hur,hgt,terrain,p,ps,ua,va,uas,vas,lon,lat,date_list = \
+			read_barra_ad(domain,time,wg_only=False)
+	elif model=="barra_r_fc":
+		print("\n	INFO: READING IN BARRA-R FORECAST DATA...\n")
+		#max_wg10,lon,lat,date_list = \
+		#	read_barra_r_fc(domain,time)
+		#param = ["max_wg10"]
+		#param_out = [max_wg10]
+		#save_netcdf(region,model,date_list,lat,lon,param,param_out)	
+		wg,ta,dp,hur,hgt,terrain,p,ps,ua,va,uas,vas,lon,lat,date_list = \
+			read_barra_r_fc(domain,time,wg_only=False)
 	else:
 		raise NameError("""model"" must be ""erai"", ""erai_fc"" or ""barra""")
 
@@ -59,8 +78,13 @@ def calc_model(model,out_name,method,time,param,issave,region,cape_method):
 			param_out = calc_param_sharppy(date_list,ta,dp,hur,hgt,p,ua,va,uas,vas,\
 				lon,lat,param,out_name,issave,region)
 		elif cape_method == "wrf":
+		    if (model == "barra_r_fc") or (model == "barra_ad"):
+			#IF BARRA-R, include wind gust in the netcdf save function 
 			param_out = calc_param_wrf(date_list,ta,dp,hur,hgt,terrain,p,ps,ua,va,\
-				uas,vas,lon,lat,param,out_name,issave,region)
+				uas,vas,lon,lat,param,model,out_name,issave,region,wg=wg)
+		    else:
+			param_out = calc_param_wrf(date_list,ta,dp,hur,hgt,terrain,p,ps,ua,va,\
+				uas,vas,lon,lat,param,model,out_name,issave,region)
 		else:
 			raise NameError("""cape_method"" must be ""SHARPpy"" or ""wrf""")
 
@@ -68,41 +92,110 @@ def calc_model(model,out_name,method,time,param,issave,region,cape_method):
 	if region == "adelaideAP":
 		points = [(138.5204, -34.5924)]
 		loc_id = ["Adelaide AP"]
+	elif (model == "barra_ad") or (model == "barra_r_fc"):
+		points = []
+		loc_id = []
 	else:
-	    raise NameError("Region must be one of ""adelaideAP""")
+	    raise NameError("Region must be ""adelaideAP"", or model must be BARRA-AD or BARRA-R")
 
 	if model=="barra":
 		print("\n	INFO: READING IN BARRA DATA...\n")
 		ta,dp,hur,hgt,terrain,p,ps,ua,va,uas,vas,lon,lat,lon_used,lat_used,date_list= \
 			read_barra_points(points,times)
+		df = calc_param_points(date_list,ta,dp,hur,hgt,terrain,p,ps,ua,va,uas,vas,lon,lat,\
+				lon_used,lat_used,param,loc_id,cape_method)
 	elif model=="erai":
 		print("\n	INFO: READING IN ERA-Interim DATA...\n")
 		ta,dp,hur,hgt,terrain,p,ps,ua,va,uas,vas,lon,lat,lon_used,lat_used,\
 			date_list = read_erai_points(points,times)
+		df = calc_param_points(date_list,ta,dp,hur,hgt,terrain,p,ps,ua,va,uas,vas,lon,lat,\
+				lon_used,lat_used,param,loc_id,cape_method)
+	elif model=="barra_ad":
+		print("\n	INFO: READING IN BARRA-AD DATA...\n")
+		start_lat = -38; end_lat = -26; start_lon = 132; end_lon = 142
+		domain = [start_lat,end_lat,start_lon,end_lon]
+		max_max_wg10,max_wg10,lon,lat,date_list = \
+			read_barra_ad(domain,time,wg_only=True)
+		param = ["max_max_wg10","max_wg10"]
+		param_out = [max_max_wg10,max_wg10]
+	elif model=="barra_r_fc":
+		print("\n	INFO: READING IN BARRA-R FORECAST DATA...\n")
+		start_lat = -38; end_lat = -26; start_lon = 132; end_lon = 142
+		domain = [start_lat,end_lat,start_lon,end_lon]
+		max_wg10,lon,lat,date_list = \
+			read_barra_r_fc(domain,time,wg_only=True)
+		param = ["max_wg10"]
+		param_out = [max_wg10]
 	else:
 		raise NameError("""model"" must be ""erai"" or ""barra""")
-
-	df = calc_param_points(date_list,ta,dp,hur,hgt,terrain,p,ps,ua,va,uas,vas,lon,lat,\
-			lon_used,lat_used,param,loc_id,cape_method)
 
 	if issave:
 		df.to_csv("/g/data/eg3/ab4502/ExtremeWind/"+region+"/data_"+out_name+"_"+\
 			dt.datetime.strftime(times[0],"%Y%m%d")+"_"+\
 			dt.datetime.strftime(times[1],"%Y%m%d")+".csv",float_format="%.3f")	
 
-def barra_driver():
+   #if (model == "barra_ad") or (model == "barra_r_fc"):
+   return [param,param_out,lon,lat,date_list]
+
+def barra_ad_driver(points,loc_id):
 	#Drive calc_model() for each month available in the BARRA dataset, for the sa_small domain
 
-	model = "barra"
+	model = "barra_ad"
 	cape_method = "wrf"
 	method = "domain"
-	region = "sa_large"
+	region = "sa_small"
+	dates = []
+	for y in np.arange(2006,2017):
+		for m in np.arange(1,13):
+		    if (m != 12):
+			dates.append([dt.datetime(y,m,1,0,0,0),\
+				dt.datetime(y,m+1,1,0,0,0)-dt.timedelta(hours = 6)])
+		    else:
+			dates.append([dt.datetime(y,m,1,0,0,0),\
+				dt.datetime(y+1,1,1,0,0,0)-dt.timedelta(hours = 6)])
+	df = pd.DataFrame()
+	if dates[0][0] == dt.datetime(2006,01,01,0):
+		dates[0][0] = dt.datetime(2006,01,01,06)
+	for t in np.arange(0,len(dates)):
+		print(str(dates[t][0])+" - "+str(dates[t][1]))
+		param,param_out,lon,lat,times = calc_model(model,model,"points",dates[t],"",False,\
+			region,cape_method)	
+		temp_df = load_array_points(param,param_out,lon,lat,times,points,loc_id,\
+				model,smooth=False)
+		df = df.append(temp_df)
+		temp_fname_csv = "/g/data/eg3/ab4502/ExtremeWind/points/barra_ad/barra_ad_points_"+\
+			dates[t][0].strftime("%Y%m")+".csv"
+		temp_fname_pkl = "/g/data/eg3/ab4502/ExtremeWind/points/barra_ad/"+\
+			"barra_ad_points_"+dates[t][0].strftime("%Y%m")+".pkl"
+		if os.path.isfile(temp_fname_pkl):
+			temp_exist = pd.read_pickle(temp_fname_pkl)
+			temp_df = pd.concat([temp_exist,temp_df])
+		temp_df.to_csv(temp_fname_csv)
+		temp_df.to_pickle(temp_fname_pkl)
+	outname_csv = "/g/data/eg3/ab4502/ExtremeWind/points/barra_ad/barra_ad_points_"+\
+		"2006_2016.csv"
+	outname_pkl = "/g/data/eg3/ab4502/ExtremeWind/points/barra_ad/barra_ad_points_"+\
+		"2006_2016.pkl"
+	if os.path.isfile(outname_pkl):
+		exist_df = pd.read_pickle(outname_pkl)
+		df = pd.concat([exist_df,df])
+	df.to_csv(outname_csv)
+	df.to_pickle(outname_pkl)
+
+def barra_r_fc_driver(points,loc_id):
+	#Drive calc_model() for each month available in the BARRA dataset, for the sa_small domain
+
+	model = "barra_r_fc"
+	cape_method = "wrf"
+	method = "domain"
+	region = "sa_small"
+	smooth = False
+	dates = []
 	param = ["ml_cape","ml_cin","mu_cin","mu_cape","srh01","srh03","srh06","scp",\
 		"stp","ship","mmp","relhum850-500","crt","non_sc_stp","vo","lr1000","lcl",\
 		"relhum1000-700","ssfc6","ssfc3","ssfc1","s06","ssfc850","ssfc500",\
-		"cape*s06","cape*ssfc6","td950","td850","td800","cape700"]
-	dates = []
-	for y in [2010,2011,2012,2013,2014,2015]:
+		"cape*s06","cape*ssfc6","td950","td850","td800","cape700","wg"]
+	for y in np.arange(2003,2017,1):
 		for m in [1,2,3,4,5,6,7,8,9,10,11,12]:
 		    if (m != 12):
 			dates.append([dt.datetime(y,m,1,0,0,0),\
@@ -110,24 +203,56 @@ def barra_driver():
 		    else:
 			dates.append([dt.datetime(y,m,1,0,0,0),\
 				dt.datetime(y+1,1,1,0,0,0)-dt.timedelta(hours = 6)])
-	dates[0][0] = dt.datetime(2010,1,1,6,0,0)
+	df = pd.DataFrame()
+	for t in np.arange(0,len(dates)):
+		print(str(dates[t][0])+" - "+str(dates[t][1]))
+		#To run convective parameters
+		#param,param_out,lon,lat,times = calc_model(model,model,"domain",dates[t],param,True,\
+		#	region,cape_method)	
+		#To run wind gusts point extraction
+		param,param_out,lon,lat,times = calc_model(model,model,"points",dates[t],param,False,\
+			region,cape_method)
+		temp_df = load_array_points(param,param_out,lon,lat,times,points,loc_id,\
+				model,smooth=smooth)
+		df = df.append(temp_df)
+		temp_df.to_csv("/g/data/eg3/ab4502/ExtremeWind/points/barra_r_fc/"+\
+			"barra_r_fc_points_"+dates[t][0].strftime("%Y%m")+".csv")
+		temp_df.to_pickle("/g/data/eg3/ab4502/ExtremeWind/points/barra_r_fc/"+\
+			"barra_r_fc_points_"+dates[t][0].strftime("%Y%m")+".pkl")
+	df.to_csv("/g/data/eg3/ab4502/ExtremeWind/points/barra_r_fc/barra_r_fc_points_"+\
+		"2006_2016.csv")
+	df.to_pickle("/g/data/eg3/ab4502/ExtremeWind/points/barra_r_fc/barra_r_fc_points_"+\
+		"2006_2016.pkl")
+
+def barra_driver(param):
+	#Drive calc_model() for each month available in the BARRA dataset, for the sa_small domain
+
+	model = "barra"
+	cape_method = "wrf"
+	method = "domain"
+	region = "sa_small"
+	dates = []
+	for y in np.arange(2015,2017):
+		for m in [1,2,3,4,5,6,7,8,9,10,11,12]:
+		    if (m != 12):
+			dates.append([dt.datetime(y,m,1,0,0,0),\
+				dt.datetime(y,m+1,1,0,0,0)-dt.timedelta(hours = 6)])
+		    else:
+			dates.append([dt.datetime(y,m,1,0,0,0),\
+				dt.datetime(y+1,1,1,0,0,0)-dt.timedelta(hours = 6)])
 	for t in np.arange(0,len(dates)):
 		print(str(dates[t][0])+" - "+str(dates[t][1]))
 		calc_model(model,model,method,dates[t],param,True,region,cape_method)	
 	
-def erai_driver():
+def erai_driver(param):
 	#Drive calc_model() for 2010-2015 in ERA-Interim, for the sa_small domain
 
 	model = "erai"
 	cape_method = "wrf"
 	method = "domain"
 	region = "sa_small"
-	param = ["ml_cape","ml_cin","mu_cin","mu_cape","srh01","srh03","srh06","scp",\
-		"stp","ship","mmp","relhum850-500","crt","non_sc_stp","vo","lr1000","lcl",\
-		"relhum1000-700","ssfc6","ssfc3","ssfc1","s06","ssfc850","ssfc500",\
-		"cape*s06","cape*ssfc6","td950","td850","td800","cape700"]
 	dates = []
-	for y in np.arange(2010,2018):
+	for y in np.arange(1979,2019):
 		for m in [1,2,3,4,5,6,7,8,9,10,11,12]:
 		    if (m != 12):
 			dates.append([dt.datetime(y,m,1,0,0,0),\
@@ -166,7 +291,7 @@ if __name__ == "__main__":
 # 	SETTINGS
 #--------------------------------------------------------------------------------------------------
 
-	model = "erai_fc"
+	model = "barra_ad"
 	cape_method = "wrf"
 
 	method = "domain"
@@ -175,30 +300,34 @@ if __name__ == "__main__":
 	experiment = ""
 
 	#ADELAIDE = UTC + 10:30
-	#times = [dt.datetime(2010,1,1,6,0,0),dt.datetime(2015,12,31,0,0,0)]
-	times = [dt.datetime(2010,1,1,0,0,0),dt.datetime(2010,1,31,18,0,0)]
-		#[dt.datetime(2014,9,28,0,0,0),dt.datetime(2014,9,29,0,0,0)]]
+	time = [dt.datetime(2016,9,28,0,0,0),dt.datetime(2016,9,29,0,0,0)]
 	issave = True
 
-	loc_id = ["Port Augusta","Marree","Munkora","Woomera","Robe","Loxton","Coonawarra","Renmark",\
-			"Clare HS","Adelaide AP"]
-	points = [(137.78,-32.54),(138.0684,-29.6587),(140.3273,-36.1058),(138.82,-31.15),\
+	loc_id = ["Port Augusta","Marree","Munkora","Woomera","Robe","Loxton","Coonawarra",\
+			"Renmark","Clare HS","Adelaide AP","Coober Pedy AP","Whyalla",\
+			"Padthaway South","Nuriootpa","Rayville Park","Mount Gambier",\
+			"Naracoorte","The Limestone","Parafield","Austin Plains","Roseworthy",\
+			"Tarcoola","Edinburgh"]
+	points = [(137.78,-32.54),(138.0684,-29.6587),(140.3273,-36.1058),(136.82,-31.15),\
 			(139.8054,-37.1776),(140.5978,-34.439),(140.8254,-37.2906),\
-			(140.6766,-34.1983),(138.5933,-33.8226),(138.53,-34.96)]
+			(140.6766,-34.1983),(138.5933,-33.8226),(138.53,-34.96),\
+			(134.7222,-29.0347),(137.5206,-33.0539),(140.5212,-36.6539),\
+			(139.0056,-34.4761),(138.2182,-33.7676),(140.7739,-37.7473),\
+			(140.7270,-36.9813),(139.7164,-36.9655),(138.6281,-34.7977),\
+			(140.5378,-35.3778),(138.6763,-34.5106),(134.5786,-30.7051),\
+			(138.6222,-34.7111)]
 
 #--------------------------------------------------------------------------------------------------
 #	RUN CODE
 #--------------------------------------------------------------------------------------------------
 
-	print("\n	CALCULATING THUNDERSTORM/TORNADO PARAMETERS FOR "+model+" USING "+cape_method+"\n 	FOR "+method+" IN "+region)
-
-	out_name = model+"_"+cape_method+experiment
-
 	if cape_method == "wrf":
 		param = ["ml_cape","ml_cin","mu_cin","mu_cape","srh01","srh03","srh06","scp",\
-			"stp","ship","mmp","relhum850-500","crt","non_sc_stp","vo","lr1000","lcl",\
+			"stp","estp","ship","mmp","relhum850-500","crt","vo10","lr1000","lcl",\
 			"relhum1000-700","ssfc6","ssfc3","ssfc1","s06","ssfc850","ssfc500",\
-			"cape*s06","cape*ssfc6"]
+			"cape*s06","cape*ssfc6","cape700","dcp","conv10","conv1000-850","conv800-600",\
+			"td850","td800","td950","dcape","dlm","dlm+dcape","dlm*dcape*cs6","dcape*cape",\
+			"dcape*cs6","dcape*td850"]
 	elif cape_method == "SHARPpy":
 		param = ["mu_cin","mu_cape","s06","ssfc850","srh01","srh03","srh06","scp",\
 			"ship","mmp","relhum850-500","stp"]
@@ -211,6 +340,9 @@ if __name__ == "__main__":
 		param = ["mu_cape","s06","cape*s06"]	
 
 	#for time in times:
-	#calc_model(model,out_name,method,times,param,issave,region,cape_method)	
-	#barra_driver()
-	erai_fc_driver()
+	calc_model(model,model,method,time,param,issave,region,cape_method)	
+	#erai_driver(param)
+	#barra_driver(param)
+	#barra_ad_driver(points,loc_id)
+	#barra_r_fc_driver(points,loc_id)
+	#param,param_out,lon,lat,date_list = calc_model(model,"test",method,time,param,True,region,cape_method)

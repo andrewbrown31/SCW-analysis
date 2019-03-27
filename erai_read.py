@@ -14,7 +14,6 @@ from mpl_toolkits.basemap import Basemap
 from matplotlib.mlab import griddata
 import pandas as pd
 
-from plot_param import plot_param
 from calc_param import *
 from barra_read import date_seq
 
@@ -325,4 +324,13 @@ def get_lat_lon_inds(points,lon,lat):
 		lat_used[point] = lat[dist_lat]
 	return [lon_ind, lat_ind, lon_used, lat_used]
 		
+def drop_erai_fc_duplicates(arr,times):
+
+	#ERAI forecast data has been saved with one day dupliaceted per year. Function to drop the first duplicate
+	#day for each year from a 3d array
+
+	u,idx = np.unique(times,return_index=True)
+	arr = arr[idx]
+
+	return (arr,u)
 

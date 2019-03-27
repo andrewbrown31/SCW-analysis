@@ -1,6 +1,6 @@
 import sharppy
 import sharppy.sharptab.profile as profile
-import sharppy.sharptab.interp as interp
+#import sharppy.sharptab.interp as interp
 import sharppy.sharptab.winds as winds
 import sharppy.sharptab.utils as utils
 import sharppy.sharptab.params as params
@@ -11,9 +11,10 @@ import datetime as dt
 import glob
 import pandas as pd
 import os
-from skewt import SkewT
+from SkewT import get_dcape
 from metpy.units import units
 import metpy.calc as mpcalc
+import metpy
 import wrf
 
 #-------------------------------------------------------------------------------------------------
@@ -290,7 +291,7 @@ def get_srh(u,v,hgt,hgt_top,papprox,storm_bot,storm_top,p=None):
 
 	return srh
 
-def get_tornado_pot(mlcape,lcl,mlcin,u,v,p,hgt,lev,srh01):
+def get_tornado_pot(mlcape,lcl,mlcin,u,v,p,hgt,lev,srh01,exp=False):
 	#From SHARPpy, but using approximations from EWD. Mixed layer cape approximated by 
 	#using 950 hPa parcel. Mixed layer lcl approximated by using maximum theta-e parcel
 	#Include scaling/limits from SPC
@@ -311,7 +312,11 @@ def get_tornado_pot(mlcape,lcl,mlcin,u,v,p,hgt,lev,srh01):
 	mlcin[mlcin>200] = 0
 	mlcin[(mlcin<=200) & (mlcin>=50)] = (200 - mlcin[(mlcin<=200) & (mlcin>=50)]) / 150
 
-	return (mlcape*srh01*shear*lcl*mlcin)
+	if exp:
+		#Was meant to raise each term to an exponent, instead just force cape to be non-zero
+		return ((mlcape+1)*(srh01)*(shear)*(lcl)*(mlcin))
+	else:
+		return (mlcape*srh01*shear*lcl*mlcin)
 
 def get_non_sc_tornado_pot(mlcape,mlcin,lcl,u,v,uas,vas,p,t,hgt,lev,vo,lr1000):
 	#From EWD. Mixed layer cape approximated by 
@@ -328,6 +333,10 @@ def get_non_sc_tornado_pot(mlcape,mlcin,lcl,u,v,uas,vas,p,t,hgt,lev,vo,lr1000):
 	vo = abs(vo)/(8*10**-5)
 
 	return (lr*mlcape*mlcin*shear*lcl*vo)
+
+def get_conv(u,v,dx,dy):
+	#10 m relative vo.
+	return (-1 * np.array(mpcalc.divergence(u,v,dx,dy)))
 
 def get_vo(uas,vas,dx,dy):
 	#10 m relative vo.
@@ -490,7 +499,8 @@ def critical_angle(u,v,hgt,u_sfc,v_sfc):
 
 	return (np.degrees(np.arccos(dot / (shear_mag * srw_mag))))
 
-def calc_param_wrf(times,ta,dp,hur,hgt,terrain,p,ps,ua,va,uas,vas,lon,lat,param,model,save,region):
+def calc_param_wrf(times,ta,dp,hur,hgt,terrain,p,ps,ua,va,uas,vas,lon,lat,param,model,out_name,save,region,\
+			wg=False):
 
 	#NOTE: Consider the winds used for "0 km" in SRH, s06, etc. Could be 10 m sfc winds, 
 	# bottom pressure level (1000 hPa)? Currently, storm motion, SRH and s06 use bottom 
@@ -504,11 +514,12 @@ def calc_param_wrf(times,ta,dp,hur,hgt,terrain,p,ps,ua,va,uas,vas,lon,lat,param,
 	#Boolean option to save as a netcdf file
 
 	#Assign p levels to a 4d array
-	p_3d = np.empty(ta.shape)
-	for i in np.arange(0,ta.shape[0]):
-		for j in np.arange(0,ta.shape[2]):
-			for k in np.arange(0,ta.shape[3]):
-				p_3d[i,:,j,k] = p
+	p_3d = np.moveaxis(np.tile(p,[ta.shape[0],ta.shape[2],ta.shape[3],1]),[0,1,2,3],[0,2,3,1])
+	#p_3d = np.empty(ta.shape)
+	#for i in np.arange(0,ta.shape[0]):
+	#	for j in np.arange(0,ta.shape[2]):
+	#		for k in np.arange(0,ta.shape[3]):
+	#			p_3d[i,:,j,k] = p
 
 	#Initialise output list
 	param = np.array(param)
@@ -523,13 +534,13 @@ def calc_param_wrf(times,ta,dp,hur,hgt,terrain,p,ps,ua,va,uas,vas,lon,lat,param,
 	#For each time
 	total_start = dt.datetime.now()
 	for t in np.arange(0,len(times)):
-		#print(times[t])
+		print(times[t])
 
 		#Calculate q
 		start = dt.datetime.now()
-		hur_unit = units.percent*hur[t,:,:,:]
-		ta_unit = units.degC*ta[t,:,:,:]
-		p_unit = units.hectopascals*p_3d[t,:,:,:]
+		hur_unit = units.units.percent*hur[t,:,:,:]
+		ta_unit = units.units.degC*ta[t,:,:,:]
+		p_unit = units.units.hectopascals*p_3d[t,:,:,:]
 		q_unit = mpcalc.mixing_ratio_from_relative_humidity(hur_unit,\
 			ta_unit,p_unit)
 		theta_unit = mpcalc.potential_temperature(p_unit,ta_unit)
@@ -549,8 +560,25 @@ def calc_param_wrf(times,ta,dp,hur,hgt,terrain,p,ps,ua,va,uas,vas,lon,lat,param,
 		ml_cape = cape_3d.data[0,2,:,:]
 		ml_cin = cape_3d.data[1,2,:,:]
 		cape700 = np.max(cape_3d.data[0][p<=700],axis=0)
-		#if t == 0:
-			#print("CAPE/CIN: "+str(dt.datetime.now()-start))
+
+		#MLCAPE TEST:
+		#First, calculate 3d cape normally for all pressure levels
+		cape3d = wrf.cape_3d(p_3d[t,:,:,:],ta[t,:,:,:]+273.15,q,hgt[t,:,:,:],terrain,ps[t,:,:],\
+			True,meta=False,missing=0).data[0]
+		#Then, mask values which are below the surface, and values which are less than 12.5 hPa AGL. 
+		#The need to exclude values between the surface and 12.5 hPa AGL, is due to the fact that the 
+		#WRF-python routine defines "layers" using mid-points between pressure levels. For example, the 
+		#third layer which defines a parcel will be between 962.5 and 937.5 hPa. So, if a pressure level is
+		# less than 12.5 hPa AGL, it will use some below-surface information to define the parcel at that
+		#level.
+		cape3d[p_3d[t] > ps[t]-25] = np.nan
+		#Now, for each grid point, define mlcape as the maximum CAPE on vertical levels which are between 
+		# 0 and 100 hPa AGL
+		mlcape = np.copy(cape3d)
+		mlcape[~((p_3d[t] >= (ps[t]-125)))] = np.nan
+		mlcape_max = np.nanmax(mlcape,axis=0)
+		mucape = np.nanmax(cape3d,axis=0)
+		
 
 		#Get other parameters...
 		if "relhum850-500" in param:
@@ -598,32 +626,24 @@ def calc_param_wrf(times,ta,dp,hur,hgt,terrain,p,ps,ua,va,uas,vas,lon,lat,param,
 			param_ind = np.where(param=="s06")[0][0]
 			s06 = get_shear_hgt(ua[t],va[t],hgt[t],0,6000)
 			param_out[param_ind][t,:,:] = s06
-			#if t == 0:
-				#print("S06: "+str(dt.datetime.now()-start))
 		if "ssfc850" in param:
 		#Wind shear sfc to 850 hPa
 			start = dt.datetime.now()
 			param_ind = np.where(param=="ssfc850")[0][0]
 			param_out[param_ind][t,:,:] = get_shear_p(ua[t],va[t],p_3d[t],"sfc",850,p,\
 				uas[t],vas[t])
-			#if t == 0:
-				#print("S06: "+str(dt.datetime.now()-start))
 		if "ssfc500" in param:
 		#Wind shear sfc to 500 m
 			start = dt.datetime.now()
 			param_ind = np.where(param=="ssfc500")[0][0]
 			param_out[param_ind][t,:,:] = get_shear_hgt(ua[t],va[t],hgt[t],0,500,\
 				uas[t],vas[t])
-			#if t == 0:
-				#print("S0500: "+str(dt.datetime.now()-start))
 		if "lr1000" in param:
 		#Lapse rate bottom pressure level to 1000 m
 			start = dt.datetime.now()
 			param_ind = np.where(param=="lr1000")[0][0]
 			lr1000 = get_lr_hgt(ta[t],hgt[t],0,1000)
 			param_out[param_ind][t,:,:] = lr1000
-			#if t == 0:
-				#print("LR1000: "+str(dt.datetime.now()-start))
 		if "mu_cin" in param:
 		#CIN for same parcel used for mu_cape
 			param_ind = np.where(param=="mu_cin")[0][0]
@@ -644,24 +664,18 @@ def calc_param_wrf(times,ta,dp,hur,hgt,terrain,p,ps,ua,va,uas,vas,lon,lat,param,
 			param_ind = np.where(param=="srh01")[0][0]
 			srh01 = get_srh(ua[t],va[t],hgt[t],1000,True,850,700,p)
 			param_out[param_ind][t,:,:] = srh01
-			#if t == 0:
-				#print("SRH: "+str(dt.datetime.now()-start))
 		if "srh03" in param:
 		#Combined (+ve and -ve) rel. helicity from 0-3 km
 			start = dt.datetime.now()
 			srh03 = get_srh(ua[t],va[t],hgt[t],3000,True,850,700,p)
 			param_ind = np.where(param=="srh03")[0][0]
 			param_out[param_ind][t,:,:] = srh03
-			#if t == 0:
-				#print("SRH: "+str(dt.datetime.now()-start))
 		if "srh06" in param:
 		#Combined (+ve and -ve) rel. helicity from 0-6 km
 			start = dt.datetime.now()
 			param_ind = np.where(param=="srh06")[0][0]
 			srh06 = get_srh(ua[t],va[t],hgt[t],6000,True,850,700,p)
 			param_out[param_ind][t,:,:] = srh06
-			#if t == 0:
-				#print("SRH: "+str(dt.datetime.now()-start))
 		if "ship" in param:
 		#Significant hail parameter
 			if "s06" not in param:
@@ -671,28 +685,12 @@ def calc_param_wrf(times,ta,dp,hur,hgt,terrain,p,ps,ua,va,uas,vas,lon,lat,param,
 			muq = mu_cape_inds.choose(q)
 			ship = get_ship(mu_cape,muq,ta[t],ua[t],va[t],hgt[t],p,s06)
 			param_out[param_ind][t,:,:] = ship
-			#if t == 0:
-				#print("SHIP: "+str(dt.datetime.now()-start))
-		if "lhp" in param:
-		#Large Hail Paramerer; NOTE requires convective profile (costly).
-			param_ind = np.where(param=="lhp")[0][0]
-		if "hgz_depth" in param:
-		#Hail growzth zone (in hPa)
-			param_ind = np.where(param=="hgz_depth")[0][0]
-		if "dcp" in param:
-		#Derecho Composite Parameter ~ cold pool driven wind events
-			param_ind = np.where(param=="dcp")[0][0]
-		if "mburst" in param:
-		#Microburst composite index
-			param_ind = np.where(param=="mburst")[0][0]
 		if "mmp" in param:
 		#Mesoscale Convective System Maintanance Probability
 			start = dt.datetime.now()
 			param_ind = np.where(param=="mmp")[0][0]
 			param_out[param_ind][t,:,:] = get_mmp(ua[t],va[t],uas[t],vas[t],\
 				mu_cape,ta[t],hgt[t])
-			#if t == 0:
-				#print("MMP: "+str(dt.datetime.now()-start))
 		if "scp" in param:
 		#Supercell composite parameter (EWD)
 			if "srh03" not in param:
@@ -715,63 +713,114 @@ def calc_param_wrf(times,ta,dp,hur,hgt,terrain,p,ps,ua,va,uas,vas,lon,lat,param,
 			param_ind = np.where(param=="stp")[0][0]
 			stp = get_tornado_pot(ml_cape,lcl,ml_cin,ua[t],va[t],p_3d[t],hgt[t],p,srh01)
 			param_out[param_ind][t,:,:] = stp
-			#if t == 0:
-				#print("STP: "+str(dt.datetime.now()-start))
-		if "vo" in param:
+		if "estp" in param:
+		#Significant tornado parameter with exponents
+		#TODO:EDIT
+			param_ind = np.where(param=="estp")[0][0]
+			estp = get_tornado_pot(ml_cape,lcl,ml_cin,ua[t],va[t],p_3d[t],hgt[t],p,srh01,exp=True)
+			param_out[param_ind][t,:,:] = estp
+		if "vo10" in param:
 		#10 m relative vorticity
-			start = dt.datetime.now()
-			param_ind = np.where(param=="vo")[0][0]
+			param_ind = np.where(param=="vo10")[0][0]
 			x,y = np.meshgrid(lon,lat)
 			dx,dy = mpcalc.lat_lon_grid_deltas(x,y)
-			vo = get_vo(uas[t],vas[t],dx,dy)
-			param_out[param_ind][t,:,:] = vo
-			#if t == 0:
-				#print("VO: "+str(dt.datetime.now()-start))
+			vo10 = get_vo(uas[t],vas[t],dx,dy)
+			param_out[param_ind][t,:,:] = vo10
+		if "conv10" in param:
+			param_ind = np.where(param=="conv10")[0][0]
+			x,y = np.meshgrid(lon,lat)
+			dx,dy = mpcalc.lat_lon_grid_deltas(x,y)
+			param_out[param_ind][t,:,:] = get_conv(uas[t],vas[t],dx,dy)
+		if "conv1000-850" in param:
+			levs = np.where((p<=1001)&(p>=849))[0]
+			param_ind = np.where(param=="conv1000-850")[0][0]
+			x,y = np.meshgrid(lon,lat)
+			dx,dy = mpcalc.lat_lon_grid_deltas(x,y)
+			param_out[param_ind][t,:,:] = \
+				np.mean(np.stack([get_conv(ua[t,i],va[t,i],dx,dy) for i in levs]),axis=0)
+		if "conv800-600" in param:
+			levs = np.where((p<=801)&(p>=599))[0]
+			param_ind = np.where(param=="conv800-600")[0][0]
+			x,y = np.meshgrid(lon,lat)
+			dx,dy = mpcalc.lat_lon_grid_deltas(x,y)
+			param_out[param_ind][t,:,:] = \
+				np.mean(np.stack([get_conv(ua[t,i],va[t,i],dx,dy) for i in levs]),axis=0)
 		if "non_sc_stp" in param:
 		#Non-Supercell Significant tornado parameter
 		#NOTE: LCL here is for "maximum" parcel. I.e., the parcel with heighest equivalent
 		# potential temperature in the lowest 3000 m. STP however, calls for mixed layer
 		# lcl.
-			if "vo" not in param:
+			if "vo10" not in param:
 				raise NameError("To calculate non_sc_stp, vo must be included")
 			if "lr1000" not in param:
 				raise NameError("To calculate non_sc_stp, lr1000 must be included")
 			start = dt.datetime.now()
 			param_ind = np.where(param=="non_sc_stp")[0][0]
 			non_sc_stp = get_non_sc_tornado_pot(ml_cape,ml_cin,lcl,ua[t],va[t],\
-				uas[t],vas[t],p_3d[t],ta[t],hgt[t],p,vo,lr1000)
+				uas[t],vas[t],p_3d[t],ta[t],hgt[t],p,vo10,lr1000)
 			param_out[param_ind][t,:,:] = non_sc_stp
-			#if t == 0:
-				#print("NON-SC STP: "+str(dt.datetime.now()-start))
 		if "crt" in param:
 		#Critical tornado angle
 			start = dt.datetime.now()
 			param_ind = np.where(param=="crt")[0][0]
 			param_out[param_ind][t,:,:] = critical_angle(ua[t],va[t],hgt[t],\
 					uas[t],vas[t])
-			#if t == 0:
-				#print("CRT: "+str(dt.datetime.now()-start))
-		#if t == 0:
-			#print("TOTAL: "+str(dt.datetime.now()-total_start))
 		if "cape*s06" in param:
 			param_ind = np.where(param=="cape*s06")[0][0]
-			param_out[param_ind][t,:,:] = mu_cape * np.power(s06,1.67)
+			cs6 = ml_cape * np.power(s06,1.67)
+			param_out[param_ind][t,:,:] = cs6
 		if "cape*ssfc6" in param:
 			param_ind = np.where(param=="cape*ssfc6")[0][0]
-			param_out[param_ind][t,:,:] = mu_cape * np.power(ssfc6,1.67)
+			param_out[param_ind][t,:,:] = ml_cape * np.power(ssfc6,1.67)
 		if "td850" in param:
 			param_ind = np.where(param=="td850")[0][0]
-			param_out[param_ind][t,:,:] = get_td_diff(ta[t],dp[t],p_3d[t],850)
+			td850 = get_td_diff(ta[t],dp[t],p_3d[t],850)
+			param_out[param_ind][t,:,:] = td850
 		if "td800" in param:
 			param_ind = np.where(param=="td800")[0][0]
 			param_out[param_ind][t,:,:] = get_td_diff(ta[t],dp[t],p_3d[t],800)
 		if "td950" in param:
 			param_ind = np.where(param=="td950")[0][0]
 			param_out[param_ind][t,:,:] = get_td_diff(ta[t],dp[t],p_3d[t],950)
+		if "wg" in param:
+		    try:
+			param_ind = np.where(param=="wg")[0][0]
+			param_out[param_ind][t,:,:] = wg[t]
+		    except ValueError:
+			print("wg field expected, but not parsed")
+		if "dcape" in param:
+			param_ind = np.where(param=="dcape")[0][0]
+			dcape = np.nanmax(get_dcape(p_3d[t],ta[t],hgt[t],p),axis=0)
+			param_out[param_ind][t,:,:] = dcape
+		if "dlm" in param:
+			param_ind = np.where(param=="dlm")[0][0]
+			dlm_u, dlm_v = get_mean_wind(ua[t],va[t],hgt[t],800,600,False,None,"plevels",p)
+			dlm = np.sqrt(np.square(dlm_u) + np.square(dlm_v))
+			param_out[param_ind][t,:,:] = dlm
+		if "dlm+dcape" in param:
+			param_ind = np.where(param=="dlm+dcape")[0][0]
+			dlm_dcape = dlm + np.sqrt(2*dcape)
+			param_out[param_ind][t,:,:] = dlm_dcape
+		if "dlm*dcape*cs6" in param:
+			param_ind = np.where(param=="dlm*dcape*cs6")[0][0]
+			param_out[param_ind][t,:,:] = (dlm_dcape/30.) * (cs6/20000)
+		if "dcape*cape" in param:
+			param_ind = np.where(param=="dcape*cape")[0][0]
+			param_out[param_ind][t,:,:] = (dcape/500.) * (mu_cape/500)
+		if "dcape*cs6" in param:
+			param_ind = np.where(param=="dcape*cs6")[0][0]
+			param_out[param_ind][t,:,:] = (dcape/500.) * (cs6/20000)
+		if "dcape*td850" in param:
+			param_ind = np.where(param=="dcape*td850")[0][0]
+			param_out[param_ind][t,:,:] = (dcape/500.) * (td850)
+		if "dcp" in param:
+		#Derecho Composite Parameter ~ cold pool driven wind events
+			param_ind = np.where(param=="dcp")[0][0]
+			param_out[param_ind][t,:,:] = (dcape/980)*(mu_cape/2000)*(s06/10)*(dlm/8)
 
 	if save:
-		save_netcdf(region,model,times,lat,lon,param,param_out)
-		
+		save_netcdf(region,model,out_name,times,lat,lon,param,param_out)
+	
 	return param_out
 
 
@@ -796,6 +845,7 @@ def calc_param_sharppy(times,ta,dp,hur,hgt,p,ua,va,uas,vas,lon,lat,param,model,s
 			print(str(x)+"/"+str(len(lon)))
 			for y in np.arange(0,len(lat)):
 				#Restrict to a single spatial point
+				start = dt.datetime.now()
 				point = [lon[x],lat[y]]   
 				ta_p,dp_p,hgt_p,ua_p,va_p,uas_p,vas_p,hur_p = get_point(point,\
 					lon,lat,ta[t,:,:,:],dp[t,:,:,:],hgt[t,:,:,:],ua[t,:,:,:],\
@@ -899,6 +949,7 @@ def calc_param_sharppy(times,ta,dp,hur,hgt,p,ua,va,uas,vas,lon,lat,param,model,s
 					param_ind = np.where(param=="stp")[0][0]
 					param_out[param_ind][t,y,x] = params.stp_cin(ml_cape,\
 						esrh,ebwd,ml_lcl,ml_cin)
+				print(dt.datetime.now()-start)
 
 
 	if save:
@@ -1107,13 +1158,13 @@ def calc_param_points(times,ta,dp,hur,hgt,terrain,p,ps,ua,va,uas,vas,lon,lat,lon
 	df["minute"] = values_minute
 	return df	
 
-def save_netcdf(region,model,times,lat,lon,param,param_out):
+def save_netcdf(region,model,out_name,times,lat,lon,param,param_out):
 	if model == "erai_fc":	#Last time of fc data is the first time of the following month
-		fname = "/g/data/eg3/ab4502/ExtremeWind/"+region+"/"+model+"/"+model+"_"+\
+		fname = "/g/data/eg3/ab4502/ExtremeWind/"+region+"/"+model+"/"+out_name+"_"+\
 			dt.datetime.strftime(times[0],"%Y%m%d")+"_"+\
 			dt.datetime.strftime(times[-2],"%Y%m%d")+".nc"
 	else:
-		fname = "/g/data/eg3/ab4502/ExtremeWind/"+region+"/"+model+"/"+model+"_"+\
+		fname = "/g/data/eg3/ab4502/ExtremeWind/"+region+"/"+model+"/"+out_name+"_"+\
 			dt.datetime.strftime(times[0],"%Y%m%d")+"_"+\
 			dt.datetime.strftime(times[-1],"%Y%m%d")+".nc"
 	if os.path.isfile(fname):
@@ -1148,6 +1199,9 @@ def save_netcdf(region,model,times,lat,lon,param,param_out):
 	param_file.close()
 
 def nc_attributes(param):
+	if param=="cape700":
+		units = "J/kg"
+		long_name = "cape700hPa"
 	if param=="ml_cape":
 		units = "J/kg"
 		long_name = "mixed_layer_cape"
@@ -1196,6 +1250,9 @@ def nc_attributes(param):
 	elif param=="scp":
 		units = ""
 		long_name = "supercell_composite_parameter"
+	elif param=="estp":
+		units = ""
+		long_name = "non_zero_cape_significant_tornado_parameter"
 	elif param=="stp":
 		units = ""
 		long_name = "significant_tornado_parameter"
@@ -1217,9 +1274,9 @@ def nc_attributes(param):
 	elif param=="non_sc_stp":
 		units = ""
 		long_name = "non-supercell_significant_tornado_parameter"
-	elif param=="vo":
+	elif param=="vo10":
 		units = "s^-1"
-		long_name = "relative_vorticity"
+		long_name = "relative_vorticity_10m"
 	elif param=="lr1000":
 		units = "degC/km"
 		long_name = "lapse_rate_sfc-1000m"
@@ -1235,9 +1292,39 @@ def nc_attributes(param):
 	elif param == "wg10":
 		units = "m/s"
 		long_name = "wind_gust_10m"
+	elif param == "wg":
+		units = "m/s"
+		long_name = "max_wind_gust_10m"
+	elif param == "dcp":
+		units = ""
+		long_name = "derecho_composite_parameter"
 	elif param == "cape":
 		units = "J/kg"
 		long_name = "most_unstable_cape"
+	elif param == "conv10":
+		units = "s^-1"
+		long_name = "convergence_10m"
+	elif param == "conv1000-850":
+		units = "s^-1"
+		long_name = "mean_convergence_1000-850hPa"
+	elif param == "conv800-600":
+		units = "s^-1"
+		long_name = "mean_convergence_1000-850hPa"
+	elif param == "td950":
+		units = "decC"
+		long_name = "dew_point_depression850hPa"
+	elif param == "td800":
+		units = "decC"
+		long_name = "dew_point_depression850hPa"
+	elif param == "td850":
+		units = "decC"
+		long_name = "dew_point_depression850hPa"
+	elif param == "dcape":
+		units = "J/kg"
+		long_name = "downwards_maximum_convective_available_potential_energy"
+	elif param == "dlm":
+		units = "m/s"
+		long_name = "deep_layer_mean_wind_speed"
 	else:
 		units = ""
 		long_name = ""

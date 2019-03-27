@@ -1,3 +1,5 @@
+#NOTE THAT TO CALCULATE DCAPE, NUMPY HAS BEEN UPGRADED TO 1.16.0. SO, TO RUN, SWAP TO ENVIRONMENT "PYCAT"
+
 import numpy as np
 from calc_param import calc_param_sharppy, calc_param_wrf
 from erai_read import read_erai, read_erai_points, read_erai_fc
@@ -6,7 +8,6 @@ from barra_ad_read import read_barra_ad
 from barra_r_fc_read import read_barra_r_fc
 from event_analysis import load_array_points
 import datetime as dt
-from calc_param import *
 
 def calc_model(model,out_name,method,time,param,issave,region,cape_method):
 
@@ -300,7 +301,7 @@ if __name__ == "__main__":
 	experiment = ""
 
 	#ADELAIDE = UTC + 10:30
-	time = [dt.datetime(2016,9,28,0,0,0),dt.datetime(2016,9,29,0,0,0)]
+	time = [dt.datetime(2003,1,7,0,0,0),dt.datetime(2003,1,8,0,0,0)]
 	issave = True
 
 	loc_id = ["Port Augusta","Marree","Munkora","Woomera","Robe","Loxton","Coonawarra",\
@@ -340,7 +341,7 @@ if __name__ == "__main__":
 		param = ["mu_cape","s06","cape*s06"]	
 
 	#for time in times:
-	calc_model(model,model,method,time,param,issave,region,cape_method)	
+	calc_model("barra","test","domain",time,param,True,region,cape_method)	
 	#erai_driver(param)
 	#barra_driver(param)
 	#barra_ad_driver(points,loc_id)

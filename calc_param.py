@@ -12,9 +12,15 @@ import glob
 import pandas as pd
 import os
 from SkewT import get_dcape
-from metpy.units import units
+#For some reason, with numpy 1.16.0, metpy import doesn't work at first, but then works when you try it again
+try:
+	import metpy.units.units as units
+	import metpy.calc as mpcalc
+except:
+	pass
+from metpy.units import units as units
 import metpy.calc as mpcalc
-import metpy
+#import metpy
 import wrf
 
 #-------------------------------------------------------------------------------------------------
@@ -538,9 +544,9 @@ def calc_param_wrf(times,ta,dp,hur,hgt,terrain,p,ps,ua,va,uas,vas,lon,lat,param,
 
 		#Calculate q
 		start = dt.datetime.now()
-		hur_unit = units.units.percent*hur[t,:,:,:]
-		ta_unit = units.units.degC*ta[t,:,:,:]
-		p_unit = units.units.hectopascals*p_3d[t,:,:,:]
+		hur_unit = units.percent*hur[t,:,:,:]
+		ta_unit = units.degC*ta[t,:,:,:]
+		p_unit = units.hectopascals*p_3d[t,:,:,:]
 		q_unit = mpcalc.mixing_ratio_from_relative_humidity(hur_unit,\
 			ta_unit,p_unit)
 		theta_unit = mpcalc.potential_temperature(p_unit,ta_unit)
@@ -790,7 +796,7 @@ def calc_param_wrf(times,ta,dp,hur,hgt,terrain,p,ps,ua,va,uas,vas,lon,lat,param,
 			print("wg field expected, but not parsed")
 		if "dcape" in param:
 			param_ind = np.where(param=="dcape")[0][0]
-			dcape = np.nanmax(get_dcape(p_3d[t],ta[t],hgt[t],p),axis=0)
+			dcape = np.nanmax(get_dcape(p_3d[t],ta[t],hgt[t],p,ps[t]),axis=0)
 			param_out[param_ind][t,:,:] = dcape
 		if "dlm" in param:
 			param_ind = np.where(param=="dlm")[0][0]

@@ -553,19 +553,6 @@ def calc_param_wrf(times,ta,dp,hur,hgt,terrain,p,ps,ua,va,uas,vas,lon,lat,param,
 		theta_unit = mpcalc.potential_temperature(p_unit,ta_unit)
 		q = np.array(q_unit)
 
-		#Old way of getting CAPE using wrf-python
-		#cape_3d = wrf.cape_3d(p_3d[t,:,:,:],ta[t,:,:,:]+273.15,q\
-		#	,hgt[t,:,:,:],terrain,ps[t,:,:],False,meta=False,missing=0)
-		#cape_2d = wrf.cape_2d(p_3d[t,:,:,:],ta[t,:,:,:]+273.15,q\
-		#	,hgt[t,:,:,:],terrain,ps[t,:,:],False,meta=False,missing=0)
-		#mu_cape_inds = np.argmax(cape_3d.data[0],axis=0)
-		#lcl = cape_2d[2].data
-		#lfc = cape_2d[3].data
-		#mu_cape = mu_cape_inds.choose(cape_3d.data[0])
-		#mu_cin = mu_cape_inds.choose(cape_3d.data[1])
-		#ml_cape = cape_3d.data[0,2,:,:]
-		#ml_cin = cape_3d.data[1,2,:,:]
-
 		#New way of getting MLCAPE. Insert an avg sfc-100 hPa AGL layer.
 		#First, find avg values for ta, p, hgt and q for ML (between the surface and 100 hPa AGL)
 		ml_inds = ((p_3d[t] <= ps[t]) & (p_3d[t] >= (ps[t] - 100)))
@@ -607,12 +594,6 @@ def calc_param_wrf(times,ta,dp,hur,hgt,terrain,p,ps,ua,va,uas,vas,lon,lat,param,
 		#Now, for each grid point, define mlcape as the maximum CAPE on vertical levels which are between 
 		# 0 and 100 hPa AGL. Define ml_cin as the maximum cin in the same region. Note, cin is only given
 		#by wrf-python if cape is present
-		#ml_cape = np.copy(cape)
-		#ml_cape[~((p_3d[t] >= (ps[t]-125)))] = np.nan
-		#ml_cape = np.nanmax(ml_cape,axis=0)
-		#ml_cin = np.copy(cin)
-		#ml_cin[~((p_3d[t] >= (ps[t]-125)))] = np.nan
-		#ml_cin = np.nanmax(ml_cin,axis=0)
 		#Define most unstable cape/cin. Cin is for the same parcel as mu_cape
 		mu_cape_inds = np.nanargmax(cape,axis=0)
 		mu_cape = mu_cape_inds.choose(cape)

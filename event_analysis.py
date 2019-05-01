@@ -3,6 +3,7 @@ import os
 from obs_read import *
 import matplotlib.pyplot as plt
 from plot_param import *
+from plot_clim import *
 
 def load_netcdf_points(fname,points,loc_id,model,smooth,erai_fc=False,\
 		ad_data=False,daily_max=False):
@@ -153,6 +154,101 @@ def load_netcdf_points(fname,points,loc_id,model,smooth,erai_fc=False,\
 	df["date"] = values_date
 
 	return df	
+
+def load_netcdf_points_mf(points,loc_id,domain,model,year_range):
+	#Same as load_netcdf_points, but use MFDataset to lead in all netcdf points at once
+
+	#Load in convective parameter netcdf files for a given model/year range/domain
+	f = load_ncdf(domain,model,year_range,var_list=False)
+
+	#Get lat/lon inds to use based on points input, taking in to account the lsm
+	if model == "erai":
+		from erai_read import get_lat_lon,reform_lsm
+		lon_orig,lat_orig = get_lat_lon()
+		lsm = reform_lsm(lon_orig,lat_orig)
+		smooth = False		#TURN SMOOTHING OFF FOR ERA-I (ALREADY 0.75 DEG)
+	elif model == "barra":
+		from barra_read import get_lat_lon
+		lon_orig,lat_orig = get_lat_lon()
+		lsm = nc.Dataset("/g/data/ma05/BARRA_R/v1/static/lnd_mask-an-slv-PT0H-BARRA_R-v1.nc").\
+			variables["lnd_mask"][:]
+	elif model == "barra_ad":
+		from barra_ad_read import get_lat_lon
+		lon_orig,lat_orig = get_lat_lon()
+		lsm = nc.Dataset("/g/data/ma05/BARRA_AD/v1/static/lnd_mask-fc-slv-PT0H-BARRA_AD-v1.nc")\
+			.variables["lnd_mask"][:]
+	elif model == "barra_r_fc":
+		from barra_r_fc_read import get_lat_lon
+		lon_orig,lat_orig = get_lat_lon()
+		lsm = nc.Dataset("/g/data/ma05/BARRA_R/v1/static/lnd_mask-an-slv-PT0H-BARRA_R-v1.nc").\
+			variables["lnd_mask"][:]
+	lon = f.variables["lon"][:]
+	lat = f.variables["lat"][:]
+	x,y = np.meshgrid(lon,lat)
+	lsm_new = lsm[((lat_orig<=lat[0]) & (lat_orig>=lat[-1]))]
+	lsm_new = lsm_new[:,((lon_orig>=lon[0]) & (lon_orig<=lon[-1]))]
+	x[lsm_new==0] = np.nan
+	y[lsm_new==0] = np.nan
+	lat_ind = np.empty(len(points))
+	lon_ind = np.empty(len(points))
+	lat_used = np.empty(len(points))
+	lon_used = np.empty(len(points))
+	for point in np.arange(0,len(points)):
+		dist = np.sqrt(np.square(x-points[point][0]) + \
+				np.square(y-points[point][1]))
+		dist_lat,dist_lon = np.unravel_index(np.nanargmin(dist),dist.shape)
+		lat_ind[point] = dist_lat
+		lon_ind[point] = dist_lon
+		lon_used[point] = lon[dist_lon]
+		lat_used[point] = lat[dist_lat]
+
+	times = nc.num2date(f.variables["time"][:],f.variables["time"].units)
+	days = (np.array([x.day for x in times]))
+	unique_days = np.unique(days)
+	var = np.array([str(f.variables.items()[i][0]) for i in np.arange(0,\
+		len(f.variables.items()))])
+	var = var[~(var=="time") & ~(var=="lat") & ~(var=="lon")]
+	values = np.empty((len(points)*len(times),len(var)))
+	values_lat = np.tile(np.array(points)[:,1],[len(times),1]).flatten()
+	values_lon = np.tile(np.array(points)[:,0],[len(times),1]).flatten()
+	values_lon_used = np.tile(lon_used,[len(times),1]).flatten()
+	values_lat_used = np.tile(lat_used,[len(times),1]).flatten()
+	values_loc_id = np.tile(np.array(loc_id),[len(times),1]).flatten()
+	values_year = np.tile(np.array([t.year for t in times]),[len(points),1]).T.flatten()
+	values_month = np.tile(np.array([t.month for t in times]),[len(points),1]).T.flatten()
+	values_day = np.tile(np.array([t.day for t in times]),[len(points),1]).T.flatten()
+	values_hour = np.tile(np.array([t.hour for t in times]),[len(points),1]).T.flatten()
+	values_date = np.tile(times,[len(points),1]).T.flatten()
+
+	cnt = 0
+	print("EXTRACTING POINT DATA FROM NETCDF FILES...")
+	for v in np.arange(len(var)):
+		print(var[v])
+		temp = f.variables[var[v]][:]
+		values[:,v] = temp[:,lat_ind.astype(int),lon_ind.astype(int)].flatten()
+
+	df = pd.DataFrame(values,columns=var,index=values_date)
+	df["lat"] = values_lat
+	df["lon"] = values_lon
+	df["lon_used"] = values_lon_used
+	df["lat_used"] = values_lat_used
+	df["loc_id"] = values_loc_id
+	df["year"] = values_year
+	df["month"] = values_month
+	df["day"] = values_day
+	df["hour"] = values_hour
+
+	#SAVE AT 6-HOURLY FREQUENCY
+	df.to_pickle("/g/data/eg3/ab4502/ExtremeWind/points/erai_points_1979_2017.pkl")
+
+	#RESAMPLE TO DAILY MAX AND SAVE
+	print("REAMPLING TO DAILY MAX...")
+	daily_df = pd.DataFrame()
+	for loc in loc_id:
+		print(loc)
+		daily_df = pd.concat([daily_df,df[df["loc_id"]==loc].resample("1D").max()],axis=0)
+	daily_df.reset_index().rename(columns={"index":"date"}).to_pickle("/g/data/eg3/ab4502/ExtremeWind"+\
+		"/points/erai_points_1979_2017_daily_max.pkl")
 
 def load_array_points(param,param_out,lon,lat,times,points,loc_id,model,smooth,erai_fc=False,\
 		ad_data=False,daily_max=False):
@@ -709,6 +805,7 @@ def analyse_jdh_events():
                 barra_r_fc["max_wg10"]],axis=1)
 
         #Create a binary column for JDH events in the original combined dataframe
+	#Only include JDH events where the AWS data is above 20 m/s
 	df["jdh"] = 0
 	df.loc[((~df["gust (m/s)"].isna()) & (~df["wind_gust"].isna()) & (df["wind_gust"]>=20)),"jdh"] = 1
 
@@ -764,16 +861,18 @@ def var_trends(df,var,loc,method,dataset,year_range=[1979,2017],months=np.arange
 	if method=="threshold":
 		years = df.year.unique()
 		fig,[ax1,ax3]=plt.subplots(figsize=[10,8],nrows=2,ncols=1)
-		ax1.set_ylabel("Monthly max wind gust (m/s)",fontsize="large")
+		ax1.set_ylabel("Wind gust (m/s)",fontsize="large")
 		df_monthly = df.set_index("date").resample("1M").max()
-		ax1.plot(df_monthly[var])
+		y = np.array([dt.datetime(t.year,t.month,t.day) for t in df_monthly.index])
+		ax1.plot(y,df_monthly[var])
 		ax2 = ax1.twinx()
 		cnt = [df[(df.stn_name==loc)&(df.year==y)].shape[0] for y in np.arange(1979,2018,1)]
-		y = [dt.datetime(y,6,1) for y in np.arange(1979,2018,1)]
-		ax2.plot(y,cnt,color="k",marker="s",linestyle="none")
-		ax2.set_ylabel("Days recorded in year",fontsize="large")
+		y = np.array([dt.datetime(y,6,1) for y in np.arange(1979,2018,1)])
+		ax2.plot(y,cnt,color="k",marker="s",linestyle="none",markersize=8)
+		ax2.set_ylabel("Obs. per year",fontsize="large")
 		[plt.axvline(v,color="k",linestyle="--") for v in vplot]
 		plt.xlabel("")
+		cnt=0
 		for thresh in threshold:
 			if (len(thresh) == 1):
 				event_years = [df[(df[var]>=thresh[0]) & (df.year == y)].shape[0] \
@@ -793,12 +892,19 @@ def var_trends(df,var,loc,method,dataset,year_range=[1979,2017],months=np.arange
 
 			lab = lab1+" "+str(round(m,3))+" +/- "+\
 				str(round(std*2,3))+" d y^-1"
-			sb.regplot("years","event_years",events,ci=95,fit_reg=False,\
-					n_boot=10000,order=1,label=lab,ax=ax3,scatter_kws={"s":20})
+			if cnt == 2:
+				sb.regplot("years","event_years",events,ci=95,fit_reg=False,color="k",\
+					n_boot=10000,order=1,label=lab,ax=ax3,marker="x",\
+					scatter_kws={"s":150,"linewidth":1.5})
+			else:
+				sb.regplot("years","event_years",events,ci=95,fit_reg=False,\
+					n_boot=10000,order=1,label=lab,ax=ax3,marker="s",\
+					scatter_kws={"s":75})
+			cnt=cnt+1
 		ax1.set_xlim([dt.datetime(years.min(),1,1),dt.datetime(years.max(),12,31)])
-		ax3.set_xlim([events.years.min(),events.years.max()])
+		ax3.set_xlim([events.years.min()-1,events.years.max()+1])
 		ax3.set_ylim([0.5,1000])
-		ax3.set_ylabel("Number of days identified",fontsize="large")
+		ax3.set_ylabel("Days",fontsize="large")
 		ax3.set_xlabel("Year",fontsize="large")
 		ax3.set_yscale('log')
 		ax1.set_title(loc,fontsize="large")
@@ -810,7 +916,7 @@ def var_trends(df,var,loc,method,dataset,year_range=[1979,2017],months=np.arange
 		fig,ax=plt.subplots(figsize=[12,5])
 		cnt = [df[(df.stn_name==loc)&(df.year==y)].shape[0] for y in np.arange(1979,2018,1)]
 		y = [dt.datetime(y,6,1) for y in np.arange(1979,2018,1)]
-		ax.set_ylabel("Days recorded in year",fontsize="large")
+		cnt=0
 		for thresh in threshold:
 			if (len(thresh) == 1):
 				event_years = [df[(df[var]>=thresh[0]) & (df.year == y)].shape[0] \
@@ -830,11 +936,23 @@ def var_trends(df,var,loc,method,dataset,year_range=[1979,2017],months=np.arange
 
 			lab = lab1+" "+str(round(m,3))+" +/- "+\
 				str(round(std*2,3))+" d y^-1"
-			sb.regplot("years","event_years",events,ci=95,fit_reg=False,\
-					n_boot=10000,order=1,label=lab,ax=ax,scatter_kws={"s":40})
-		ax.set_xlim([events.years.min(),events.years.max()])
+			if cnt==2:
+				sb.regplot("years","event_years",events,ci=95,fit_reg=False,\
+					n_boot=10000,order=1,label=lab,ax=ax,marker="x",color="k",\
+					scatter_kws={"s":75,"linewidth":2})
+			else:
+				sb.regplot("years","event_years",events,ci=95,fit_reg=False,\
+					n_boot=10000,order=1,label=lab,ax=ax,marker="s",\
+					scatter_kws={"s":75})
+			cnt=cnt+1
+		if dataset == "BARRA-AD":
+			ax.set_xlim([events.years.min()-1,events.years.max()-0.5])
+		elif dataset == "BARRA-R":
+			ax.set_xlim([events.years.min()-1,events.years.max()-0.5])
+		else:
+			ax.set_xlim([events.years.min()-1,events.years.max()+1])
 		ax.set_ylim([0.5,1000])
-		ax.set_ylabel("Number of days identified",fontsize="large")
+		ax.set_ylabel("Days",fontsize="large")
 		ax.set_xlabel("Year",fontsize="large")
 		ax.set_yscale('log')
 		ax.tick_params(labelsize="large")
@@ -935,13 +1053,17 @@ def interannual_time_series(df_list,var,names,loc,year_range,method,months=np.ar
 	plt.legend()
 	plt.show()
 		
-def wind_gust_boxplot(df,aws,loc,var,season=np.arange(1,13,1)):
+def wind_gust_boxplot(df,aws,var,loc=False,season=np.arange(1,13,1),two_thirds=True):
 
 	#For a reanalysis dataframe (df), create a boxplot for parameter "var" for each wind speed gust
 	# category
 
-	df = df[(df.stn_name == loc)].reset_index().set_index("date")
-	aws = aws[(aws.stn_name == loc)].reset_index().set_index("date")
+	if loc==False:
+		df = df.reset_index().set_index(["date","stn_name"])
+		aws = aws.reset_index().set_index(["date","stn_name"])
+	else:
+		df = df[(df.stn_name == loc)].reset_index().set_index("date")
+		aws = aws[(aws.stn_name == loc)].reset_index().set_index("date")
 
 	df = pd.concat([df,aws.wind_gust],axis=1)
 
@@ -952,15 +1074,30 @@ def wind_gust_boxplot(df,aws,loc,var,season=np.arange(1,13,1)):
 	df2 = df[(df.wind_gust >= 15) & (df.wind_gust<25) & (np.in1d(df.month,np.array(season)))]
 	df3 = df[(df.wind_gust >= 25) & (df.wind_gust<30) & (np.in1d(df.month,np.array(season)))]
 	df4 = df[(df.wind_gust >= 30) & (np.in1d(df.month,np.array(season)))]
+	#df5 = df[(df.wind_gust >= 35) & (df.wind_gust<40) & (np.in1d(df.month,np.array(season)))]
+	#df6 = df[(df.wind_gust >= 40) & (np.in1d(df.month,np.array(season)))]
 
-	plt.boxplot([df1[var],df2[var],df3[var],df4[var]],whis="range",\
-		labels=["5-15 m/s\n("+str(df1.shape[0])+")","15-25 m/s\n("+str(df2.shape[0])+")",\
-		"25-30 m/s\n("+str(df3.shape[0])+")","30+ m/s\n("+str(df4.shape[0])+")"])
-	plt.xticks(fontsize="large")
-	plt.yticks(fontsize="large")
-	plt.title(loc,fontsize="large")
+	if two_thirds:
+		plt.boxplot([df1[var],df2[var],df3[var],df4[var],df5[var],df6[var]],whis=[33,100],\
+			labels=["5-15 m/s\n("+str(df1.shape[0])+")","15-25 m/s\n("+str(df2.shape[0])+")",\
+			"25-30 m/s\n("+str(df3.shape[0])+")","30-35 m/s\n("+str(df4.shape[0])+")",\
+			"35-40 m/s\n("+str(df5.shape[0])+")","40+ m/s\n("+str(df6.shape[0])+")"])
+	else:
+		plt.boxplot([df1[var],df2[var],df3[var],df4[var]],
+			#df5[var],df6[var]],
+			whis="range",\
+			labels=["5-15 m/s\n("+str(df1.shape[0])+")","15-25 m/s\n("+str(df2.shape[0])+")",\
+			"25-30 m/s\n("+str(df3.shape[0])+")","30+ m/s\n("+str(df4.shape[0])+")"])
+			#"35-40 m/s\n("+str(df5.shape[0])+")","40+ m/s\n("+str(df6.shape[0])+")"])
+	plt.xticks(fontsize="x-large")
+	plt.yticks(fontsize="x-large")
+
+	if loc==False:
+		plt.title("All Stations",fontsize="x-large")
+	else:
+		plt.title(loc,fontsize="x-large")
 	t1,t2,t3,units,t4,log_plot,t6 = contour_properties(var)
-	plt.ylabel(units)
+	plt.ylabel(units,fontsize="x-large")
 
 	if log_plot:
 		plt.yscale("log")
@@ -971,12 +1108,17 @@ def wind_gust_boxplot(df,aws,loc,var,season=np.arange(1,13,1)):
 	elif var == "s06":
 		plt.ylim([0,60])
 
-	plt.savefig("/home/548/ab4502/working/ExtremeWind/figs/distributions/boxplot_"+loc+"_"+var+"_"+\
-		str(season[0])+"_"+str(season[-1])+".png",\
-		bbox_inches="tight")
+	if loc==False:
+		plt.savefig("/home/548/ab4502/working/ExtremeWind/figs/distributions/boxplot_AllStations_"+var+"_"+\
+			str(season[0])+"_"+str(season[-1])+".png",\
+			bbox_inches="tight")
+	else:
+		plt.savefig("/home/548/ab4502/working/ExtremeWind/figs/distributions/boxplot_"+loc+"_"+var+"_"+\
+			str(season[0])+"_"+str(season[-1])+".png",\
+			bbox_inches="tight")
 	plt.close()
 
-def plot_conv_seasonal_cycle(df,loc,var):
+def plot_conv_seasonal_cycle(df,loc,var,trend=False):
 
 	#For a reanalysis dataframe (df), create a seasonal mean plot forrameter "var" for each wind speed gust
 	# category
@@ -990,51 +1132,66 @@ def plot_conv_seasonal_cycle(df,loc,var):
 		#ax.plot(np.arange(1,13,1),[np.mean(barra[barra.month==m][var[0]]) for m in np.arange(1,13,1)],\
 		#	color="b",linestyle="--")
 		t1,t2,t3,units,t4,t5,t6 = contour_properties(var[0])
-		ax.set_ylabel(units)
-		ax.tick_params(labelcolor="b",axis="y")
+		ax.set_ylabel(units,fontsize="x-large")
+		ax.tick_params(labelcolor="b",axis="y",labelsize="x-large")
 		ax2 = ax.twinx()
 		ax2.plot(np.arange(1,13,1),[np.mean(df[df.month==m][var[1]]) for m in np.arange(1,13,1)],\
 			color="red")
 		#ax2.plot(np.arange(1,13,1),[np.mean(barra[barra.month==m][var[1]]) for m in np.arange(1,13,1)],\
 		#	color="red",linestyle="--")
-		ax2.tick_params(labelcolor="red",axis="y")
+		ax2.tick_params(labelcolor="red",axis="y",labelsize="x-large")
+		ax2.tick_params(labelcolor="k",axis="x",labelsize="x-large")
+		ax.tick_params(labelcolor="k",axis="x",labelsize="x-large")
 		t1,t2,t3,units,t4,t5,t6 = contour_properties(var[1])
-		ax2.set_ylabel(units)
-		plt.title(loc)
+		ax2.set_ylabel(units,fontsize="x-large")
+		plt.title(loc,fontsize="x-large")
 		plt.savefig("/home/548/ab4502/working/ExtremeWind/figs/distributions/monthly_mean_"+loc+\
 			"_"+var[0]+"_"+var[1]+".png",bbox_inches="tight")
 	else:
 		df = df[(df.stn_name == loc)].reset_index().set_index("date")
-		plt.plot([np.mean(df[df.month==m][var[0]]) for m in np.arange(1,13,1)])
-		plt.title(loc)
-		plt.savefig("/home/548/ab4502/working/ExtremeWind/figs/distributions/monthly_mean_"+loc+\
-			"_"+var[0]+".png",bbox_inches="tight")
+		if trend:
+			plt.plot([np.mean(df[(df.month==m) & (df.year<=1998)][var[0]]) for m in np.arange(1,13,1)],\
+						label = "1979-1998",color="b")
+			plt.plot([np.mean(df[(df.month==m) & (df.year>=1998)][var[0]]) for m in np.arange(1,13,1)],\
+						label = "1998-2017",color="b",linestyle="--")
+			plt.title(loc)
+			plt.legend()
+			plt.savefig("/home/548/ab4502/working/ExtremeWind/figs/distributions/monthly_mean_"+loc+\
+					"_"+var[0]+"_trend.png",bbox_inches="tight")
+		else:
+			plt.plot([np.mean(df[df.month==m][var[0]]) for m in np.arange(1,13,1)])
+			plt.title(loc)
+			plt.savefig("/home/548/ab4502/working/ExtremeWind/figs/distributions/monthly_mean_"+loc+\
+					"_"+var[0]+".png",bbox_inches="tight")
 	plt.close()
 
 def hypothesis_test(a,b,B):
 
 	#For two samples (a,b) perform a student t test and bootstrap hypothesis test that the mean is different
 
-	abs_diff = np.mean(b) - np.mean(a)
+	if (np.all(np.isnan(a)) ) | (np.all(np.isnan(b)) ):
+		return (np.nan)
+	else:
+		abs_diff = np.nanmean(b) - np.nanmean(a)
 
-	total = np.concatenate((a,b))
+		total = np.concatenate((a,b))
 
-	tot_mean = np.mean(total)
-	a_shift = a - np.mean(a) + tot_mean
-	b_shift = b - np.mean(b) + tot_mean
+		tot_mean = np.nanmean(total)
+		a_shift = a - np.nanmean(a) + tot_mean
+		b_shift = b - np.nanmean(b) + tot_mean
 
-	a_samples = np.random.choice(a_shift,(B,a_shift.shape[0]))
-	b_samples = np.random.choice(b_shift,(B,b_shift.shape[0]))
+		a_samples = np.random.choice(a_shift,(B,a_shift.shape[0]))
+		b_samples = np.random.choice(b_shift,(B,b_shift.shape[0]))
 
-	a_sample_means = np.array(map(np.mean,a_samples))
-	b_sample_means = np.array(map(np.mean,b_samples))
+		a_sample_means = np.array(map(np.nanmean,a_samples))
+		b_sample_means = np.array(map(np.nanmean,b_samples))
 
-	sample_diff = b_sample_means - a_sample_means
+		sample_diff = b_sample_means - a_sample_means
 
-	p_up = np.sum(sample_diff >= abs_diff) / float(B)
-	p_low = np.sum(sample_diff <= abs_diff) / float(B)
+		p_up = np.sum(sample_diff >= abs_diff) / float(B)
+		p_low = np.sum(sample_diff <= abs_diff) / float(B)
 
-	return (2*np.min([p_low,p_up]))
+		return (2*np.min([p_low,p_up]))
 
 def trend_table():
 
@@ -1134,35 +1291,49 @@ def far_table():
 	#	extreme AWS gusts (>30)
 
 	#Load in and combine JDH data (quality controlled), ERA-Interim data and AWS data
-	sdf,jdh_df,non_jdh_df = analyse_jdh_events()
+	df,jdh_df,non_jdh_df = analyse_jdh_events()
 	#Only consider data for time/places where JDH data is available (i.e. where AWS data is available)
 	df = df.dropna(axis=0,subset=["wind_gust"])
-	#Only consider 4 stations
-	#df = df[np.in1d(df.index.get_level_values(1),["Adelaide AP","Woomera","Mount Gambier","Port Augusta"])]
 	df["strong_gust"] = 0;df["extreme_gust"] = 0
 	df.loc[(df.wind_gust >= 25) & (df.wind_gust < 30),"strong_gust"] = 1
 	df.loc[(df.wind_gust >= 30),"extreme_gust"] = 1
-	df["mlcape*s06"] = df["ml_cape"] * np.power(df["s06"],1.67)	
-	df["DMAX_dlm*cs6*dcape"] = ((df["dlm"] * df["dcape"])/30) * \
-		(df["ml_cape"] * np.power(df["s06"],1.67)/20000)
 
 	jdh_far = [];jdh_thresh = []
 	strong_gust_far = [];strong_gust_thresh = []
 	extreme_gust_far = [];extreme_gust_thresh = []
-	#param = ["ml_cape","mu_cape","stp","ship","mmp","scp","mlcape*s06","wg10","s06","dcape"]
 	param = ["ml_cape","ml_cin","mu_cin","mu_cape","srh01","srh03","srh06","scp",\
-		"stp","estp","ship","mmp","relhum850-500","crt","vo10","lr1000","lcl",\
-		"relhum1000-700","ssfc6","ssfc3","ssfc1","s06","ssfc850","ssfc500",\
-		"cape*s06","cape*ssfc6","cape700","dcp","conv10","conv1000-850","conv800-600",\
-		"td850","td800","td950","dcape","dlm","dlm+dcape","dlm*dcape*cs6","dcape*cape",\
-		"dcape*cs6","dcape*td850","mlcape*s06","DMAX_dlm*cs6*dcape","wg10"]
+		"stp","ship","mmp","relhum850-500","vo10","lr1000","lcl",\
+		"relhum1000-700","s06","s0500","s01","s03",\
+		"cape*s06","dcp","td850","td800","td950","dcape","mlm","dlm","mlm+dcape","dlm+dcape",\
+		"dcape*cs6","dlm*dcape*cs6","mlm*dcape*cs6","mlm*dcape*cs3","wg10"]
 	for p in param:
+	    if p in ["cond","sf","mf"]:
+		hits = ((df.jdh==1) & (df[p]==1)).sum()
+		misses = ((df.jdh==1) & (df[p]==0)).sum()
+		fa = ((df.jdh==0) & (df[p]==1)).sum()
+		cn = ((df.jdh==0) & (df[p]==0)).sum()
+		jdh_f = fa / float(cn + fa)
+		
+		hits = ((df.strong_gust==1) & (df[p]==1)).sum()
+		misses = ((df.strong_gust==1) & (df[p]==0)).sum()
+		fa = ((df.strong_gust==0) & (df[p]==1)).sum()
+		cn = ((df.strong_gust==0) & (df[p]==0)).sum()
+		sg_f = fa / float(cn + fa)
+
+		hits = ((df.extreme_gust==1) & (df[p]==1)).sum()
+		misses = ((df.extreme_gust==1) & (df[p]==0)).sum()
+		fa = ((df.extreme_gust==0) & (df[p]==1)).sum()
+		cn = ((df.extreme_gust==0) & (df[p]==0)).sum()
+		eg_f = fa / float(cn + fa)
+
+		eg_t=jdh_t=sg_t = 1.0
+	    else:
 		temp,jdh_f,jdh_t = get_far66(df,"jdh",p)
 		temp,sg_f,sg_t = get_far66(df,"strong_gust",p)
 		temp,eg_f,eg_t = get_far66(df,"extreme_gust",p)
-		jdh_far.append(jdh_f);jdh_thresh.append(jdh_t)
-		strong_gust_far.append(sg_f);strong_gust_thresh.append(sg_t)
-		extreme_gust_far.append(eg_f);extreme_gust_thresh.append(eg_t)
+	    jdh_far.append(jdh_f);jdh_thresh.append(jdh_t)
+	    strong_gust_far.append(sg_f);strong_gust_thresh.append(sg_t)
+	    extreme_gust_far.append(eg_f);extreme_gust_thresh.append(eg_t)
 	out = pd.DataFrame({"JDH FAR":jdh_far,"Strong Wind Gust FAR":strong_gust_far,"Extreme Wind Gust FAR":\
 		extreme_gust_far,"JDH Threshold":jdh_thresh,"Strong Wind Gust Threshold":strong_gust_thresh,\
 		"Extreme Wind Gust Threshold":extreme_gust_thresh},index=param)
@@ -1182,6 +1353,66 @@ def remove_incomplete_aws_years(df,loc):
 	print("INFO: REMOVED YEARS FOR "+loc+" ",remove_years)
 	return df
 
+def magnitude_trends(param,hr,param_names):
+
+	#Attempt to identify trends in a range of magnitudes, following the method of Dowdy (2014)
+	#Param is a string, hr is an array or percentiles which identify a daignostic threshold
+
+	#Load datasets and combine
+	df,t1,t2 = analyse_jdh_events()
+	df = df.dropna(subset=["wind_gust"])
+	
+	markers=["s","o","^","+","v"]
+	cols = ["b","r","g","c","y"]
+	for i in np.arange(len(hr)):
+		#Find the proportion of event days given all days, as a function of wind speed catergory
+		speed_cats = [[0,5],[5,10],[10,15],[15,20],[20,25],[25,30],[30,35],[35,40],[40,45],[45,50]]
+		speed_labs = ["0-5","5-10","10-15","15-20","20-25","25-30","30-35","35-40","40-45","45-50"]
+		all_days = np.zeros(len(speed_cats))
+		event_days = np.zeros(len(speed_cats))
+		for s in np.arange(len(speed_cats)):
+			all_days[s] = df[(df["wind_gust"]>=speed_cats[s][0]) & \
+				(df["wind_gust"]<speed_cats[s][1])].shape[0]
+			event_days[s] = df[(df["wind_gust"]>=speed_cats[s][0]) & \
+				(df["wind_gust"]<speed_cats[s][1]) & \
+				(df[param[i]]>=np.percentile(df[df.jdh==1][param[i]],hr[i]))].shape[0]
+
+		#Plot the relationship
+		if i==0:
+			plt.plot(np.arange(len(speed_cats)),all_days,"kx",linestyle="none",markersize=12,\
+				label = "All days")
+		lab = "Days with "+param_names[i]+" = "+str(np.percentile(df[df.jdh==1][param[i]],hr[i]).round(3))
+		plt.plot(np.arange(len(speed_cats)),event_days,color=cols[i],marker=markers[i],linestyle="none",\
+			fillstyle="none",markersize=12,label = lab)
+		print(lab+"\n"+str((event_days/all_days.astype(float)).round(3)))
+
+	plt.yscale("log")
+	plt.ylabel("Number of Days",fontsize="x-large")
+	plt.xlabel("Wind Speed (m/s)\nAt 23 AWS locations from 1979-2017",fontsize="x-large")
+	ax=plt.gca();ax.set_xticks(np.arange(len(speed_cats)));ax.set_xticklabels(speed_labs)
+	ax.tick_params(labelsize="x-large")
+	plt.xlim([-0.5,len(speed_cats)]);plt.ylim([0.5,10e4])
+	plt.legend(numpoints=1,fontsize="x-large")
+	plt.show()
+
+def plot_aus_station_wind_gusts():
+
+	from adjustText import adjust_text
+	
+	df = pd.read_pickle("/short/eg3/ab4502/ExtremeWind/aws/all_daily_max_wind_gusts_aus_1979_2017.pkl")
+	plt.figure()
+	locs = df.stn_name.unique()
+	max_gusts = np.array([df[df.stn_name==l]["wind_gust"].max() for l in locs])
+	no_of_gusts = np.array([df[(df.stn_name==l)&(df.wind_gust>=30)].shape[0] for l in locs])
+	no_of_points = np.array([df[(df.stn_name==l)].shape[0] for l in locs])
+	plt.plot(max_gusts,no_of_gusts/no_of_points.astype(float),"bo")
+	texts = [plt.text(max_gusts[i],no_of_gusts[i]/float(no_of_points[i]),locs[i]) for i in np.arange(len(locs))]
+	adjust_text(texts,arrowprops={"arrowstyle":"->","color":"red"})
+	plt.xlabel("Max wind gust (m/s)")
+	plt.ylabel("No. of gusts above 30 m/s")
+	plt.xlim([28,60])
+	plt.show()
+
 if __name__ == "__main__":
 
 	loc_id = ["Port Augusta","Marree","Munkora","Woomera","Robe","Loxton","Coonawarra",\
@@ -1194,7 +1425,7 @@ if __name__ == "__main__":
 			(140.6766,-34.1983),(138.5933,-33.8226),(138.53,-34.96),\
 			(134.7222,-29.0347),(137.5206,-33.0539),(140.5212,-36.6539),\
 			(139.0056,-34.4761),(138.2182,-33.7676),(140.7739,-37.7473),\
-			(140.7270,-36.9813),(139.7164,-36.9655),(138.6281,-34.7977),\
+			(140.7270,-36.9813),(1397164,-36.9655),(138.6281,-34.7977),\
 			(140.5378,-35.3778),(138.6763,-34.5106),(134.5786,-30.7051),\
 			(138.6222,-34.7111)]
 	#aws_model,model_df = plot_scatter(model)
@@ -1205,17 +1436,19 @@ if __name__ == "__main__":
 	#load_jdh_points_barra(smooth=False)
 	#df = get_wind_sa("erai")
 
+	#EXTRACT DAILY POINT DATA FROM CONVECTIVE PARAMETER NETCDF FILES
 	#load_jdh_points_erai(loc_id,points,fc=False,daily_max=True)
 	#load_jdh_points_barra_ad(smooth=False)
 	#load_jdh_points_barra_r_fc(daily_max=True,smooth=False)
+	#load_netcdf_points_mf(points,loc_id,"sa_small","erai",[1979,2017])
 
 	#aws = remove_incomplete_aws_years(pd.read_pickle("/short/eg3/ab4502/ExtremeWind/aws/"+\
 	#	"all_daily_max_wind_gusts_sa_1979_2017.pkl"),"Port Augusta")
 	aws = pd.read_pickle("/short/eg3/ab4502/ExtremeWind/aws/"+\
 		"all_daily_max_wind_gusts_sa_1979_2017.pkl")
-	erai = pd.read_pickle("/g/data/eg3/ab4502/ExtremeWind/points/"\
-		+"erai_points_1979_2017_daily_max.pkl").rename(columns={"loc_id":"stn_name"}).\
-		reset_index()   
+	#erai = pd.read_pickle("/g/data/eg3/ab4502/ExtremeWind/points/"\
+	#	+"erai_points_1979_2017_daily_max.pkl").rename(columns={"loc_id":"stn_name"}).\
+	#	reset_index()   
 	#erai_fc = pd.read_pickle("/g/data/eg3/ab4502/ExtremeWind/points/"\
 	#	+"erai_fc_points_1979_2017_daily_max.pkl").rename(columns={"loc_id":"stn_name"}).\
 	#	reset_index()   
@@ -1228,28 +1461,26 @@ if __name__ == "__main__":
 	#barra_ad = pd.read_pickle("/g/data/eg3/ab4502/ExtremeWind/points/barra_ad/"\
 	#	+"barra_ad_points_daily_2006_2016.pkl").rename(columns={"loc_id":"stn_name"}).\
 	#	reset_index()   
-	##for loc in ["Adelaide AP","Woomera","Mount Gambier"]:
-	##    for var in ["mu_cape","s06"]:
-	##	var_trends(erai,var,loc,"amean","erai")
-	##	var_trends(erai,var,loc,"amean","erai",months=[4,5,6,7,8,9])
-	##	var_trends(erai,var,loc,"amean","erai",months=[10,11,12,1,2,3])
-	##interannual_time_series([aws,erai_fc],["wind_gust","wg10"],["AWS","ERA-Interim"],\
-	##		"Adelaide AP",[1989,2017],"am",[10,11,12,1,2,3])
-	#locs = ["Adelaide AP","Edinburgh","Mount Gambier","Parafield",\
-        #        "Port Augusta","Woomera"]
-	#[var_trends(aws,"wind_gust",l,"threshold","AWS",threshold=[[15,25],[25,30],[30]]) \
-	#	for l in locs]
+	#interannual_time_series([aws,erai_fc],["wind_gust","wg10"],["AWS","ERA-Interim"],\
+	#		"Adelaide AP",[1989,2017],"am",[10,11,12,1,2,3])
+	locs = ["Adelaide AP","Edinburgh","Mount Gambier","Parafield",\
+                "Port Augusta","Woomera"]
+	[var_trends(aws,"wind_gust",l,"threshold","AWS",threshold=[[15,25],[25,30],[30]]) \
+		for l in locs]
 	#[var_trends(erai_fc,"wg10",l,"threshold_only","ERA-Interim",threshold=[[15,25],[25,30],[30]]) \
 	#	for l in locs]
-	#[var_trends(barra_r,"max_wg10",l,"threshold_only","BARRA-R",threshold=[[15,25],[25,30],[30]],year_range=[2003,2016]) \
+	#[var_trends(barra_r_fc,"max_wg10",l,"threshold_only","BARRA-R",threshold=[[15,25],[25,30],[30]],year_range=[2003,2016]) \
 	#	for l in locs]
 	#[var_trends(barra_ad,"max_wg10",l,"threshold_only","BARRA-AD",threshold=[[15,25],[25,30],[30]],year_range=[2006,2016]) \
 	#	for l in locs]
 	#trend_table()
-	seasons = [np.arange(1,13,1),[11,12,1],[2,3,4],[5,6,7],[8,9,10]]
-	for loc in ["Woomera","Adelaide AP","Mount Gambier", "Port Augusta"]:
-	 #  plot_conv_seasonal_cycle(erai,loc,["ml_cape","s06"])
-	   for var in ["mu_cape","ml_cape","s06","cape*s06","dcape"]:
-	     for s in seasons:
-		wind_gust_boxplot(erai,aws,loc,var,season=s)
+	#seasons = [np.arange(1,13,1),[11,12,1],[2,3,4],[5,6,7],[8,9,10]]
+	#for loc in ["Woomera","Adelaide AP","Mount Gambier", "Port Augusta"]:
+	   #plot_conv_seasonal_cycle(erai,loc,["ml_cape","s06"],trend=True)
+	   #for var in ["ml_cape","s06","dcape","dlm"]:
+	 #  for var in ["dlm*dcape*cs6"]:
+	#     for s in seasons:
+		#wind_gust_boxplot(erai,aws,var,loc=loc,two_thirds=False)
 	#far_table()
+	#magnitude_trends(["cond"],[33],\
+	#			["COND"])

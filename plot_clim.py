@@ -1,3 +1,4 @@
+import xarray
 import matplotlib
 matplotlib.use("Agg")
 import netCDF4 as nc
@@ -51,6 +52,85 @@ def clim(domain,model,year_range,var_list,seasons=[[1,2,3,4,5,6,7,8,9,10,11,12]]
 			b = np.mean(dmean_season2,axis=0)
 			trend = ((b - a) / a) * 100
 		
+def load_xarray(var,year_range,start_lon,start_lat,end_lon,end_lat,plevel=False):
+
+	#Function to load ERA-Interim directly from the ub4 directory. Have to use xarray to load all files
+	#at once
+
+	#Note, if loading pressure level data (e.g. ta850), the whole era-interim dataset takes too long to load
+	# with xarray.open_mfdataset. So, we loop over each file, extract the pressure level we want, and append
+	# to a numpy array. To save time, this array is saved to the eg3 /g/data directory as a netcdf file, which
+	# can be loaded if it has already been processed for the right variable/pressure level/time period.
+
+	fnames = list()
+	if var in ["tas","ta2d"]:
+		for y in np.arange(year_range[0],year_range[1]+1):
+			fnames.extend(glob.glob("/g/data/ub4/erai/netcdf/6hr/atmos/oper_an_sfc/v01/"+var+"/"+var+\
+			"*"+str(y)+"*.nc"))
+	elif var == "tos":
+		for y in np.arange(year_range[0],year_range[1]+1):
+			fnames.extend(glob.glob("/g/data/ub4/erai/netcdf/6hr/ocean/oper_an_sfc/v01/"+var+"/"+var+\
+			"*"+str(y)+"*.nc"))
+	else:
+		for y in np.arange(year_range[0],year_range[1]+1):
+			fnames.extend(glob.glob("/g/data/ub4/erai/netcdf/6hr/atmos/oper_an_pl/v01/"+var+"/"+var+\
+			"*"+str(y)+"*.nc"))
+	fnames.sort()
+	
+	#Get lat/lon inds
+	lon,lat = get_lat_lon()
+	lon_ind = np.where((lon >= start_lon) & (lon <= end_lon))[0]
+	lat_ind = np.where((lat >= start_lat) & (lat <= end_lat))[0]
+	lon = lon[lon_ind]
+	lat = lat[lat_ind]
+
+	#Load data
+	if var in ["tas","ta2d","tos"]:
+		f = xarray.open_mfdataset(fnames,decode_times=False)
+		values = f.data_vars[var][:,lat_ind,lon_ind].values
+	else:
+	    fname = "/g/data/eg3/ab4502/ExtremeWind/sa_small/erai_"+var+str(plevel)+"_"+str(year_range[0])+"_"+\
+		str(year_range[1])+".nc"
+	    if not os.path.isfile(fname):
+		print("This variable has not yet been extracted for this pressure level. Processing...\n")
+		values = np.empty((0,len(lat_ind),len(lon_ind)))
+		for i in np.arange(len(fnames)):
+			print(i)
+			f = xarray.open_dataset(fnames[i],decode_times=False)
+			if i == 0:
+				lev = f.coords["lev"].values
+			temp = f.data_vars[var][:,\
+				np.where(np.array(abs(lev-plevel))==np.array(abs(lev-plevel)).min())[0][0],\
+				lat_ind,lon_ind].values
+			values = np.concatenate((values,temp),axis=0)
+			f.close()
+		out_file = nc.Dataset(fname,"w",format="NETCDF4_CLASSIC")
+		time_dim = out_file.createDimension("time",None)
+		lat_dim = out_file.createDimension("lat",len(lat_ind))
+		lon_dim = out_file.createDimension("lon",len(lon_ind))
+		out_var = out_file.createVariable(var+str(plevel),lat.dtype,("time","lat","lon"))
+		out_var[:] = values
+		out_file.close()
+	    else:
+		values = nc.Dataset(fname).variables[var+str(plevel)][:]
+		
+	#Format times
+	ref = dt.datetime(1900,1,1,0,0,0)
+	if var in ["tas","ta2d"]:
+		times = f.coords["time"].data
+		times = nc.num2date(times,nc.Dataset("/g/data/ub4/erai/netcdf/6hr/atmos/oper_an_sfc/v01/"+var+\
+			"/"+var+"_6hrs_ERAI_historical_an-sfc_19790101_19790131.nc").variables["time"].units)
+	elif var == "tos":
+		times = f.coords["time"].data
+		times = nc.num2date(times,nc.Dataset("/g/data/ub4/erai/netcdf/6hr/ocean/oper_an_sfc/v01/"+var+\
+			"/"+var+"_6hrs_ERAI_historical_an-sfc_19790101_19790131.nc").variables["time"].units)
+	else:
+		times = nc.num2date(xarray.open_mfdataset(fnames,decode_times=False).coords["time"].data,\
+			nc.Dataset("/g/data/ub4/erai/netcdf/6hr/atmos/oper_an_pl/v01/"+var+\
+			"/"+var+"_6hrs_ERAI_historical_an-pl_19790101_19790131.nc").variables["time"].units)
+
+	return [values, times, lat, lon]
+
 def load_ncdf(domain,model,year_range,var_list=False):
 
 	#Load netcdf files of convective parameters
@@ -78,16 +158,21 @@ def load_ncdf(domain,model,year_range,var_list=False):
 	else:
 	    return(nc.MFDataset(fnames))
 
-def netcdf_resample(f,time,var,model,method):
+def daily_resample(f,time,var,model,method,ftype="netcdf"):
 
-	#Resample a netcdf file from sub-daily to a daily max array
+	#Resample a file from sub-daily to a daily max array
+	#File can either be "netcdf" or "xarray"
 
-	if var == "mlcape*s06":
-		a = (f.variables["ml_cape"][:]) * np.power(f.variables["s06"][:],1.67)
+	if ftype == "netcdf":
+		if var == "mlcape*s06":
+			a = (f.variables["ml_cape"][:]) * np.power(f.variables["s06"][:],1.67)
+		else:
+			a =  f.variables[var][:]
+		if model == "erai_fc":
+			a,time = drop_erai_fc_duplicates(a,time)
 	else:
-		a =  f.variables[var][:]
-	if model == "erai_fc":
-		a,time = drop_erai_fc_duplicates(a,time)
+		#OR ELSE, IS A ERAI ANALYSIS, ALREADY EXTRACTED
+		a = f
 
 	years = np.array([t.year for t in time])
 	months = np.array([t.month for t in time])
@@ -126,23 +211,12 @@ def netcdf_resample(f,time,var,model,method):
 
 def daily_max_clim(domain,model,year_range,threshold=False,var_list=False,seasons=[[1,2,3,4,5,6,7,8,9,10,11,12]],\
 			plot_trends=False,levels=False,trend_levels=np.linspace(-50,50,11),plot_corr=False,\
-			n_boot=1000):
+			n_boot=1000,trend_on_cond_days=False):
 	#Plot daily max climatology
 	#Re-sample to daily maximum first
 	#If var = False, plot all vars. Else, pass a list of var names
 
-	if "cond" in var_list:
-		f = load_ncdf(domain,model,year_range,["ml_cape","s06","dcape","dlm"])
-	else:
-		f = load_ncdf(domain,model,year_range,var_list)
-	lon = f.variables["lon"][:]
-	lat = f.variables["lat"][:]
-	if var_list == False:
-		var_list = np.array([str(f.variables.items()[i][0]) for i in np.arange(0,\
-			len(f.variables.items()))])
-		var_list = var_list[~(var_list=="time") & ~(var_list=="lat") & ~(var_list=="lon")]
-	time = nc.num2date(f.variables["time"][:],f.variables["time"].units)
-
+	#Set up domain
 	if domain == "aus":
 	    start_lat = -44.525; end_lat = -9.975; start_lon = 111.975; end_lon = 156.275
 	elif domain == "sa_small":
@@ -152,26 +226,83 @@ def daily_max_clim(domain,model,year_range,threshold=False,var_list=False,season
 	m = Basemap(llcrnrlon = start_lon, llcrnrlat = start_lat, urcrnrlon = end_lon, \
 				urcrnrlat = end_lat, projection="cyl", resolution = "l")
 
-	if plot_corr:
-		nino34 = read_clim_ind("nino34")
-		dmi = read_clim_ind("dmi")
-		sam = read_clim_ind("sam")
-	
+	#If we are looking at 2 m air temp or dew point, then get the data straight from the ERA-Interim
+	# directory, rather than from the calculated convective parameter directory
+	if ("tas" in var_list) | ("ta2d" in var_list) | ("ta850" in var_list) | ("dp850" in var_list)\
+		 | ("ta700" in var_list) | ("dp700" in var_list) | ("tos" in var_list):
+		if trend_on_cond_days:
+			f = load_ncdf(domain,model,year_range,["ml_cape","s06","dcape","dlm"])
+			lon = f.variables["lon"][:]
+			lat = f.variables["lat"][:]
+			time = nc.num2date(f.variables["time"][:],f.variables["time"].units)
+			mlcape,daily_dates = daily_resample(f,time,"ml_cape",model,"max")
+			dcape,daily_dates = daily_resample(f,time,"dcape",model,"max")
+			s06,daily_dates = daily_resample(f,time,"s06",model,"max")
+			dlm,daily_dates = daily_resample(f,time,"dlm",model,"max")
+			sf = ((s06>30) & (dcape>0) & (dcape<500) & (dlm>=26) )                
+			wf = ((mlcape>120) & (dcape>250) & (dlm<26) )     
+			dmax = sf  | wf 
+			dmax = dmax * 1.0; sf = sf * 1.0; wf = wf * 1.0
+			cond = np.copy(dmax)
+	else:
+		if ("cond" in var_list) | (trend_on_cond_days):
+			f = load_ncdf(domain,model,year_range,["cond","mf","sf"])
+		else:
+			f = load_ncdf(domain,model,year_range,var_list)
+		lon = f.variables["lon"][:]
+		lat = f.variables["lat"][:]
+		if var_list == False:
+			var_list = np.array([str(f.variables.items()[i][0]) for i in np.arange(0,\
+				len(f.variables.items()))])
+			var_list = var_list[~(var_list=="time") & ~(var_list=="lat") & ~(var_list=="lon")]
+		time = nc.num2date(f.variables["time"][:],f.variables["time"].units)
+
 	#Resample to daily max
 	print("Resampling gridded data to daily max...")
 	for v in np.arange(0,len(var_list)):
+		print(var_list[v])
 
-		if var_list[v] == "cond":
-			mlcape,daily_dates = netcdf_resample(f,time,"ml_cape",model,"max")
-			dcape,daily_dates = netcdf_resample(f,time,"dcape",model,"max")
-			s06,daily_dates = netcdf_resample(f,time,"s06",model,"max")
-			dlm,daily_dates = netcdf_resample(f,time,"dlm",model,"max")
-			sf = ((s06>30) & (dcape>0) & (dcape<500) & (dlm>=26) )                
-			wf = ((mlcape>120) & (dcape>350) & (dlm<26) )     
-			dmax = sf  | wf 
-			dmax = dmax * 1.0; sf = sf * 1.0; wf = wf * 1.0
+		if (var_list[v] == "cond"):
+			#mlcape,daily_dates = daily_resample(f,time,"ml_cape",model,"max")
+			#dcape,daily_dates = daily_resample(f,time,"dcape",model,"max")
+			#s06,daily_dates = daily_resample(f,time,"s06",model,"max")
+			#dlm,daily_dates = daily_resample(f,time,"dlm",model,"max")
+			#sf = ((s06>30) & (dcape>0) & (dcape<500) & (dlm>=26) )                
+			#wf = ((mlcape>120) & (dcape>250) & (dlm<26) )     
+			dmax,daily_dates = daily_resample(f,time,"cond",model,"max")
+			wf,daily_dates = daily_resample(f,time,"mf",model,"max")
+			sf,daily_dates = daily_resample(f,time,"sf",model,"max")
+			#dmax = sf  | wf 
+			#dmax = dmax * 1.0; sf = sf * 1.0; wf = wf * 1.0
+			cond = np.copy(dmax)
+		elif var_list[v] in ["tas","ta2d","tos"]:
+			dmax, daily_dates, lat, lon = load_xarray(var_list[v],year_range,start_lon,start_lat,\
+				end_lon,end_lat)
+			dmax,daily_dates = daily_resample(dmax,daily_dates,None,"erai","max",ftype="xarray")
+		elif var_list[v] in ["ta850"]:
+			dmax, daily_dates, lat, lon = load_xarray("ta",year_range,start_lon,start_lat,\
+				end_lon,end_lat,85000)
+			dmax,daily_dates = daily_resample(dmax,daily_dates,None,"erai","max",ftype="xarray")
+		elif var_list[v] in ["ta700"]:
+			dmax, daily_dates, lat, lon = load_xarray("ta",year_range,start_lon,start_lat,\
+				end_lon,end_lat,70000)
+			dmax,daily_dates = daily_resample(dmax,daily_dates,None,"erai","max",ftype="xarray")
+		elif var_list[v] in ["dp850"]:
+			hur_dmax, daily_dates, lat, lon = load_xarray("hur",year_range,start_lon,start_lat,\
+				end_lon,end_lat,85000)
+			ta_dmax, daily_dates, lat, lon = load_xarray("ta",year_range,start_lon,start_lat,\
+				end_lon,end_lat,85000)
+			dmax,daily_dates = daily_resample(get_dp(ta_dmax,hur_dmax),daily_dates,None,\
+				"erai","max",ftype="xarray")
+		elif var_list[v] in ["dp700"]:
+			hur_dmax, daily_dates, lat, lon = load_xarray("hur",year_range,start_lon,start_lat,\
+				end_lon,end_lat,70000)
+			ta_dmax, daily_dates, lat, lon = load_xarray("ta",year_range,start_lon,start_lat,\
+				end_lon,end_lat,70000)
+			dmax,daily_dates = daily_resample(get_dp(ta_dmax,hur_dmax),daily_dates,None,\
+				"erai","max",ftype="xarray")
 		else:
-			dmax,daily_dates = netcdf_resample(f,time,var_list[v],model,"max")
+			dmax,daily_dates = daily_resample(f,time,var_list[v],model,"max")
 		daily_months = np.array([t.month for t in daily_dates])
 		daily_years = np.array([t.year for t in daily_dates])
 
@@ -182,6 +313,7 @@ def daily_max_clim(domain,model,year_range,threshold=False,var_list=False,season
 			dmax_season = dmax[np.in1d(daily_months,np.array(season))]
 
 			#PLOT MEAN
+			#If a threshold is given, then plot the number of days which exceed this threshold
 			if threshold != False:
 				exceeds = dmax_season > threshold[v]
 				exceeds_sum = (np.sum(exceeds,axis=0)) / float(((year_range[1]-year_range[0])+1))
@@ -191,24 +323,47 @@ def daily_max_clim(domain,model,year_range,threshold=False,var_list=False,season
 				except:
 				    plot_clim(f,m,lat,lon,exceeds_sum,var_list[v],model,domain,year_range,season,\
 					threshold=threshold[v],levels=levels)
+			#If no threshold is given...
 			else:
-			   #IF COND, THEN ALSO CALCULATE SF AND WF SEPARATELY
+			   #For COND, plot the number of times condition is met, also plot "sf", "mf" and "wfper"
 			   if var_list[v] == "cond":
-				vals = [dmax,sf,wf,None]
+				sf_season = sf[np.in1d(daily_months,np.array(season))]
+				wf_season = wf[np.in1d(daily_months,np.array(season))]
+				vals = [dmax_season,sf_season,wf_season,None]
 				cond_list = ["cond","sf","wf","wfper"]
 				levels_list = [np.arange(0,42.5,2.5),np.arange(0,21.125,1.25),np.arange(0,42.5,2.5),\
 							np.arange(0,110,10)]
 				for i in np.arange(0,len(vals)):
 				    if cond_list[i] == "wfper":
 					exceeds_sum = np.sum(vals[2],axis=0)/np.sum(vals[0],axis=0) * 100
-					plot_clim(f,m,lat,lon,exceeds_sum,cond_list[i],model,domain,year_range,season,\
+					plot_clim(f,m,lat,lon,exceeds_sum,cond_list[i],model,\
+						domain,year_range,season,\
 						threshold=threshold,levels=levels_list[i])
 				    else:
-					exceeds_sum = np.sum(vals[i],axis=0) / float(((year_range[1]-year_range[0])+1))
-					plot_clim(f,m,lat,lon,exceeds_sum,cond_list[i],model,domain,year_range,season,\
+					exceeds_sum = np.sum(vals[i],axis=0) \
+						/ float(((year_range[1]-year_range[0])+1))
+					plot_clim(f,m,lat,lon,exceeds_sum,cond_list[i],model,domain,\
+						year_range,season,\
 						threshold=threshold,levels=levels_list[i])
+			   #For surface temp and dew point, plot mean 
+			   elif var_list[v] in ["tas","ta2d","tos"]:
+				try:
+				    plot_clim(None,m,lat,lon,dmax_season.mean(axis=0),var_list[v],model,domain,\
+					year_range,season,levels=levels[v])
+				except:
+				    plot_clim(None,m,lat,lon,dmax_season.mean(axis=0),var_list[v],model,domain,\
+					year_range,season,threshold=threshold,levels=levels)
+			   #For pressure-level temperature and humidity, plot mean
+			   elif var_list[v] in ["ta850","ta700","dp850","dp700"]:
+				try:
+				    plot_clim(None,m,lat,lon,dmax_season.mean(axis=0),var_list[v],model,domain,\
+					year_range,season,levels=levels[v])
+				except:
+				    plot_clim(None,m,lat,lon,dmax_season.mean(axis=0),var_list[v],model,domain,\
+					year_range,season,threshold=threshold,levels=levels)
+			   #Or else, try and plot the mean
 			   else:
-				exceeds_sum = np.sum(dmax,axis=0) / float(((year_range[1]-year_range[0])+1))
+				exceeds_sum = np.sum(dmax_season,axis=0) / float(((year_range[1]-year_range[0])+1))
 				try:
 				    plot_clim(f,m,lat,lon,exceeds_sum,var_list[v],model,domain,year_range,season,\
 					threshold=threshold,levels=levels[v])
@@ -218,8 +373,10 @@ def daily_max_clim(domain,model,year_range,threshold=False,var_list=False,season
 
 			#PLOT TRENDS
 			if plot_trends:
+			   #Define the first and second half of the period 1979-2017
 			   t1 = np.array(daily_dates) <= dt.datetime(1998,12,31)
 			   t2 = np.array(daily_dates) >= dt.datetime(1998,1,1)
+			   #For the conditional parameter, as well as "sf" and "wf"
 			   if var_list[v] == "cond":
 				vals = [dmax,sf,wf]
 				cond_list = ["cond","sf","wf"]
@@ -228,38 +385,193 @@ def daily_max_clim(domain,model,year_range,threshold=False,var_list=False,season
 					b = vals[c][np.in1d(daily_months,np.array(season)) & (t2)]
 					trend = (np.sum(b,axis=0) - np.sum(a,axis=0)) / np.nansum(a,axis=0).astype(float) * 100
 					trend[(np.nansum(a,axis=0)==0)&(np.nansum(b,axis=0)>0)] = 1000
+					if n_boot > 0:
+						sig = np.empty((trend.shape[0],trend.shape[1]))
+						for i in np.arange(0,a.shape[1]):
+						   for j in np.arange(0,a.shape[2]):
+							p = hypothesis_test(a[:,i,j],b[:,i,j],n_boot)
+							sig[i,j] = p
+					x,y=np.meshgrid(lon,lat)
+					plt.figure()
+					m.drawcoastlines()
+					m.contourf(x,y,trend,cmap=cm.RdBu_r,levels=trend_levels,extend="both")
+					m.drawmeridians(np.arange(np.floor(lon.min()),np.floor(lon.max()),3),\
+							labels=[True,False,False,True])
+					m.drawparallels(np.arange(np.floor(lat.min()),np.floor(lat.max()),3),\
+							labels=[True,False,True,False])
+					if n_boot > 0:
+						plt.plot(x[np.where(sig<=0.05)],y[np.where(sig<=0.05)],"ko")
+					else:
+						add_towns(m)
+					plt.colorbar()
+					plt.savefig("/home/548/ab4502/working/ExtremeWind/figs/trends/contour_"+\
+						model+"_"+cond_list[c]+"_"+str(season[0])+"_"+str(season[-1])+"_"+str(year_range[0])+"_"+\
+						str(year_range[1])+".png",bbox_inches="tight")
+
+					#Now, do a spatial trend
+					spatial_trends(cond_list[c],a, b, [137,-35.5,139,-32], x, y, year_range)
+
+			   #For temperature and humidity
+			   elif var_list[v] in ["tas","ta2d","ta850","ta700","dp850","dp700","tos"]:
+				a = dmax[np.in1d(daily_months,np.array(season)) & (t1)]
+				b = dmax[np.in1d(daily_months,np.array(season)) & (t2)]
+				trend = (np.nanmean(b,axis=0) - np.nanmean(a,axis=0))
+				if n_boot > 0:
 					sig = np.empty((trend.shape[0],trend.shape[1]))
 					for i in np.arange(0,a.shape[1]):
 					   for j in np.arange(0,a.shape[2]):
 						p = hypothesis_test(a[:,i,j],b[:,i,j],n_boot)
 						sig[i,j] = p
-					x,y=np.meshgrid(lon,lat)
+
+				#If interested, repeat on cond days.
+				if trend_on_cond_days:
+					a_cond = np.ma.masked_where(cond[np.in1d(daily_months,np.array(season)) \
+						& (t1)]==0,a)
+					b_cond = np.ma.masked_where(cond[np.in1d(daily_months,np.array(season)) \
+						& (t2)]==0,b)
+					a_wf = np.ma.masked_where(wf[np.in1d(daily_months,np.array(season)) \
+						& (t1)]==0,a)
+					b_wf = np.ma.masked_where(wf[np.in1d(daily_months,np.array(season)) \
+						& (t2)]==0,b)
+					a_sf = np.ma.masked_where(sf[np.in1d(daily_months,np.array(season)) \
+						& (t1)]==0,a)
+					b_sf = np.ma.masked_where(sf[np.in1d(daily_months,np.array(season)) \
+						& (t2)]==0,b)
+					trend_cond = (b_cond.mean(axis=0) - a_cond.mean(axis=0))
+					trend_wf = (b_wf.mean(axis=0) - a_wf.mean(axis=0))
+					trend_sf = (b_sf.mean(axis=0) - a_sf.mean(axis=0))
+					if n_boot >0:
+						sig_cond = np.empty((trend_cond.shape[0],trend_cond.shape[1]))
+						for i in np.arange(0,a_cond.shape[1]):
+						   for j in np.arange(0,a_cond.shape[2]):
+							p = hypothesis_test(a_cond[:,i,j].data,b_cond[:,i,j].data,\
+								n_boot)
+							sig_cond[i,j] = p
+						sig_wf = np.empty((trend_wf.shape[0],trend_wf.shape[1]))
+						for i in np.arange(0,a_wf.shape[1]):
+						   for j in np.arange(0,a_wf.shape[2]):
+							p = hypothesis_test(a_wf[:,i,j].data,b_wf[:,i,j].data,\
+								n_boot)
+							sig_wf[i,j] = p
+						sig_sf = np.empty((trend_sf.shape[0],trend_sf.shape[1]))
+						for i in np.arange(0,a_sf.shape[1]):
+						   for j in np.arange(0,a_sf.shape[2]):
+							p = hypothesis_test(a_sf[:,i,j].data,b_sf[:,i,j].data,\
+								n_boot)
+							sig_sf[i,j] = p
+				x,y=np.meshgrid(lon,lat)
+				plt.figure()
+				m.drawcoastlines()
+				m.drawmeridians(np.arange(np.floor(lon.min()),np.floor(lon.max()),3),\
+						labels=[True,False,False,True])
+				m.drawparallels(np.arange(np.floor(lat.min()),np.floor(lat.max()),3),\
+						labels=[True,False,True,False])
+				try:
+					m.contourf(x,y,trend,cmap=cm.RdBu_r,extend="both",levels=trend_levels[v])
+				except:
+					m.contourf(x,y,trend,cmap=cm.RdBu_r,extend="both")
+				if n_boot >0:
+					plt.plot(x[np.where(sig<=0.05)],y[np.where(sig<=0.05)],"ko")
+				else:
+					add_towns(m)
+				plt.colorbar()
+				plt.savefig("/home/548/ab4502/working/ExtremeWind/figs/trends/contour_"+\
+					model+"_"+var_list[v]+"_"+str(season[0])+"_"+str(season[-1])+\
+					"_"+str(year_range[0])+"_"+str(year_range[1])+".png",bbox_inches="tight")
+
+				#If interested, plot for cond days
+				if trend_on_cond_days:
+					#COND days
 					plt.figure()
 					m.drawcoastlines()
-					m.contourf(x,y,trend,cmap=cm.RdBu_r,levels=trend_levels,extend="both")
-					plt.plot(x[np.where(sig<=0.05)],y[np.where(sig<=0.05)],"ko")
+					m.drawmeridians(np.arange(np.floor(lon.min()),np.floor(lon.max()),3),\
+							labels=[True,False,False,True])
+					m.drawparallels(np.arange(np.floor(lat.min()),np.floor(lat.max()),3),\
+							labels=[True,False,True,False])
+					try:
+						m.contourf(x,y,trend_cond,cmap=cm.RdBu_r,extend="both",\
+							levels=trend_levels[v])
+					except:
+						m.contourf(x,y,trend_cond,cmap=cm.RdBu_r,extend="both")
+					if n_boot >0:
+						plt.plot(x[np.where(sig_cond<=0.05)],y[np.where(sig_cond<=0.05)],"ko")
+					else:
+						add_towns(m)
 					plt.colorbar()
 					plt.savefig("/home/548/ab4502/working/ExtremeWind/figs/trends/contour_"+\
-						model+"_"+cond_list[c]+"_"+str(season[0])+"_"+str(season[-1])+"_"+str(year_range[0])+"_"+\
-						str(year_range[1])+".png",bbox_inches="tight")
+						model+"_"+var_list[v]+"_cond_days_"+str(season[0])+"_"+\
+						str(season[-1])+"_"+str(year_range[0])+"_"+str(year_range[1])+\
+						".png",bbox_inches="tight")
+					#MF days
+					plt.figure()
+					m.drawcoastlines()
+					m.drawmeridians(np.arange(np.floor(lon.min()),np.floor(lon.max()),3),\
+							labels=[True,False,False,True])
+					m.drawparallels(np.arange(np.floor(lat.min()),np.floor(lat.max()),3),\
+							labels=[True,False,True,False])
+					try:
+						m.contourf(x,y,trend_wf,cmap=cm.RdBu_r,extend="both",\
+							levels=trend_levels[v])
+					except:
+						m.contourf(x,y,trend_wf,cmap=cm.RdBu_r,extend="both")
+					if n_boot >0:
+						plt.plot(x[np.where(sig_wf<=0.05)],y[np.where(sig_wf<=0.05)],"ko")
+					else:
+						add_towns(m)
+					plt.colorbar()
+					plt.savefig("/home/548/ab4502/working/ExtremeWind/figs/trends/contour_"+\
+						model+"_"+var_list[v]+"_wf_days_"+str(season[0])+"_"+\
+						str(season[-1])+"_"+str(year_range[0])+"_"+str(year_range[1])+\
+						".png",bbox_inches="tight")
+					#SF days
+					plt.figure()
+					m.drawcoastlines()
+					m.drawmeridians(np.arange(np.floor(lon.min()),np.floor(lon.max()),3),\
+							labels=[True,False,False,True])
+					m.drawparallels(np.arange(np.floor(lat.min()),np.floor(lat.max()),3),\
+							labels=[True,False,True,False])
+					try:
+						m.contourf(x,y,trend_sf,cmap=cm.RdBu_r,extend="both",\
+							levels=trend_levels[v])
+					except:
+						m.contourf(x,y,trend_sf,cmap=cm.RdBu_r,extend="both")
+					if n_boot >0:
+						plt.plot(x[np.where(sig_sf<=0.05)],y[np.where(sig_sf<=0.05)],"ko")
+					else:
+						add_towns(m)
+					plt.colorbar()
+					plt.savefig("/home/548/ab4502/working/ExtremeWind/figs/trends/contour_"+\
+						model+"_"+var_list[v]+"_sf_days_"+str(season[0])+"_"+\
+						str(season[-1])+"_"+str(year_range[0])+"_"+str(year_range[1])+\
+						".png",bbox_inches="tight")
+
 			   else:
 				dmax_season1 = dmax[np.in1d(daily_months,np.array(season)) & (t1)]
 				dmax_season2 = dmax[np.in1d(daily_months,np.array(season)) & (t2)]
 				a = dmax_season1>=threshold[v]
 				b = dmax_season2>=threshold[v]
-				trend = (np.sum(b,axis=0) - np.sum(a,axis=0)) / np.nansum(a,axis=0).astype(float) * 100
+				trend = (np.sum(b,axis=0) - np.sum(a,axis=0)) / \
+						np.nansum(a,axis=0).astype(float) * 100
 				#Fix "divide by zero" values to a really large %
 				trend[(np.nansum(a,axis=0)==0)&(np.nansum(b,axis=0)>0)] = 1000
-				sig = np.empty((trend.shape[0],trend.shape[1]))
-				for i in np.arange(0,a.shape[1]):
-				   for j in np.arange(0,a.shape[2]):
-					p = hypothesis_test(a[:,i,j],b[:,i,j],10000)
-					sig[i,j] = p
+				if n_boot > 0:
+					sig = np.empty((trend.shape[0],trend.shape[1]))
+					for i in np.arange(0,a.shape[1]):
+					   for j in np.arange(0,a.shape[2]):
+						p = hypothesis_test(a[:,i,j],b[:,i,j],10000)
+						sig[i,j] = p
 				x,y=np.meshgrid(lon,lat)
 				plt.figure()
 				m.drawcoastlines()
+				m.drawmeridians(np.arange(np.floor(lon.min()),np.floor(lon.max()),3),\
+						labels=[True,False,False,True])
+				m.drawparallels(np.arange(np.floor(lat.min()),np.floor(lat.max()),3),\
+						labels=[True,False,True,False])
 				m.contourf(x,y,trend,cmap=cm.RdBu_r,levels=trend_levels,extend="both")
-				plt.plot(x[np.where(sig<=0.05)],y[np.where(sig<=0.05)],"ko")
+				if n_boot > 0:
+					plt.plot(x[np.where(sig<=0.05)],y[np.where(sig<=0.05)],"ko")
+				else:
+					add_towns(m)
 				plt.colorbar()
 				plt.savefig("/home/548/ab4502/working/ExtremeWind/figs/trends/contour_"+\
 					model+"_"+var_list[v]+"_"+str(season[0])+"_"+str(season[-1])+"_"+str(threshold[v])\
@@ -268,6 +580,10 @@ def daily_max_clim(domain,model,year_range,threshold=False,var_list=False,season
 		#PLOT CLIM IND CORRELATIONS
 		#BACK OUTSIDE OF THE SEASONS LOOP
 		if plot_corr:
+		    nino34 = read_clim_ind("nino34")
+		    dmi = read_clim_ind("dmi")
+		    sam = read_clim_ind("sam")
+	
 		    if var_list[v] == "cond":
 			plot_corr_func(m,lon,lat,model,nino34,dmi,sam,dmax,daily_years,daily_months,"cond",False,\
 				year_range,n_boot)	
@@ -276,7 +592,7 @@ def daily_max_clim(domain,model,year_range,threshold=False,var_list=False,season
 			plot_corr_func(m,lon,lat,model,nino34,dmi,sam,wf,daily_years,daily_months,"wf",False,\
 				year_range,n_boot)	
 		    else:
-			plot_corr_func(m,lon,lat,nino34,dmi,sam,dmax,daily_years,daily_months,var_list[v],\
+			plot_corr_func(m,lon,lat,model,nino34,dmi,sam,dmax,daily_years,daily_months,var_list[v],\
 				threshold[v],year_range,n_boot)	
 
 def plot_corr_func(m,lon,lat,model,nino34,dmi,sam,dmax,daily_years,daily_months,var_name,threshold,year_range,n_boot):
@@ -301,10 +617,10 @@ def plot_corr_func(m,lon,lat,model,nino34,dmi,sam,dmax,daily_years,daily_months,
 					cond = ((daily_years==years[y]) & (daily_months==corr_seasons[s][0])) \
 						| ((daily_years==years[y]) & (daily_months==corr_seasons[s][1])) \
 						| ((daily_years==years[y]+1) & (daily_months==corr_seasons[s][2]))
-					monthly_ts[s,y] = np.sum(dmax[cond] >= threshold[v],axis=0)
+					monthly_ts[s,y] = np.sum(dmax[cond] >= threshold,axis=0)
 				else:
 					cond = (daily_years==years[y]) & (np.in1d(daily_months,corr_seasons[s]))
-					monthly_ts[s,y] = np.sum(dmax[cond] >= threshold[v],axis=0)
+					monthly_ts[s,y] = np.sum(dmax[cond] >= threshold,axis=0)
 			#If variable is "cond", then we do not need to find threshold exceedence, as it is already
 			# in the form of binary/boolean condition
 			else:
@@ -339,6 +655,10 @@ def plot_corr_func(m,lon,lat,model,nino34,dmi,sam,dmax,daily_years,daily_months,
 		    #NINO 3.4
 		    plt.figure()
 		    m.drawcoastlines()
+		    m.drawmeridians(np.arange(np.floor(lon.min()),np.floor(lon.max()),3),\
+				labels=[True,False,False,True])
+		    m.drawparallels(np.arange(np.floor(lat.min()),np.floor(lat.max()),3),\
+				labels=[True,False,True,False])
 		    x,y=np.meshgrid(lon,lat)
 		    m.contourf(x,y,nino34_corr[s],cmap=cm.RdBu_r,levels=np.linspace(-0.5,0.5,11)\
 			,extend="both")
@@ -351,6 +671,10 @@ def plot_corr_func(m,lon,lat,model,nino34,dmi,sam,dmax,daily_years,daily_months,
 		    #DMI
 		    plt.figure()
 		    m.drawcoastlines()
+		    m.drawmeridians(np.arange(np.floor(lon.min()),np.floor(lon.max()),3),\
+				labels=[True,False,False,True])
+		    m.drawparallels(np.arange(np.floor(lat.min()),np.floor(lat.max()),3),\
+				labels=[True,False,True,False])
 		    x,y=np.meshgrid(lon,lat)
 		    m.contourf(x,y,dmi_corr[s],cmap=cm.RdBu_r,levels=np.linspace(-0.5,0.5,11)\
 			,extend="both")
@@ -363,6 +687,10 @@ def plot_corr_func(m,lon,lat,model,nino34,dmi,sam,dmax,daily_years,daily_months,
 		    #NINO 3.4
 		    plt.figure()
 		    m.drawcoastlines()
+		    m.drawmeridians(np.arange(np.floor(lon.min()),np.floor(lon.max()),3),\
+				labels=[True,False,False,True])
+		    m.drawparallels(np.arange(np.floor(lat.min()),np.floor(lat.max()),3),\
+				labels=[True,False,True,False])
 		    x,y=np.meshgrid(lon,lat)
 		    m.contourf(x,y,sam_corr[s],cmap=cm.RdBu_r,levels=np.linspace(-0.5,0.5,11)\
 			,extend="both")
@@ -375,6 +703,10 @@ def plot_corr_func(m,lon,lat,model,nino34,dmi,sam,dmax,daily_years,daily_months,
 		    #YEARS (trend)
 		    plt.figure()
 		    m.drawcoastlines()
+		    m.drawmeridians(np.arange(np.floor(lon.min()),np.floor(lon.max()),3),\
+				labels=[True,False,False,True])
+		    m.drawparallels(np.arange(np.floor(lat.min()),np.floor(lat.max()),3),\
+				labels=[True,False,True,False])
 		    x,y=np.meshgrid(lon,lat)
 		    m.contourf(x,y,years_corr[s],cmap=cm.RdBu_r,levels=np.linspace(-0.5,0.5,11)\
 			,extend="both")
@@ -514,6 +846,39 @@ def add_towns(m):
 		plt.annotate(names[i],xy=(x,y+.12),color="k",size="small",ha="center")
 		plt.plot(x,y,"ko")
 	
+def spatial_trends(var,arr1, arr2, domain, lon, lat, year_range):
+
+	#Take a rectangular area given by domain ( = [start_lon,start_lat,end_lon,end_lat])
+	#Calculate the trend in environment days from 1979-2017, by the difference in the 
+	#	first (arr1) and second half (arr2) of the period
+	#Convert trend to days/decade
+	#Save trend as csv
+
+	outside_bounds = (lon < domain[0]) | (lat < domain[1]) | (lon > domain[2]) | (lat > domain[3])
+
+	#Take the change by subtraction, then take mean
+	trend = np.ma.masked_where(outside_bounds,(arr2.sum(axis=0) - arr1.sum(axis=0))).mean()
+
+	#Now, divide each result by the amount of decades
+	trend = trend / float((year_range[1] - year_range[0] + 1) / 10.)
+
+	#What was the mean number of days in the first half of the period?
+	days1 = np.ma.masked_where(outside_bounds,arr1.sum(axis=0)).mean()
+	days2 = np.ma.masked_where(outside_bounds,arr2.sum(axis=0)).mean()
+
+	#Save as csv
+	df = pd.DataFrame({"Trend":trend,"Days1":days1,"Days2":days2},index=["Value"])
+	df.to_csv("/home/548/ab4502/working/ExtremeWind/figs/trends/erai_spatial_"+var+".csv")
+
+	#Take the change by asking for each timestep, is there an event in the region
+	events1 = np.array([np.ma.masked_where(outside_bounds,arr1[t]).max() for t in np.arange(arr1.shape[0])])
+	events2 = np.array([np.ma.masked_where(outside_bounds,arr2[t]).max() for t in np.arange(arr2.shape[0])])
+	trend = (np.sum(events2) - np.sum(events1)) / float((year_range[1] - year_range[0] + 1) / 10.)
+	days1 = np.sum(events1)
+	days2 = np.sum(events2)
+	df = pd.DataFrame({"Trend":trend,"Days1":days1,"Days2":days2},index=["Value"])
+	df.to_csv("/home/548/ab4502/working/ExtremeWind/figs/trends/erai_spatial_events_"+var+".csv")
+
 
 if __name__ == "__main__":
 	#clim("sa_small","erai",[1979,2017])
@@ -522,8 +887,10 @@ if __name__ == "__main__":
 	#clim("sa_small","erai_fc",[2010,2015])
 	#clim("sa_small","barra",[2010,2015])
 	#diurnal_clim("sa_small","barra_r_fc",[2003,2016],"max_wg10",threshold=30)
-	#daily_max_clim("sa_small","barra_r_fc",[2003,2016],threshold=25.3,vars=["max_wg10"],\
-			#seasons=[[11,12,1],[2,3,4],[5,6,7],[8,9,10]])
+	daily_max_clim("sa_small","erai",[1979,2017],\
+		var_list=["cond"],\
+		levels=False,\
+		plot_trends=True, n_boot = 0, plot_corr = False)
 
 	#FIGURE 14:
 	#THRESHOLD 1
@@ -548,31 +915,30 @@ if __name__ == "__main__":
 	#		levels=[np.arange(0,2.2,.2)],plot_trends=True,plot_corr=True,\
 	#		trend_levels=np.arange(-175,175,25),seasons = [np.arange(1,13,1),[11,12,1],[2,3,4],\
 	#		[5,6,7],[8,9,10]])
-
-	#FIGURE 15:
-	#daily_max_clim("sa_small","erai",[2003,2016],threshold=[127,22790,0.027,0.025],var_list=["ml_cape",\
-	#		"mlcape*s06","ship","scp"],levels=[np.arange(0,55,5),np.arange(0,33,3),\
-	#		np.arange(0,55,5),np.arange(0,55,5)],plot_trends=False,plot_corr=True)
-	#daily_max_clim("sa_small","barra",[2003,2016],threshold=[127,22790,0.027,0.025],var_list=["ml_cape",\
-	#		"mlcape*s06","ship","scp"],levels=[np.arange(0,55,5),np.arange(0,33,3),\
-	#		np.arange(0,55,5),np.arange(0,55,5)],plot_trends=False,plot_corr=True)
-	#daily_max_clim("sa_small","erai",[1979,2017],threshold=[127,22790,0.027,0.025],var_list=["ml_cape",\
-	#		"mlcape*s06","ship","scp"],levels=[np.arange(0,55,5),np.arange(0,33,3),\
-	#		np.arange(0,55,5),np.arange(0,55,5)],plot_trends=False,plot_corr=True)
-	#VER2
-	#daily_max_clim("sa_small","erai",[2003,2016],threshold=[10344.542,0.669],var_list=["cape*s06",\
-			#"dlm*dcape*cs6"],levels=[np.arange(0,55,5),np.arange(0,55,5)],\
-			#plot_trends=False,plot_corr=False)
-	#daily_max_clim("sa_small","barra",[2003,2016],threshold=[10344.542,0.669],var_list=["cape*s06",\
-	#		"dlm*dcape*cs6"],levels=[np.arange(0,55,5),np.arange(0,55,5)],\
-	#		plot_trends=False,plot_corr=False)
-	#daily_max_clim("sa_small","erai",[1979,2017],threshold=[10344.542,0.669],var_list=["cape*s06",\
-	#		"dlm*dcape*cs6"],levels=[np.arange(0,55,5),np.arange(0,55,5)],\
-	#		plot_trends=True,plot_corr=True)
-	#daily_max_clim("sa_small","erai",[1979,2017],threshold=[86.646,24.700,267.394,17.105],\
-	#		var_list=["ml_cape","s06","dcape","dlm"],levels=[np.arange(0,55,5),np.arange(0,55,5),\
-	#		np.arange(0,55,5),np.arange(0,55,5)],plot_trends=True,plot_corr=True)
 	#99.6 percentile BARRA-R wind gust: 25.25. ERA-Interim: 21.5
+
+	#FIGURE 20:
+	#daily_max_clim("sa_small","erai",[2003,2016],threshold=[6029.981,0.429],var_list=["cape*s06",\
+	#		"mlm*dcape*cs6"],levels=[np.arange(0,55,5),np.arange(0,55,5)],\
+	#		plot_trends=False,plot_corr=False)
+	#daily_max_clim("sa_small","barra",[2003,2016],threshold=[6029.981,0.429],var_list=["cape*s06",\
+	#		"mlm*dcape*cs6"],levels=[np.arange(0,55,5),np.arange(0,55,5)],\
+	#		plot_trends=False,plot_corr=False)
+	#Figure 20/22/23
+	#daily_max_clim("sa_small","erai",[1979,2017],threshold=[6029.981,0.429,120],\
+	#		var_list=["cape*s06","mlm*dcape*cs6","ml_cape"],\
+	#		levels=[np.arange(0,55,5),np.arange(0,55,5),np.arange(0,55,5)],\
+	#		plot_trends=True,plot_corr=True)
+	#FIGURE 20:
+	#daily_max_clim("sa_small","erai",[2003,2016],threshold=[0.028],var_list=["dcp"],\
+	#	levels=[np.arange(0,55,5)],plot_trends=False,plot_corr=False)
+	#daily_max_clim("sa_small","barra",[2003,2016],threshold=[0.028],var_list=["dcp"],\
+	#	levels=[np.arange(0,55,5)],plot_trends=False,plot_corr=False)
+	#Figure 20/22/23
+	#daily_max_clim("sa_small","erai",[1979,2017],threshold=[0.028],\
+	#	var_list=["dcp"],\
+	#	levels=[np.arange(0,55,5)],\
+	#	plot_trends=True,plot_corr=True,n_boot=1000)
 
 	#Figure 6
 #	daily_max_clim("sa_small","erai_fc",[2003,2016],threshold=[21.5],vars=["wg10"],\
@@ -587,7 +953,17 @@ if __name__ == "__main__":
 	#DAILY MEAN CLIM
 	#clim("sa_small","erai",[2003,2016],["s06","dcape","ml_cape","dlm"])
 
-	#COND CLIM/TRENDS
+	#Figure 20/21/22/23
 	#daily_max_clim("sa_small","erai",[2003,2016],var_list=["cond"],plot_trends=False,plot_corr=False)
 	#daily_max_clim("sa_small","barra",[2003,2016],var_list=["cond"],plot_trends=False,plot_corr=False)
-	daily_max_clim("sa_small","erai",[1979,2017],var_list=["cape*s06"],plot_trends=False,plot_corr=False,threshold=[10344.542],levels=[np.arange(0,55,5)])
+	#daily_max_clim("sa_small","erai",[1979,2017],var_list=["cond"],plot_trends=True,plot_corr=True)
+
+	#Ingredients
+	#daily_max_clim("sa_small","erai",[1979,2017],var_list=["tos"],\
+	#		plot_trends=True,trend_levels=[np.linspace(-1.5,1.5,11)],n_boot=0,\
+	#		trend_on_cond_days=True)
+	#daily_max_clim("sa_small","erai",[1979,2017],var_list=["ta2d","tas","tos"],\
+	#		plot_trends=True,\
+	#		trend_levels=[np.linspace(-1.5,1.5,11),np.linspace(-1.5,1.5,11),np.linspace(-2,2,11)]\
+	#		,n_boot=1000,trend_on_cond_days=True,\
+	#		seasons=[np.arange(1,13,1),[11,12,1],[2,3,4],[5,6,7],[8,9,10]])

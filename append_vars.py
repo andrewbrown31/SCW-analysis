@@ -30,6 +30,36 @@ def append_capeS06():
 			np.power(param_file.variables["s06"][:],1.67)
 		param_file.close()
 
+def append_ducs3():
+	#Load each ERA-Interim sa_small netcdf file, and append ducs3
+
+	model = "erai"
+	region = "sa_small"
+	dates = []
+	for y in np.arange(1979,2018):
+		for m in [1,2,3,4,5,6,7,8,9,10,11,12]:
+		    if (m != 12):
+			dates.append([dt.datetime(y,m,1,0,0,0),\
+				dt.datetime(y,m+1,1,0,0,0)-dt.timedelta(hours = 6)])
+		    else:
+			dates.append([dt.datetime(y,m,1,0,0,0),\
+				dt.datetime(y+1,1,1,0,0,0)-dt.timedelta(hours = 6)])
+	for t in np.arange(0,len(dates)):
+		print(str(dates[t][0])+" - "+str(dates[t][1]))
+
+		fname = "/g/data/eg3/ab4502/ExtremeWind/"+region+"/"+model+"/"+model+"_"+\
+			dt.datetime.strftime(dates[t][0],"%Y%m%d")+"_"+\
+			dt.datetime.strftime(dates[t][-1],"%Y%m%d")+".nc"
+		
+		param_file = nc.Dataset(fname,"a")
+		ducs3_var = param_file.createVariable("mlm*dcape*cs3",float,\
+		("time","lat","lon"))
+		ducs3_var.units = ""
+		ducs3_var.long_name = ""
+		ducs3_var[:] = (param_file.variables["mlm+dcape"][:]/30.) * \
+			((param_file.variables["ml_cape"][:] * np.power(param_file.variables["s03"][:],1.67))/20000.)
+		param_file.close()
+
 def append_dp():
 	#Load each ERA-Interim sa_small netcdf file, and append pressure-averaged dp
 
@@ -105,8 +135,124 @@ def add_units():
 		max_wg10.units = wg.units
 		f.close()
 	
+def append_cond():
+	#Load each ERA-Interim sa_small netcdf file, and append COND
+
+	model = "erai"
+	region = "sa_small"
+	dates = []
+	for y in np.arange(1979,2018):
+		for m in [1,2,3,4,5,6,7,8,9,10,11,12]:
+		    if (m != 12):
+			dates.append([dt.datetime(y,m,1,0,0,0),\
+				dt.datetime(y,m+1,1,0,0,0)-dt.timedelta(hours = 6)])
+		    else:
+			dates.append([dt.datetime(y,m,1,0,0,0),\
+				dt.datetime(y+1,1,1,0,0,0)-dt.timedelta(hours = 6)])
+	for t in np.arange(0,len(dates)):
+		print(str(dates[t][0])+" - "+str(dates[t][1]))
+
+		fname = "/g/data/eg3/ab4502/ExtremeWind/"+region+"/"+model+"/"+model+"_"+\
+			dt.datetime.strftime(dates[t][0],"%Y%m%d")+"_"+\
+			dt.datetime.strftime(dates[t][-1],"%Y%m%d")+".nc"
+		
+		param_file = nc.Dataset(fname,"a")
+
+		#LOAD VARIABLES FOR COND
+		mlcape = param_file.variables["ml_cape"][:]
+		s06 = param_file.variables["s06"][:]
+		mlm = param_file.variables["mlm"][:]
+		dcape = param_file.variables["dcape"][:]
+
+		#Calculate COND
+		sf = ((s06>=30) & (dcape<500) & (mlm>=26) )                
+		mf = ((mlcape>120) & (dcape>350) & (mlm<26) )     
+		cond = sf  | mf
+		cond = cond * 1.0
+		sf = sf * 1.0
+		mf = mf * 1.0
+
+		#Add to file		
+		if "cond" in param_file.variables.keys():
+			cond_var = param_file.variables["cond"]
+			mf_var = param_file.variables["mf"]
+			sf_var = param_file.variables["sf"]
+		else:
+			cond_var = param_file.createVariable("cond",cond.dtype,("time","lat","lon"))
+			mf_var = param_file.createVariable("mf",mf.dtype,("time","lat","lon"))
+			sf_var = param_file.createVariable("sf",sf.dtype,("time","lat","lon"))
+		cond_var[:] = cond
+		cond_var.units = "is_cond"
+		cond_var.long_name = "conditional_parameter"
+		mf_var[:] = mf
+		mf_var.units = "is_mf"
+		mf_var.long_name = "mesoscale_forcing"
+		sf_var[:] = sf
+		sf_var.units = "is_sf"
+		sf_var.long_name = "synoptic_scale_forcing"
+
+		param_file.close()
+
+def append_cond_barra():
+	#Load each ERA-Interim sa_small netcdf file, and append COND
+
+	model = "barra"
+	region = "sa_small"
+	dates = []
+	for y in np.arange(2003,2017):
+		for m in [1,2,3,4,5,6,7,8,9,10,11,12]:
+		    if (m != 12):
+			dates.append([dt.datetime(y,m,1,0,0,0),\
+				dt.datetime(y,m+1,1,0,0,0)-dt.timedelta(hours = 6)])
+		    else:
+			dates.append([dt.datetime(y,m,1,0,0,0),\
+				dt.datetime(y+1,1,1,0,0,0)-dt.timedelta(hours = 6)])
+	for t in np.arange(0,len(dates)):
+		print(str(dates[t][0])+" - "+str(dates[t][1]))
+
+		fname = "/g/data/eg3/ab4502/ExtremeWind/"+region+"/"+model+"/"+model+"_"+\
+			dt.datetime.strftime(dates[t][0],"%Y%m%d")+"_"+\
+			dt.datetime.strftime(dates[t][-1],"%Y%m%d")+".nc"
+		
+		param_file = nc.Dataset(fname,"a")
+
+		#LOAD VARIABLES FOR COND
+		mlcape = param_file.variables["ml_cape"][:]
+		s06 = param_file.variables["s06"][:]
+		mlm = param_file.variables["mlm"][:]
+		dcape = param_file.variables["dcape"][:]
+
+		#Calculate COND
+		sf = ((s06>30) & (dcape<500) & (mlm>=26) )                
+		mf = ((mlcape>120) & (dcape>350) & (mlm<26) )     
+		cond = sf  | mf
+		cond = cond * 1.0
+		sf = sf * 1.0
+		mf = mf * 1.0
+
+		#Add to file		
+		if "cond" in param_file.variables.keys():
+			cond_var = param_file.variables["cond"]
+			mf_var = param_file.variables["mf"]
+			sf_var = param_file.variables["sf"]
+		else:
+			cond_var = param_file.createVariable("cond",cond.dtype,("time","lat","lon"))
+			mf_var = param_file.createVariable("mf",mf.dtype,("time","lat","lon"))
+			sf_var = param_file.createVariable("sf",sf.dtype,("time","lat","lon"))
+		cond_var[:] = cond
+		cond_var.units = "is_cond"
+		cond_var.long_name = "conditional_parameter"
+		mf_var[:] = mf
+		mf_var.units = "is_mf"
+		mf_var.long_name = "mesoscale_forcing"
+		sf_var[:] = sf
+		sf_var.units = "is_sf"
+		sf_var.long_name = "synoptic_scale_forcing"
+
+		param_file.close()
 
 if __name__ == "__main__":
 	#append_dp()
 	#append_capeS06()
-	rename_barra_wg()
+	#rename_barra_wg()
+	append_cond_barra()

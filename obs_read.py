@@ -2,6 +2,7 @@ import numpy as np
 import pandas as pd
 import datetime as dt
 import math
+import os
 from calc_param import *
 
 def calc_obs():
@@ -201,6 +202,78 @@ def read_aws_daily(loc):
 	
 	return aws
 
+def read_aws_daily_aus():
+	#Read daily AWS data which has been downloaded for 35 stations Australia wide, 1979-2017
+	#Remove suspect, wrong or inconsistent quality controlled data
+
+	names = ["hm","stn_no","stn_name","lat","lon","date_str","wind_gust","quality",\
+			"#"]
+	renames = {'ALICE SPRINGS AIRPORT                   ':"Alice Springs",\
+			'GILES METEOROLOGICAL OFFICE             ':"Giles",\
+			'COBAR MO                                ':"Cobar",\
+			'AMBERLEY AMO                            ':"Amberley",\
+			'SYDNEY AIRPORT AMO                      ':"Sydney",\
+			'MELBOURNE AIRPORT                       ':"Melbourne",\
+			'MACKAY M.O                              ':"Mackay",\
+			'WEIPA AERO                              ':"Weipa",\
+			'MOUNT ISA AERO                          ':"Mount Isa",\
+			'ESPERANCE                               ':"Esperance",\
+			'ADELAIDE AIRPORT                        ':"Adelaide",\
+			'CHARLEVILLE AERO                        ':"Charleville",\
+			'CEDUNA AMO                              ':"Ceduna",\
+			'OAKEY AERO                              ':"Oakey",\
+			'WOOMERA AERODROME                       ':"Woomera",\
+			'TENNANT CREEK AIRPORT                   ':"Tennant Creek",\
+			'GOVE AIRPORT                            ':"Gove",\
+			'COFFS HARBOUR MO                        ':"Coffs Harbour",\
+			'MEEKATHARRA AIRPORT                     ':"Meekatharra",\
+			'HALLS CREEK METEOROLOGICAL OFFICE       ':"Halls Creek",\
+			'ROCKHAMPTON AERO                        ':"Rockhampton",\
+			'MOUNT GAMBIER AERO                      ':"Mount Gambier",\
+			'PERTH AIRPORT                           ':"Perth",\
+			'WILLIAMTOWN RAAF                        ':"Williamtown",\
+			'CARNARVON AIRPORT                       ':"Carnarvon",\
+			'KALGOORLIE-BOULDER AIRPORT              ':"Kalgoorlie",\
+			'DARWIN AIRPORT                          ':"Darwin",\
+			'CAIRNS AERO                             ':"Cairns",\
+			'MILDURA AIRPORT                         ':"Mildura",\
+			'WAGGA WAGGA AMO                         ':"Wagga Wagga",\
+			'BROOME AIRPORT                          ':"Broome",\
+			'EAST SALE                               ':"East Sale",\
+			'TOWNSVILLE AERO                         ':"Townsville",\
+			'HOBART (ELLERSLIE ROAD)                 ':"Hobart",\
+			'PORT HEDLAND AIRPORT                    ':"Port Hedland"}
+
+	path = "/short/eg3/ab4502/ExtremeWind/aws/daily_aus_1979_2018/"
+	fnames = os.listdir(path)
+	fnames = [path+f for f in fnames]
+	
+	df = pd.DataFrame()
+
+	for f in fnames:
+		print(f)
+		
+		temp = pd.read_csv(f, header=0
+					,names=names,dtype={"wind_gust":float},\
+					na_values={"wind_gust":'     '})
+		temp["day"] = temp.date_str.str.slice(0,2).astype("int")
+		temp["month"] = temp.date_str.str.slice(3,5).astype("int")
+		temp["year"] = temp.date_str.str.slice(6,10).astype("int")
+		temp_dt = []
+		for i in np.arange(0,temp.shape[0]):
+			temp_dt.append(dt.datetime((temp["year"][i]),(temp["month"][i]),\
+				(temp["day"][i])))
+		temp["date"] = temp_dt
+
+		df = pd.concat([df,temp],axis=0)
+	
+	df = df.replace({"stn_name":renames})
+	df.loc[np.in1d(df.quality,np.array(["S","W","I"])),"wind_gust"] = np.nan
+	df = df[df.year<=2017]
+	df.to_pickle("/short/eg3/ab4502/ExtremeWind/aws/all_daily_max_wind_gusts_aus_1979_2017.pkl")
+
+	return aws
+
 def read_aws_1979(loc,resample=False):
 	#Read half-hourly AWS data which has been downloaded for 1979-2017 (although, half 
 	# hourly measurments for wind gusts only start in the 1990s)
@@ -366,7 +439,7 @@ def read_non_synoptic_wind_gusts():
 	df1.columns = df2.columns = df3.columns = df4.columns = df0.columns
 	df_full = pd.concat([df0,df1,df2,df3,df4])
 
-	#Fix data points (2010-2015) for which day and month are the wrong way around in JDH data
+	#Fix data points for which day and month are the wrong way around in JDH data
 	#Checked for Woomera, Adelaide AP and Port Augusta
 	#NOTE THAT 28-11-2011 at Port Augusta is dubious (daily max AWS = 17 m/s)
 	#NOTE THAT 30-12-2012 at Renmark is dubious (daily max AWS = 12.3 m/s)
@@ -390,6 +463,10 @@ def read_non_synoptic_wind_gusts():
 	df_full.dates.loc[df_full["dates"]==dt.datetime(1996,12,9)] = dt.datetime(1996,9,12)
 	df_full.dates.loc[df_full["dates"]==dt.datetime(1998,5,11)] = dt.datetime(1998,11,5)
 	df_full.dates.loc[df_full["dates"]==dt.datetime(2002,5,8)] = dt.datetime(2002,8,5)
+
+	#Remove points which have been identified as incorrect
+	wrong_points = [dt.datetime(1983,12,24),dt.datetime(2001,11,17)]
+	df_full = df_full[~(np.in1d(np.array(df_full.dates),np.array(wrong_points).astype(np.datetime64)))]
 
 	#THINK JDH DATA MAY ALREADY BE IN UTC
 	#df_full["dates_utc_start"] = [x - dt.timedelta(hours=10,minutes=30) \

@@ -72,9 +72,9 @@ def plot_netcdf(domain,fname,outname,time,model,vars=False):
 				mlcape = np.squeeze(f.variables["ml_cape"][times_dt == time])
 				dcape = np.squeeze(f.variables["dcape"][times_dt == time])
 				s06 = np.squeeze(f.variables["s06"][times_dt == time])
-				dlm = np.squeeze(f.variables["dlm"][times_dt == time])
-				sf = ((s06>30) & (dcape>0) & (dcape<500) & (dlm>=26) ) 
-				wf = ((mlcape>120) & (dcape>350) & (dlm<26) ) 
+				mlm = np.squeeze(f.variables["mlm"][times_dt == time])
+				sf = ((s06>=30) & (dcape<500) & (mlm>=26) ) 
+				wf = ((mlcape>120) & (dcape>350) & (mlm<26) ) 
 				values = sf | wf 
 				values = values * 1.0; sf = sf * 1.0; wf = wf * 1.0
 				values_disc = np.zeros(values.shape)
@@ -93,15 +93,16 @@ def plot_netcdf(domain,fname,outname,time,model,vars=False):
 
 		m.drawcoastlines()
 		m.drawmeridians(np.arange(np.floor(lon.min()),np.floor(lon.max()),5),\
-				labels=[True,False,False,True])
+				labels=[True,False,False,True],fontsize="x-large")
 		m.drawparallels(np.arange(np.floor(lat.min()),np.floor(lat.max()),5),\
-				labels=[True,False,True,False])
+				labels=[True,False,True,False],fontsize="x-large")
 		if param == "cond":
 			m.pcolor(x,y,values,latlon=True,cmap=plt.get_cmap("Reds",2))
 		else:
 			m.contourf(x,y,values,latlon=True,cmap=cmap,levels=levels,extend="max")
 		cb = plt.colorbar()
 		cb.set_label(cb_lab)
+		cb.ax.tick_params(labelsize="x-large")
 		if param == "cond":
 			cb.set_ticks([0,1])
 		m.contour(x,y,values,latlon=True,colors="grey",levels=threshold)
@@ -117,14 +118,15 @@ def plot_netcdf(domain,fname,outname,time,model,vars=False):
 			plt.figure()
 			m.drawcoastlines()
 			m.drawmeridians(np.arange(np.floor(lon.min()),np.floor(lon.max()),5),\
-					labels=[True,False,False,True])
+					labels=[True,False,False,True],fontsize="x-large")
 			m.drawparallels(np.arange(np.floor(lat.min()),np.floor(lat.max()),5),\
-					labels=[True,False,True,False])
+					labels=[True,False,True,False],fontsize="x-large")
 			m.pcolor(x,y,values_disc,latlon=True,cmap=plt.get_cmap("Accent_r",3),vmin=0,vmax=2)
 			cb = plt.colorbar()
-			cb.set_label("Forcing type")
+			cb.set_label("Forcing type",fontsize="x-large")
 			cb.set_ticks([0,1,2,3])
 			cb.set_ticklabels(["None","SF","MF","Both"])
+			cb.ax.tick_params(labelsize="x-large")
 			plt.savefig("/home/548/ab4502/working/ExtremeWind/figs/"+model+"/"+outname+\
 				"_"+"forcing_types"+".png",bbox_inches="tight")
 			plt.close()
@@ -186,7 +188,7 @@ def contour_properties(param):
 		cb_lab = "J/Kg"
 		range = [0,4000]
 		log_plot = True
-	if param in ["dlm*dcape*cs6"]:
+	if param in ["dlm*dcape*cs6","mlm*dcape*cs6"]:
 		cmap = cm.Reds
 		mean_levels = np.linspace(0,4,11)
 		extreme_levels = np.linspace(0,40,11)
@@ -245,6 +247,14 @@ def contour_properties(param):
 		cb_lab = "m/s"
 		range = [0,20]
 		log_plot = False
+	elif param in ["dcp"]:
+		cmap = cm.Reds
+		mean_levels = np.linspace(0,0.5,11)
+		extreme_levels = np.linspace(0,4,11)
+		cb_lab = ""
+		range = [0,3]
+		threshold = [0.028,1]
+		log_plot = True
 	elif param in ["scp"]:
 		cmap = cm.Reds
 		mean_levels = np.linspace(0,0.5,11)
@@ -282,7 +292,7 @@ def contour_properties(param):
 		cb_lab = "degrees"
 		range = [0,180]
 		log_plot = False
-	elif param in ["relhum850-500","relhum1000-700"]:
+	elif param in ["relhum850-500","relhum1000-700","hur850","hur700"]:
 		cmap = cm.YlGnBu
 		mean_levels = np.linspace(0,100,11)
 		extreme_levels = np.linspace(0,100,11)
@@ -332,7 +342,7 @@ def contour_properties(param):
 		cb_lab = ""
 		range = None
 		log_plot = True
-	elif param in ["dp850-500","dp1000-700"]:
+	elif param in ["dp850-500","dp1000-700","dp850","dp700"]:
 		cmap = cm.YlGnBu
 		mean_levels = np.linspace(-10,10,11)
 		extreme_levels = np.linspace(-10,10,11)
@@ -372,6 +382,22 @@ def contour_properties(param):
 		range = [0,1]
 		log_plot = False
 	elif param in ["max_wg10","wg10"]:
+		cmap = cm.YlGnBu
+		mean_levels = np.linspace(0,200,11)
+		extreme_levels = np.linspace(-10,10,11)
+		threshold = [12.817,21.5]
+		cb_lab = "no. of days"
+		range = [-20,20]
+		log_plot = False
+	elif param in ["tas","ta850","ta700","tos"]:
+		cmap = cm.Reds
+		mean_levels = np.linspace(285,320,5)
+		extreme_levels = np.linspace(-10,10,11)
+		threshold = [1]
+		cb_lab = "K"
+		range = [-20,20]
+		log_plot = False
+	elif param in ["ta2d"]:
 		cmap = cm.YlGnBu
 		mean_levels = np.linspace(0,200,11)
 		extreme_levels = np.linspace(-10,10,11)
@@ -1503,25 +1529,8 @@ def plot_param_scatter(event_type):
 				bbox_inches="tight")
 			plt.close()
 
-def plot_temporal_wind_distribution():
-	#Plot the diurnal and seasonal distributions of AWS-defined wind gust events
-	#For 2010-2015 produce convective and all-gust distirbutions
-	#For 1979-2015 produce a split distribution for all gusts (1979-1997 and 1998-2015)
-
-	#Load resampled (6 hourly) aws data
-#	aws_6hr = load_aws_all(resample=True)
-#	aws_6hr = aws_6hr.set_index(["stn_name"],append=True)
-#	lightning = load_lightning(smoothing=True)
-#	lightning = lightning.set_index(["date","loc_id"])
-#	aws_6hr = pd.concat([aws_6hr,lightning.lightning],axis=1).dropna().reset_index()
-#	aws_6hr["date_lt"] = aws_6hr.level_0 + dt.timedelta(hours = -10.5)
-#	aws_6hr["hour"] = [x.hour for x in aws_6hr.date_lt]
-#	aws_6hr["month"] = [x.month for x in aws_6hr.date_lt]
-#	aws_6hr_warm_inds = np.in1d(aws_6hr.month,np.array([10,11,12,1,2,3]))
-	
-	#Load JDH events
-#	jdh = read_non_synoptic_wind_gusts()
-#	jdh["month"] = [x.month for x in jdh.dates]
+def plot_diurnal_wind_distribution():
+	#Plot the diurnal distributions of AWS-defined wind gust events
 
 	#Load unsampled (half-horuly) aws data
 	aws_30min = pd.read_pickle("/short/eg3/ab4502/ExtremeWind/aws/"+\
@@ -1554,193 +1563,31 @@ def plot_temporal_wind_distribution():
 			(aws_30min.wind_gust>=30)])
 
 	#Get diurnal distribution for 6 hourly data
-#	aws_6hr_warm_10_cnt,hours_6hr = get_diurnal_dist(aws_6hr[(aws_6hr_warm_inds) & \
-#		(aws_6hr.wind_gust>=10) & (aws_6hr.wind_gust<20)])
-#	aws_6hr_warm_20_cnt,hours_6hr = get_diurnal_dist(aws_6hr[(aws_6hr_warm_inds) & \
-#		(aws_6hr.wind_gust>=20)])
-#	aws_6hr_cold_10_cnt,hours_6hr = get_diurnal_dist(aws_6hr[(~aws_6hr_warm_inds) & \
-#		(aws_6hr.wind_gust>=10) & (aws_6hr.wind_gust<20)])
-#	aws_6hr_cold_20_cnt,hours_6hr = get_diurnal_dist(aws_6hr[(~aws_6hr_warm_inds) & \
-#		(aws_6hr.wind_gust>=20)])
-#
-#	#Get diurnal distribution for 6 hourly convective wind gusts
-#	aws_6hr_warm_10_conv_cnt,hours_6hr = get_diurnal_dist(aws_6hr[(aws_6hr_warm_inds) & \
-#		(aws_6hr.wind_gust>=10) & (aws_6hr.wind_gust<20) & (aws_6hr.lightning >=2)])
-#	aws_6hr_warm_20_conv_cnt,hours_6hr = get_diurnal_dist(aws_6hr[(aws_6hr_warm_inds) & \
-#		(aws_6hr.wind_gust>=20) & (aws_6hr.lightning >=2)])
-#	aws_6hr_cold_10_conv_cnt,hours_6hr = get_diurnal_dist(aws_6hr[(~aws_6hr_warm_inds) & \
-#		(aws_6hr.wind_gust>=10) & (aws_6hr.wind_gust<20) & (aws_6hr.lightning >=2)])
-#	aws_6hr_cold_20_conv_cnt,hours_6hr = get_diurnal_dist(aws_6hr[(~aws_6hr_warm_inds) & \
-#		(aws_6hr.wind_gust>=20) & (aws_6hr.lightning >=2)])
-#
-#	#Get diurnal distribution for 6 hourly non-convective wind gusts
-#	aws_6hr_warm_10_non_conv_cnt,hours_6hr = get_diurnal_dist(aws_6hr[(aws_6hr_warm_inds) & \
-#		(aws_6hr.wind_gust>=10) & (aws_6hr.wind_gust<20) & (aws_6hr.lightning <2)])
-#	aws_6hr_warm_20_non_conv_cnt,hours_6hr = get_diurnal_dist(aws_6hr[(aws_6hr_warm_inds) & \
-#		(aws_6hr.wind_gust>=20) & (aws_6hr.lightning <2)])
-#	aws_6hr_cold_10_non_conv_cnt,hours_6hr = get_diurnal_dist(aws_6hr[(~aws_6hr_warm_inds) & \
-#		(aws_6hr.wind_gust>=10) & (aws_6hr.wind_gust<20) & (aws_6hr.lightning <2)])
-#	aws_6hr_cold_20_non_conv_cnt,hours_6hr = get_diurnal_dist(aws_6hr[(~aws_6hr_warm_inds) & \
-#		(aws_6hr.wind_gust>=20) & (aws_6hr.lightning <2)])
-#
-#
-#	#Get monthly distribution for 30 min data
-#	aws_30min_10_mth_cnt,mean,months = get_monthly_dist(aws_30min[\
-#		(aws_30min.wind_gust>=10) & (aws_30min.wind_gust<20)])
-#	aws_30min_20_mth_cnt,mean,months = get_monthly_dist(aws_30min[\
-#		(aws_30min.wind_gust>=20)])
-#
-#	#Get monthly distribution for 6 hourly data
-#	aws_6hr_10_mth_cnt,mean,months_6hr = get_monthly_dist(aws_6hr[\
-#		(aws_6hr.wind_gust>=10) & (aws_6hr.wind_gust<20)])
-#	aws_6hr_20_mth_cnt,mean,months_6hr = get_monthly_dist(aws_6hr[\
-#		(aws_6hr.wind_gust>=20)])
-#
-#	#Get monthly distribution for 6 hourly convective wind gusts
-#	aws_6hr_10_mth_conv_cnt,mean,months_6hr = get_monthly_dist(aws_6hr[\
-#		(aws_6hr.wind_gust>=10) & (aws_6hr.wind_gust<20) & (aws_6hr.lightning >=2)])
-#	aws_6hr_20_mth_conv_cnt,mean,months_6hr = get_monthly_dist(aws_6hr[\
-#		(aws_6hr.wind_gust>=20) & (aws_6hr.lightning >=2)])
-#	jdh_conv_cnt,months_6hr = get_monthly_dist(jdh)
-#
-#	#Get monthly distribution for 6 hourly non-convective wind gusts
-#	aws_6hr_10_mth_non_conv_cnt,mean,months_6hr = get_monthly_dist(aws_6hr[\
-#		(aws_6hr.wind_gust>=10) & (aws_6hr.wind_gust<20) & (aws_6hr.lightning <2)])
-#	aws_6hr_20_mth_non_conv_cnt,mean,months_6hr = get_monthly_dist(aws_6hr[\
-#		(aws_6hr.wind_gust>=20) & (aws_6hr.lightning <2)])
-
-	#Plot diurnal distributions
-#	fig=plt.figure(figsize=[12,10])
-#	plt.subplot(2,2,1)
-#	plt.plot(hours,aws_30min_warm_10_cnt,"r",label="Warm season wind gust 10-20 m/s")
-#	plt.plot(hours,aws_30min_warm_20_cnt,"r--",label="Warm season wind gust >20 m/s")
-#	plt.plot(hours,aws_30min_cold_10_cnt,"b",label="Cold season wind gust 10-20 m/s")
-#	plt.plot(hours,aws_30min_cold_20_cnt,"b--",label="Cold season wind gust >20 m/s")
-#	plt.title("AWS 30-minute wind gusts")
-#	fig.subplots_adjust(bottom=0.25)
-#	plt.legend(loc="lower left",bbox_to_anchor=[0.7,-1.7,1,.05],mode="expand",\
-#		fontsize=10)
-#	plt.ylabel("Normalised counts")
-#	plt.subplot(2,2,2)
-#	plt.plot(hours_6hr,aws_6hr_warm_10_cnt,"r")
-#	plt.plot(hours_6hr,aws_6hr_warm_20_cnt,"r--")
-#	plt.plot(hours_6hr,aws_6hr_cold_10_cnt,"b")
-#	plt.plot(hours_6hr,aws_6hr_cold_20_cnt,"b--")
-#	plt.title("AWS 6-hourly wind gusts")
-#	plt.subplot(2,2,3)
-#	plt.plot(hours_6hr,aws_6hr_warm_10_conv_cnt,"r")
-#	plt.plot(hours_6hr,aws_6hr_warm_20_conv_cnt,"r--")
-#	plt.plot(hours_6hr,aws_6hr_cold_10_conv_cnt,"b")
-#	plt.plot(hours_6hr,aws_6hr_cold_20_conv_cnt,"b--")
-#	plt.title("AWS 6-hourly convective wind gusts")
-#	plt.xlabel("Hours (local time)")
-#	plt.ylabel("Normalised counts")
-#	plt.subplot(2,2,4)
-#	plt.plot(hours_6hr,aws_6hr_warm_10_non_conv_cnt,"r")
-#	plt.plot(hours_6hr,aws_6hr_warm_20_non_conv_cnt,"r--")
-#	plt.plot(hours_6hr,aws_6hr_cold_10_non_conv_cnt,"b")
-#	plt.plot(hours_6hr,aws_6hr_cold_20_non_conv_cnt,"b--")
-#	plt.title("AWS 6-hourly non-convective wind gusts")
-#	plt.xlabel("Hours (local time)")
 		plt.figure()
-		plt.plot(hours,aws_30min_5_cnt,marker="s",linestyle="none",color="k")
-		plt.plot(hours,aws_30min_15_cnt,marker="s",linestyle="none",color="b")
-		plt.plot(hours,aws_30min_25_cnt,marker="s",linestyle="none",color="g")
-		plt.plot(hours,aws_30min_30_cnt,marker="s",linestyle="none",color="r")
-		plt.ylabel("Count")
-		plt.xlabel("Hour (Local Time)")
+		plt.plot(hours,aws_30min_15_cnt,marker="s",linestyle="none",markersize=11)
+		plt.plot(hours,aws_30min_25_cnt,marker="s",linestyle="none",markersize=11)
+		plt.plot(hours,aws_30min_5_cnt,marker="s",linestyle="none",markersize=11)
+		plt.plot(hours,aws_30min_30_cnt,marker="x",linestyle="none",color="k",\
+				markeredgewidth=1.5,markersize=17.5)
+		plt.ylabel("Count",fontsize="large")
+		plt.xlabel("Hour (Local Time)",fontsize="large")
 		plt.yscale("log")
 		plt.title(loc)
 		plt.xlim([0,24]);plt.ylim([0.5,plt.ylim()[1]])
+		ax = plt.gca()
+		ax.tick_params(labelsize=20)
 		plt.grid()
 		plt.savefig("/home/548/ab4502/working/ExtremeWind/figs/temporal_distributions/"+\
 			"diurnal_"+loc+".png",bbox_inches="tight")
 		plt.close()
 
-	#Plot monthly distributions
-#	fig=plt.figure(figsize=[12,10])
-#	plt.subplot(2,2,1)
-#	plt.plot(months,aws_30min_10_mth_cnt,"k",label="Wind gust 10-20 m/s")
-#	plt.plot(months,aws_30min_20_mth_cnt,"k--",label="Wind gust >20 m/s")
-#	plt.title("AWS 30-minute wind gusts")
-#	fig.subplots_adjust(bottom=0.25)
-#	plt.legend(loc="lower left",bbox_to_anchor=[0.7,-1.7,1,.05],mode="expand",\
-#		fontsize=10)
-#	plt.ylabel("Normalised counts")
-#	plt.subplot(2,2,2)
-#	plt.plot(months_6hr,aws_6hr_10_mth_cnt,"k")
-#	plt.plot(months_6hr,aws_6hr_20_mth_cnt,"k--")
-#	plt.title("AWS 6-hourly wind gusts")
-#	plt.subplot(2,2,3)
-#	plt.plot(months_6hr,aws_6hr_10_mth_conv_cnt,"k")
-#	plt.plot(months_6hr,aws_6hr_20_mth_conv_cnt,"k--")
-#	plt.plot(months_6hr,jdh_conv_cnt,"m")
-#	plt.title("AWS 6-hourly convective wind gusts")
-#	plt.ylabel("Normalised counts")
-#	plt.xlabel("Month")
-#	plt.subplot(2,2,4)
-#	plt.plot(months_6hr,aws_6hr_10_mth_non_conv_cnt,"k")
-#	plt.plot(months_6hr,aws_6hr_20_mth_non_conv_cnt,"k--")
-#	plt.xlabel("Month")
-#	plt.title("AWS 6-hourly non-convective wind gusts")
-#	plt.savefig("/home/548/ab4502/working/ExtremeWind/figs/temporal_distributions/"+\
-#		"monthly_all_2010_2015.png",bbox_inches="tight")
 
 def plot_daily_data_monthly_dist(aws,stns,outname):
-	#Load JDH events
-	#jdh = read_non_synoptic_wind_gusts()
-	#jdh["month"] = [x.month for x in jdh.dates]
-
-	#Load BoM observed events, retaining only one row for each event (there are multiple
-	#entries for the same event, in different locations)
-	#wind_sa = load_wind_sa().drop_duplicates(subset="Event ID")	
-	#wind_sa["month"] = [x.month for x in wind_sa.date]
-
-	#Plot seasonal distribution of wind gusts over certain thresholds
-	#aws = pd.read_pickle("/short/eg3/ab4502/ExtremeWind/aws/"+\
-	#	"all_daily_max_wind_gusts_sa_1979_2017.pkl")
-	#aws = aws[np.in1d(aws.stn_name,["Adelaide AP","Woomera","Mount Gambier","Parafield",\
-	#	"Edinburgh","Port Augusta Power Station","Port Augusta"])]
-#	aws_mth_cnt10,aws_mth_mean10,mths10 = get_monthly_dist(aws[(aws.wind_gust>=10)&\
-#		(aws.wind_gust<20)],mean=)
-#	n10 = aws[(aws.wind_gust>=10)&(aws.wind_gust<20)].shape[0]
-#	aws_mth_cnt20,aws_mth_mean20,mths20 = get_monthly_dist(aws[(aws.wind_gust>=20)])
-#	n20 = aws[(aws.wind_gust>=20)].shape[0]
-#	aws_mth_cnt25,aws_mth_mean25,mths25 = get_monthly_dist(aws[(aws.wind_gust>=25)])
-#	n25 = aws[(aws.wind_gust>=25)].shape[0]
-#	aws_mth_cnt30,aws_mth_mean30,mths30 = get_monthly_dist(aws[(aws.wind_gust>=30)])
-#	n30 = aws[(aws.wind_gust>=30)].shape[0]
-#	jdh_conv_cnt,months_jdh = get_monthly_dist(jdh)
-#	nJDH= jdh.shape[0]
-#	wind_sa_cnt,months_wind_sa = get_monthly_dist(wind_sa)
-#	n_wind_sa= wind_sa.shape[0]
-#	plt.figure()
-#	plt.plot(mths10,aws_mth_cnt10,"k",label="Wind gust 10-20 m/s: N = "+str(n10))
-#	plt.plot(mths20,aws_mth_cnt20,"k--",label="Wind gust > 20 m/s: N = "+str(n20))
-#	#plt.plot(mths25,aws_mth_cnt25,"k:",label="Wind gust > 25 m/s: N = "+str(n25))
-#	#plt.plot(mths30,aws_mth_cnt30,"k",label="Wind gust > 30 m/s: N = "+str(n30),marker="^")
-#	plt.plot(months_jdh,jdh_conv_cnt,"m",label="JDH events: N = "+str(nJDH))
-#	plt.plot(months_wind_sa,wind_sa_cnt,"k:",label="BoM observed events: N = "+\
-#		str(n_wind_sa))
-#	plt.xlabel("Month")
-#	plt.title("AWS daily maximum wind gusts")
-#	plt.legend(loc="upper left")
-#	plt.savefig("/home/548/ab4502/working/ExtremeWind/figs/temporal_distributions/"+\
-#		"monthly_7stn_1979_2017.png",bbox_inches="tight")
-#
-#	#Plot monthly-mean wind gusts
-#	plt.figure()
-#	aws_mth_cnt,aws_mth_mean,mths = get_monthly_dist(aws)
-#	plt.plot(mths,aws_mth_mean,"k",marker="^")
-#	plt.xlabel("Month")
-#	plt.ylabel("Wind gust (m/s)")
-#	plt.title("Montly mean AWS daily maximum wind gusts")
-#	plt.savefig("/home/548/ab4502/working/ExtremeWind/figs/temporal_distributions/"+\
-#		"monthly_mean_7stn_1979_2017.png",bbox_inches="tight")
 
 	#Plot seasonal distribution of wind gusts over certain thresholds for each AWS station
+	s = 11
 	for i in np.arange(0,len(stns)):
-		plt.figure()
+		fig = plt.figure()
 		aws_mth_cnt5,mths = get_monthly_dist(aws[(aws.stn_name==stns[i])],\
 			threshold=[5,15])
 		aws_mth_cnt15,mths = get_monthly_dist(aws[(aws.stn_name==stns[i])],\
@@ -1749,19 +1596,22 @@ def plot_daily_data_monthly_dist(aws,stns,outname):
 			threshold=[25,30])
 		aws_mth_cnt30,mths = get_monthly_dist(aws[(aws.stn_name==stns[i])],\
 			threshold=[30])
-		plt.plot(mths,aws_mth_cnt5,linestyle="none",marker="s",color="k")
-		plt.plot(mths,aws_mth_cnt15,linestyle="none",marker="s",color="b")
-		plt.plot(mths,aws_mth_cnt25,linestyle="none",marker="s",color="g")
-		plt.plot(mths,aws_mth_cnt30,linestyle="none",marker="s",color="r")
+		plt.plot(mths,aws_mth_cnt15,linestyle="none",marker="s",markersize=s)
+		plt.plot(mths,aws_mth_cnt25,linestyle="none",marker="s",markersize=s)
+		plt.plot(mths,aws_mth_cnt5,linestyle="none",marker="s",markersize=s)
+		plt.plot(mths,aws_mth_cnt30,linestyle="none",marker="x",markersize=17.5,color="k",\
+			markeredgewidth=1.5)
 		plt.title(stns[i])
-		plt.xlabel("Month");plt.ylabel("Counts")
+		plt.xlabel("Month",fontsize="large");plt.ylabel("Counts",fontsize="large")
 		#plt.legend(loc="upper left")
 		ax=plt.gca();ax.set_yscale('log')
 		ax.set_xticks(np.arange(1,13,1))
 		ax.set_xticklabels(["J","F","M","A","M","J","J","A","S","O","N","D"])
 		ax.set_xlim([0.5,12.5])
 		ax.set_ylim([0.5,ax.get_ylim()[1]])
+		ax.tick_params(labelsize=20)
 		ax.grid()
+		fig.subplots_adjust(bottom=0.2)
 		plt.savefig("/home/548/ab4502/working/ExtremeWind/figs/temporal_distributions/"\
 			+outname+"_"+"monthly_"+stns[i]+"_1979_2017.png")
 		plt.close()
@@ -1857,40 +1707,43 @@ if __name__ == "__main__":
 	#plot_jdh_events(["ml_cape","dlm*dcape*cs6","wg10"])
 	#plot_param_scatter("jdh")
 	
-	#plot_daily_data_monthly_dist(pd.read_pickle("/g/data/eg3/ab4502/ExtremeWind/points/erai_fc_points_1979_2017_daily_max.pkl").\
-	#	reset_index().rename(columns={"wg10":"wind_gust","loc_id":"stn_name"}),["Adelaide AP","Woomera","Mount Gambier",\
-	#	"Port Augusta"],outname="ERA-Interim")
-	#plot_daily_data_monthly_dist(pd.read_pickle("/g/data/eg3/ab4502/ExtremeWind/points/barra_r_fc/barra_r_fc_points_daily_2006_2016.pkl").\
-	#	reset_index().rename(columns={"max_wg10":"wind_gust","loc_id":"stn_name"}),["Adelaide AP","Woomera","Mount Gambier",\
-	#	"Port Augusta"],outname="BARRA-R")
-	#plot_daily_data_monthly_dist(remove_incomplete_aws_years(\
-	#		pd.read_pickle("/short/eg3/ab4502/ExtremeWind/aws/"+\
-	#		"all_daily_max_wind_gusts_sa_1979_2017.pkl"),"Port Augusta").reset_index()\
-	#		,["Adelaide AP","Woomera","Mount Gambier","Port Augusta"],outname="AWS")
-	#plot_daily_data_monthly_dist(pd.read_pickle("/g/data/eg3/ab4502/ExtremeWind/points/barra_ad/barra_ad_points_daily_2006_2016.pkl").\
-	#	reset_index().rename(columns={"max_wg10":"wind_gust","loc_id":"stn_name"}),["Adelaide AP","Woomera","Mount Gambier",\
-	#	"Port Augusta"],outname="BARRA-AD")
+#	plot_daily_data_monthly_dist(pd.read_pickle("/g/data/eg3/ab4502/ExtremeWind/points/"+\
+#		"erai_fc_points_1979_2017_daily_max.pkl").reset_index().\
+#		rename(columns={"wg10":"wind_gust","loc_id":"stn_name"}),\
+#		["Adelaide AP","Woomera","Mount Gambier","Port Augusta"],outname="ERA-Interim")
+#	plot_daily_data_monthly_dist(pd.read_pickle("/g/data/eg3/ab4502/ExtremeWind/points/barra_r_fc/"+\
+#		"barra_r_fc_points_daily_2006_2016.pkl").reset_index().\
+#		rename(columns={"max_wg10":"wind_gust","loc_id":"stn_name"}),\
+#		["Adelaide AP","Woomera","Mount Gambier","Port Augusta"],outname="BARRA-R")
+#	plot_daily_data_monthly_dist(remove_incomplete_aws_years(\
+#			pd.read_pickle("/short/eg3/ab4502/ExtremeWind/aws/"+\
+#			"all_daily_max_wind_gusts_sa_1979_2017.pkl"),"Port Augusta").reset_index()\
+#			,["Adelaide AP","Woomera","Mount Gambier","Port Augusta"],outname="AWS")
+#	plot_daily_data_monthly_dist(pd.read_pickle("/g/data/eg3/ab4502/ExtremeWind/points/barra_ad/"+\
+#		"barra_ad_points_daily_2006_2016.pkl").reset_index().\
+#		rename(columns={"max_wg10":"wind_gust","loc_id":"stn_name"}),\
+#		["Adelaide AP","Woomera","Mount Gambier","Port Augusta"],outname="BARRA-AD")
 
 	#CASE STUDIES
-	for time in date_seq([dt.datetime(1979,11,14,0),dt.datetime(1979,11,14,12)],"hours",6):
-		plot_netcdf(domain,"/g/data/eg3/ab4502/ExtremeWind/sa_small/erai/"+\
-			"erai_19791101_19791130.nc"\
-			,"event_1979_"+time.strftime("%Y%m%d%H"),\
-			[time],"erai",vars=["cond"])
-	for time in date_seq([dt.datetime(2016,9,28,0),dt.datetime(2016,9,28,12)],"hours",6):
-		plot_netcdf(domain,"/g/data/eg3/ab4502/ExtremeWind/sa_small/erai/"+\
-			"erai_20160901_20160930.nc"\
-			,"system_black_"+time.strftime("%Y%m%d%H"),\
-			[time],"erai",vars=["cond"])
-	for time in date_seq([dt.datetime(2016,9,28,0),dt.datetime(2016,9,28,12)],"hours",6):
-		plot_netcdf(domain,"/g/data/eg3/ab4502/ExtremeWind/sa_small/barra/"+\
-			"barra_20160901_20160930.nc"\
-			,"system_black_"+time.strftime("%Y%m%d%H"),\
-			[time],"barra",vars=["cond"])
-	for time in date_seq([dt.datetime(2016,9,28,0),dt.datetime(2016,9,28,12)],"hours",6):
-		plot_netcdf(domain,"/g/data/eg3/ab4502/ExtremeWind/sa_small/barra_ad/"+\
-			"barra_ad_20160927_20160929.nc"\
-			,"system_black_"+time.strftime("%Y%m%d%H"),\
-			[time],"barra_ad",vars=["cond"])
+#	for time in date_seq([dt.datetime(1979,11,14,0),dt.datetime(1979,11,14,12)],"hours",6):
+#		plot_netcdf(domain,"/g/data/eg3/ab4502/ExtremeWind/sa_small/erai/"+\
+#			"erai_19791101_19791130.nc"\
+#			,"event_1979_"+time.strftime("%Y%m%d%H"),\
+#			[time],"erai",vars=["dcp"])
+#	for time in date_seq([dt.datetime(2016,9,28,0),dt.datetime(2016,9,28,12)],"hours",6):
+#		plot_netcdf(domain,"/g/data/eg3/ab4502/ExtremeWind/sa_small/erai/"+\
+#			"erai_20160901_20160930.nc"\
+#			,"system_black_"+time.strftime("%Y%m%d%H"),\
+#			[time],"erai",vars=["dcp"])
+#	for time in date_seq([dt.datetime(2016,9,28,0),dt.datetime(2016,9,28,12)],"hours",6):
+#		plot_netcdf(domain,"/g/data/eg3/ab4502/ExtremeWind/sa_small/barra/"+\
+#			"barra_20160901_20160930.nc"\
+#			,"system_black_"+time.strftime("%Y%m%d%H"),\
+#			[time],"barra",vars=["dcp"])
+#	for time in date_seq([dt.datetime(2016,9,28,0),dt.datetime(2016,9,28,12)],"hours",6):
+#		plot_netcdf(domain,"/g/data/eg3/ab4502/ExtremeWind/sa_small/barra_ad/"+\
+#			"barra_ad_20160928_20160929.nc"\
+#			,"system_black_"+time.strftime("%Y%m%d%H"),\
+#			[time],"barra_ad",vars=["dcp"])
 
-	#plot_temporal_wind_distribution()
+	plot_diurnal_wind_distribution()

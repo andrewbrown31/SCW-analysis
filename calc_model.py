@@ -1,13 +1,19 @@
 #NOTE THAT TO CALCULATE DCAPE, NUMPY HAS BEEN UPGRADED TO 1.16.0. SO, TO RUN, SWAP TO ENVIRONMENT "PYCAT"
+#source activate pycat
 
 import numpy as np
-from calc_param import calc_param_sharppy, calc_param_wrf
+from calc_param import calc_param_sharppy, calc_param_wrf, calc_param_wrf_par
 from erai_read import read_erai, read_erai_points, read_erai_fc
 from barra_read import read_barra, read_barra_points
 from barra_ad_read import read_barra_ad
 from barra_r_fc_read import read_barra_r_fc
 from event_analysis import load_array_points
 import datetime as dt
+import itertools
+import multiprocessing
+
+#Functions to drive *model*_read.py (to extract variables from reanalysis) and calc_param.py (to calculate 
+# convective parameters)
 
 def calc_model(model,out_name,method,time,param,issave,region,cape_method):
 
@@ -18,8 +24,6 @@ def calc_model(model,out_name,method,time,param,issave,region,cape_method):
 # - param is a list of strings corresponding to thunderstorm parameters to be calculated. 
 #	See calc_params.py for a list
 # - issave (boolean) - is the output to be saved to a netcdf file?
-# - points is a list of coordinates in the form [(lon1,lat1),...,(lonN,latN)] at which
-#	to extract parameters
 # - region is either "aus","sa_small", "sa_large" or "adelaideAP".
 # - cape_method refers to the method of deriving CAPE from the reanalysis, and subsequently, the
 # 	method for deriving other parameters. If "wrf", then wrf.cape3d is used, and the rest of
@@ -62,11 +66,6 @@ def calc_model(model,out_name,method,time,param,issave,region,cape_method):
 			read_barra_ad(domain,time,wg_only=False)
 	elif model=="barra_r_fc":
 		print("\n	INFO: READING IN BARRA-R FORECAST DATA...\n")
-		#max_wg10,lon,lat,date_list = \
-		#	read_barra_r_fc(domain,time)
-		#param = ["max_wg10"]
-		#param_out = [max_wg10]
-		#save_netcdf(region,model,date_list,lat,lon,param,param_out)	
 		wg,ta,dp,hur,hgt,terrain,p,ps,ua,va,uas,vas,lon,lat,date_list = \
 			read_barra_r_fc(domain,time,wg_only=False)
 	else:
@@ -77,15 +76,29 @@ def calc_model(model,out_name,method,time,param,issave,region,cape_method):
 	if model != "erai_fc":
 		if cape_method == "SHARPpy":
 			param_out = calc_param_sharppy(date_list,ta,dp,hur,hgt,p,ua,va,uas,vas,\
-				lon,lat,param,out_name,issave,region)
+				lon,lat,param,model,out_name,issave,region)
 		elif cape_method == "wrf":
 		    if (model == "barra_r_fc") or (model == "barra_ad"):
-			#IF BARRA-R, include wind gust in the netcdf save function 
-			param_out = calc_param_wrf(date_list,ta,dp,hur,hgt,terrain,p,ps,ua,va,\
-				uas,vas,lon,lat,param,model,out_name,issave,region,wg=wg)
+			#IF BARRA-R, include wind gust in the netcdf save function. Also, use every 6 hrs
+			date_list_hrs = [t.hour for t in date_list]
+			date_inds = np.in1d(np.array(date_list_hrs),np.array([0,6,12,18]))
+			param_out = calc_param_wrf(date_list[date_inds],ta[date_inds],dp[date_inds],hur[date_inds],\
+				hgt[date_inds],terrain,p,ps[date_inds],ua[date_inds],va[date_inds],\
+				uas[date_inds],vas[date_inds],lon,lat,param,model,out_name,issave,region,\
+				wg=wg[date_inds])
 		    else:
 			param_out = calc_param_wrf(date_list,ta,dp,hur,hgt,terrain,p,ps,ua,va,\
 				uas,vas,lon,lat,param,model,out_name,issave,region)
+		elif cape_method == "wrf_par":
+		    #USES WRF METHOD BUT PASSES DATES IN PARALLEL (USUALLY ONE MONTHS WORTH)
+			it = itertools.product([date_list],np.arange(0,len(date_list)),\
+				[ta],[dp],[hur],[hgt],[terrain],[p],[ps],[ua],[va],\
+				[uas],[vas],[lon],[lat],[param],[model],[out_name],[issave],[region],[False])
+			pool = multiprocessing.Pool()
+			param_out = pool.map(calc_param_wrf_par,it)
+			#Now have the param output. Need to check that it is in the right time order, and save
+			pool.close()
+			pool.join()
 		else:
 			raise NameError("""cape_method"" must be ""SHARPpy"" or ""wrf""")
 
@@ -135,7 +148,6 @@ def calc_model(model,out_name,method,time,param,issave,region,cape_method):
 			dt.datetime.strftime(times[0],"%Y%m%d")+"_"+\
 			dt.datetime.strftime(times[1],"%Y%m%d")+".csv",float_format="%.3f")	
 
-   #if (model == "barra_ad") or (model == "barra_r_fc"):
    return [param,param_out,lon,lat,date_list]
 
 def barra_ad_driver(points,loc_id):
@@ -246,14 +258,14 @@ def barra_driver(param):
 		calc_model(model,model,method,dates[t],param,True,region,cape_method)	
 	
 def erai_driver(param):
-	#Drive calc_model() for 2010-2015 in ERA-Interim, for the sa_small domain
+	#Drive calc_model() for 1979-2017 in ERA-Interim, for the sa_small domain
 
 	model = "erai"
 	cape_method = "wrf"
 	method = "domain"
 	region = "sa_small"
 	dates = []
-	for y in np.arange(1979,2019):
+	for y in np.arange(2008,2019):
 		for m in [1,2,3,4,5,6,7,8,9,10,11,12]:
 		    if (m != 12):
 			dates.append([dt.datetime(y,m,1,0,0,0),\
@@ -292,16 +304,16 @@ if __name__ == "__main__":
 # 	SETTINGS
 #--------------------------------------------------------------------------------------------------
 
-	model = "barra_ad"
+	model = "barra"
 	cape_method = "wrf"
 
 	method = "domain"
-	region = "sa_small"
+	region = "aus"
 
-	experiment = ""
+	experiment = "test"
 
 	#ADELAIDE = UTC + 10:30
-	time = [dt.datetime(2003,1,7,0,0,0),dt.datetime(2003,1,8,0,0,0)]
+	time = [dt.datetime(2016,9,1,0,0,0),dt.datetime(2016,9,30,18,0,0)]
 	issave = True
 
 	loc_id = ["Port Augusta","Marree","Munkora","Woomera","Robe","Loxton","Coonawarra",\
@@ -322,16 +334,14 @@ if __name__ == "__main__":
 #	RUN CODE
 #--------------------------------------------------------------------------------------------------
 
-	if cape_method == "wrf":
+	if (cape_method == "wrf") | (cape_method == "wrf_par"):
 		param = ["ml_cape","ml_cin","mu_cin","mu_cape","srh01","srh03","srh06","scp",\
-			"stp","estp","ship","mmp","relhum850-500","crt","vo10","lr1000","lcl",\
-			"relhum1000-700","ssfc6","ssfc3","ssfc1","s06","ssfc850","ssfc500",\
-			"cape*s06","cape*ssfc6","cape700","dcp","conv10","conv1000-850","conv800-600",\
-			"td850","td800","td950","dcape","dlm","dlm+dcape","dlm*dcape*cs6","dcape*cape",\
-			"dcape*cs6","dcape*td850"]
+			"stp","ship","mmp","relhum850-500","vo10","lr1000","lcl",\
+			"relhum1000-700","s06","s0500","s01","s03",\
+			"cape*s06","dcp","td850","td800","td950","dcape","mlm","dlm",\
+			"dcape*cs6","mlm+dcape","mlm*dcape*cs6"]
 	elif cape_method == "SHARPpy":
-		param = ["mu_cin","mu_cape","s06","ssfc850","srh01","srh03","srh06","scp",\
-			"ship","mmp","relhum850-500","stp"]
+		param = ["ml_cape","mu_cape"]
 	elif cape_method == "points_wrf":
 		param = ["ml_cape","ml_cin","mu_cin","mu_cape","srh01","srh03","srh06","scp",\
 			"stp","ship","mmp","relhum850-500","crt","lr1000","lcl",\
@@ -341,9 +351,14 @@ if __name__ == "__main__":
 		param = ["mu_cape","s06","cape*s06"]	
 
 	#for time in times:
-	calc_model("barra","test","domain",time,param,True,region,cape_method)	
+	start = dt.datetime.now()
+	[param,param_out,lon,lat,date_list] = calc_model(model,experiment,method,time,\
+			param,False,region,cape_method)	
+	print(param_out[0][0])
+	print(dt.datetime.now()-start)
 	#erai_driver(param)
 	#barra_driver(param)
 	#barra_ad_driver(points,loc_id)
 	#barra_r_fc_driver(points,loc_id)
 	#param,param_out,lon,lat,date_list = calc_model(model,"test",method,time,param,True,region,cape_method)
+

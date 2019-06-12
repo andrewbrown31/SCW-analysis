@@ -5,36 +5,28 @@ from statsmodels.distributions.empirical_distribution import ECDF
 from event_analysis import *
 from plot_param import *
 
-def load_wind_gusts(include_barra):
+def load_wind_gusts(include_barra,remove_incomplete_years='True'):
 	#Load dataframes
-	aws = remove_incomplete_aws_years(pd.read_pickle("/short/eg3/ab4502/ExtremeWind/aws/"+\
-		"all_daily_max_wind_gusts_sa_1979_2017.pkl"),"Port Augusta")
+	aws = pd.read_pickle("/short/eg3/ab4502/ExtremeWind/aws/all_daily_max_wind_gusts_sa_1979_2017.pkl")
+	if remove_incomplete_years:
+		aws = remove_incomplete_aws_years(aws,"Port Augusta")
 	erai = pd.read_pickle("/g/data/eg3/ab4502/ExtremeWind/points/"+\
 		"erai_fc_points_1979_2017_daily_max.pkl")
 
 	#Combine ERA-Interim, AWS and BARRA-R daily max wind gusts 
 	if include_barra:
 	    barra_r = pd.read_pickle("/g/data/eg3/ab4502/ExtremeWind/points/barra_r_fc/"+\
-			"barra_r_fc_points_daily_2006_2016.pkl")
-	    barra_r_smooth = pd.read_pickle("/g/data/eg3/ab4502/ExtremeWind/points/barra_r_fc/"+\
-			"barra_r_fc_points_smooth_daily_2006_2016.pkl")
+			"barra_r_fc_points_daily_2003_2016.pkl")
 	    barra_ad = pd.read_pickle("/g/data/eg3/ab4502/ExtremeWind/points/barra_ad/"+\
 			"barra_ad_points_daily_2006_2016.pkl")
-	    barra_ad_smooth = pd.read_pickle("/g/data/eg3/ab4502/ExtremeWind/points/barra_ad/"+\
-			"barra_ad_points_mean_daily_2006_2016.pkl")
 	    combined = pd.concat([aws.set_index(["date","stn_name"]).\
 		rename(columns={"wind_gust":"aws_gust"})\
 		,erai.set_index(["date","loc_id"]).rename(columns={"wg10":"erai_gust"}).erai_gust,\
 		barra_ad.reset_index().set_index(["date","loc_id"]).\
 		rename(columns={"max_max_wg10":"barra_ad_max_gust",\
 		"max_wg10":"barra_ad_gust"})[["barra_ad_max_gust","barra_ad_gust"]],
-		#barra_ad_smooth.reset_index().set_index(["date","loc_id"]).\
-		#rename(columns={"max_max_wg10":"barra_ad_smooth_max_gust",\
-		#"max_wg10":"barra_ad_smooth_gust"})[["barra_ad_smooth_max_gust","barra_ad_smooth_gust"]],
 		barra_r.reset_index().set_index(["date","loc_id"]).\
 		rename(columns={"max_wg10":"barra_r_gust"}).barra_r_gust,\
-		#barra_r_smooth.reset_index().set_index(["date","loc_id"]).\
-		#rename(columns={"max_wg10":"barra_r_smooth_gust"})["barra_r_smooth_gust"]\
 		],axis=1).dropna()
 	else:
 	    combined = pd.concat([aws.set_index(["date","stn_name"]).\
@@ -126,25 +118,53 @@ def quantile_match(combined,obs_name,model_name):
 	return combined
 
 def plot_scatter(combined,model_list,name_list,location=False):
-	plt.figure(figsize=[14,6])
+	import matplotlib.colors as colors
+	fig = plt.figure(figsize=[15,7])
 	if location != False:
 		combined = combined[combined.index.get_level_values(1) == location]
+
 	for n in np.arange(0,len(model_list)):
 		plt.subplot(1,len(model_list),n+1)
-		if n == 1:
-			plt.title(location,fontsize="large")
 		mod_rho = rho(combined["aws_gust"],combined[model_list[n]]).correlation
-		leg = name_list[n] + "\n" + str(round(mod_rho,3))
-		plt.scatter(combined["aws_gust"],combined[model_list[n]],label=leg)
-		plt.legend()
-		plt.plot([0,50],[0,50],"k")
-		plt.xlim([0,45])
-		plt.ylim([0,45])
-		plt.xlabel("AWS")
-		plt.ylabel("Model")
-	plt.savefig("/home/548/ab4502/working/ExtremeWind/figs/scatter/aws/"+location+".png",\
-		bbox_inches="tight")
-	plt.close()
+		bias = np.mean(combined[model_list[n]]) / np.mean(combined["aws_gust"])
+		mae = np.mean(combined[model_list[n]] - combined["aws_gust"])
+		rmse = np.sqrt(np.mean(np.power((combined[model_list[n]] - combined["aws_gust"]),2)))
+		leg = "r = " + str(round(mod_rho,3)) + "\nMAE = " + str(round(mae,3)) + "\nRMSE = "+\
+				str(round(rmse,3))
+		#plt.scatter(combined["aws_gust"],combined[model_list[n]],label=leg)
+		plt.scatter(combined[combined["aws_gust"]>=30]["aws_gust"],\
+				combined[combined["aws_gust"]>=30][model_list[n]],color="k",marker="o")
+		h = plt.hist2d(combined["aws_gust"],combined[model_list[n]],\
+				bins=20,range=[[0,40],[0,40]],norm=colors.LogNorm(.1,1000),cmap=plt.get_cmap("Greys",8))
+		#plt.legend(numpoints=0,fontsize="xx-large",loc=2)
+		plt.plot([0,50],[0,50],"r")
+		plt.xlim([0,40])
+		plt.ylim([0,40])
+		ax = plt.gca()
+		ax.tick_params(labelsize="xx-large")
+		ax.annotate(leg, xy=(2,39), xycoords='data',size="xx-large",ha="left",va="top",\
+				bbox=dict(boxstyle='round', fc='w'))
+		if n==1:
+			ax.set_title(location,fontsize="xx-large")
+		if location != "Mount Gambier":
+			ax = plt.gca()
+			ax.set_xticklabels("")			
+		else:
+			ax = plt.gca()
+			ax.set_xticks([0,10,20,30,40])			
+			ax.set_xticklabels(['0','10','20','30','40'])			
+	   		cax = fig.add_axes([0.2,0.05,0.6,0.01])
+	   		cb = plt.colorbar(h[-1],cax,orientation="horizontal",extend="max")
+	   		cb.ax.tick_params(labelsize="xx-large")
+		if n>0:
+			ax = plt.gca()
+			ax.set_yticklabels("")			
+	#plt.savefig("/short/eg3/ab4502/figs/ExtremeWind/scatter_"+location+".tiff",\
+	#	bbox_inches="tight")
+	#plt.savefig("/home/548/ab4502/working/ExtremeWind/figs/scatter/aws/"+location+".png",\
+	#	bbox_inches="tight")
+	plt.show()
+    plt.close()
 
 def plot_monthly_dist(combined,gust_list,threshold):
 	for n in np.arange(0,len(gust_list)):
@@ -243,7 +263,7 @@ def test_dist_assumption(combined,gust_type,stns=False,threshold=0):
 	plt.show()
 
 if __name__ == "__main__":
-	df = load_wind_gusts(True)
+	df = load_wind_gusts(True,remove_incomplete_years=False)
 	#test_dist_assumption(df,["barra_r_gust"],stns=False,threshold=20)
 	[plot_scatter(df,["erai_gust","barra_r_gust","barra_ad_gust"],["ERA-Interim","BARRA-R","BARRA-AD"],\
 		location=l) for l in ["Adelaide AP","Woomera","Port Augusta","Mount Gambier"]]

@@ -5,6 +5,7 @@ from plot_param import *
 from sklearn.ensemble import RandomForestClassifier
 from sklearn.model_selection import train_test_split
 from sklearn.linear_model import LogisticRegression
+from sklearn.linear_model import LinearRegression
 from sklearn.tree import DecisionTreeClassifier
 
 def load_data(season=False):
@@ -69,6 +70,29 @@ def decision_tree(train,test,features):
 	
 	return (probs,preds,obs)	
 
+def logit2():
+
+	df,t1,t2 = analyse_jdh_events()
+
+	train,test = train_test_split(df.rename(columns={"jdh":"events"}))
+
+	logit = LogisticRegression()
+	logit_model = logit.fit(train[["mlm","dcape","s06","ml_cape"]],train["events"])
+	probs = logit_model.predict_proba(test[["mlm","dcape","s06","ml_cape"]])
+	obs = np.array(test["events"])
+	preds = logit_model.predict(test[["mlm","dcape","s06","ml_cape"]])
+	
+	return (probs,preds,obs)	
+
+def olr(train,test,features):
+	logit = LinearRegression()
+	logit_model = logit.fit(train[features],train["events"])
+	probs = logit_model.predict_proba(test[features])
+	obs = np.array(test["events"])
+	preds = logit_model.predict(test[features])
+	
+	return (probs,preds,obs)	
+
 def logit(train,test,features):
 	logit = LogisticRegression()
 	logit_model = logit.fit(train[features],train["events"])
@@ -91,12 +115,16 @@ if __name__=="__main__":
 	#erai_df = load_data(season=False)	#season can be False, warm or cold
 	df,warm_df,cool_df = load_jdh_events()
 	train,test = train_test_split(df.rename(columns={"jdh":"events"}))
-	feats = ["mu_cape","mu_cin","relhum850-500",\
-			"s06","wg10"]
+	feats = ["ml_cape","ml_cin","mlm",\
+			"s06","dcape","wg10"]
+	probs,preds,obs = olr(train,test,feats)
+	plt.hist(probs[:,1],log=True);plt.show()
+	print_stats(preds,obs,"LINEAR REGRESSION")
+	probs,preds,obs = logit(train,test,feats)
+	plt.hist(probs[:,1],log=True);plt.show()
+	print_stats(preds,obs,"LOGISTIC REGRESSION")
 	probs,preds,obs = random_forest(train,test,feats)
 	print_stats(preds,obs,"RF")
-	probs,preds,obs = logit(train,test,feats)
-	print_stats(preds,obs,"LOGISTIC REGRESSION")
 	probs,preds,obs = decision_tree(train,test,feats)
 	print_stats(preds,obs,"DECISION TREE")
 

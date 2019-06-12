@@ -11,7 +11,6 @@ import datetime as dt
 import glob
 import matplotlib.pyplot as plt
 from mpl_toolkits.basemap import Basemap
-from matplotlib.mlab import griddata
 import pandas as pd
 
 from calc_param import *
@@ -253,9 +252,19 @@ def get_terrain(lat_ind,lon_ind):
 	terrain_file.close()
 	return terrain
 
+def get_mask(lon,lat):
+
+	#Take 1d lat lon data from an already-loaded BARRA-R domain (e.g. sa_small or aus) and return a land-sea mask
+	nat_lon,nat_lat = get_lat_lon()
+	lon_ind = np.where((nat_lon >= lon[0]) & (nat_lon <= lon[-1]))[0]
+	lat_ind = np.where((nat_lat >= lat[0]) & (nat_lat <= lat[-1]))[0]
+	lsm = nc.Dataset("/g/data/ma05/BARRA_R/v1/static/lnd_mask-an-slv-PT0H-BARRA_R-v1.nc").variables["lnd_mask"][:]
+	lsm_domain = lsm[lat_ind[0]:lat_ind[-1]+1,lon_ind[0]:lon_ind[-1]+1]
+	
+	return lsm_domain
 
 def remove_corrupt_dates(date_list):
-	corrupt_dates = [dt.datetime(2014,11,22,06,0)]
+	corrupt_dates = [dt.datetime(2014,11,22,6,0)]
 	date_list = np.array(date_list)
 	for i in np.arange(0,len(corrupt_dates)):
 		date_list = date_list[~(date_list==corrupt_dates[i])]

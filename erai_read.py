@@ -11,7 +11,6 @@ import datetime as dt
 import glob
 import matplotlib.pyplot as plt
 from mpl_toolkits.basemap import Basemap
-from matplotlib.mlab import griddata
 import pandas as pd
 
 from calc_param import *
@@ -304,6 +303,16 @@ ta_6hrs_ERAI_historical_an-pl_"+"201201"+"*.nc")[0])
 	lat = ta_file["lat"][:]
 	ta_file.close()
 	return [lon,lat]
+
+def get_mask(lon,lat):
+	#Return lsm for a given domain (with lats=lat and lons=lon)
+	nat_lon,nat_lat = get_lat_lon()
+	lon_ind = np.where((nat_lon >= lon[0]) & (nat_lon <= lon[-1]))[0]
+	lat_ind = np.where((nat_lat >= lat[-1]) & (nat_lat <= lat[0]))[0]
+	lsm = reform_lsm(nat_lon,nat_lat)
+	lsm_domain = lsm[(lat_ind[0]):(lat_ind[-1]+1),(lon_ind[0]):(lon_ind[-1]+1)]
+
+	return lsm_domain
 
 def get_lat_lon_inds(points,lon,lat):
 	lsm_new = reform_lsm(lon,lat)

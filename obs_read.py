@@ -5,16 +5,17 @@ import math
 import os
 from calc_param import *
 
-def calc_obs():
+def calc_obs(start_date,end_date):
 
 	#Read in upper air obs for 2300 UTC soundings 2010-2015 Adelaide AP
 
 	names = ["record_id","stn_id","date_time","ta","ta_quality","dp","dp_quality",\
 		"rh","rh_quality","ws","ws_quality","wd","wd_quality","p","p_quality",
 		"z","z_quality","symbol"]
-	df = pd.read_csv("/short/eg3/ab4502/ExtremeWind/adelaideAP_obs/UA01D_Data_023034_999999999555752.txt",names=names,header=0,dtype={"ta":np.float64},na_values = ["     ","      ","   ","          "," "])
+	df = pd.read_csv("/short/eg3/ab4502/ExtremeWind/upper_air/UA01D_Data_023034_999999999624286.txt",names=names,header=0,dtype={"ta":np.float64},na_values = ["     ","      ","   ","          "," "])
 	times = [dt.datetime.strptime(x,"%d/%m/%Y %H:%M") for x in df["date_time"]]
 	df["date"] = times
+	df = df[(df["date"] >= start_date) & (df["date"] <= end_date)].reset_index()
 
 	#Convert wind speed and direction to U and V
 	df = uv(df)
@@ -60,6 +61,11 @@ def calc_obs():
 					temp_va[:,0,:],[138.5196],[-34.9524],[138.5196],[-34.9524]\
 					,params,["Adelaide AP"],"points_wrf")
 			params_df = params_df.append(temp_df)
+
+	params_df = params_df.reset_index()
+	params_df["date"] = [dt.datetime(params_df["year"][t],params_df["month"][t],params_df["day"][t],\
+			params_df["hour"][t]) for t in np.arange(params_df.shape[0])]
+	params_df = params_df.set_index("date")
 
 	return params_df
 
@@ -272,7 +278,7 @@ def read_aws_daily_aus():
 	df = df[df.year<=2017]
 	df.to_pickle("/short/eg3/ab4502/ExtremeWind/aws/all_daily_max_wind_gusts_aus_1979_2017.pkl")
 
-	return aws
+	return df
 
 def read_aws_1979(loc,resample=False):
 	#Read half-hourly AWS data which has been downloaded for 1979-2017 (although, half 
@@ -448,9 +454,9 @@ def read_non_synoptic_wind_gusts():
 	df_full.dates.loc[df_full["dates"]==dt.datetime(2015,7,12)] = dt.datetime(2015,12,7)
 
 	df_full.dates.loc[df_full["dates"]==dt.datetime(2004,12,10)] = dt.datetime(2004,10,12)
-	df_full.dates.loc[df_full["dates"]==dt.datetime(2005,10,06)] = dt.datetime(2005,06,10)
-	df_full.dates.loc[df_full["dates"]==dt.datetime(2008,05,12)] = dt.datetime(2008,12,05)
-	df_full.dates.loc[df_full["dates"]==dt.datetime(2010,01,12)] = dt.datetime(2010,12,01)
+	df_full.dates.loc[df_full["dates"]==dt.datetime(2005,10,6)] = dt.datetime(2005,6,10)
+	df_full.dates.loc[df_full["dates"]==dt.datetime(2008,5,12)] = dt.datetime(2008,12,5)
+	df_full.dates.loc[df_full["dates"]==dt.datetime(2010,1,12)] = dt.datetime(2010,12,1)
 	df_full.dates.loc[df_full["dates"]==dt.datetime(2011,9,11)] = dt.datetime(2011,11,9)
 	df_full.dates.loc[df_full["dates"]==dt.datetime(2012,5,9)] = dt.datetime(2012,9,5)
 	df_full.dates.loc[df_full["dates"]==dt.datetime(2015,7,1)] = dt.datetime(2015,1,7)
@@ -562,12 +568,12 @@ def read_clim_ind(ind):
 			index_col=0,sep="  ",skiprows=[0,1,2],skipfooter=3,engine="python")
 		time_series = pd.DataFrame(columns=np.append(names,"ANN"),index=years)
 		for y in years:
-		    for s in np.arange(0,len(seasons)):
-			if s == 3:	#IF NDJ
-				mean = np.mean([df.loc[y,seasons[s][0]],df.loc[y,seasons[s][1]],\
+			for s in np.arange(0,len(seasons)):
+				if s == 3:	#IF NDJ
+					mean = np.mean([df.loc[y,seasons[s][0]],df.loc[y,seasons[s][1]],\
 					df.loc[y+1,seasons[s][2]]])
-			else:
-				mean = np.mean([df.loc[y,seasons[s][0]],df.loc[y,seasons[s][1]],\
+				else:
+					mean = np.mean([df.loc[y,seasons[s][0]],df.loc[y,seasons[s][1]],\
 					df.loc[y,seasons[s][2]]])
 			time_series.loc[y,names[s]] = mean
 			time_series.loc[y,"ANN"] = np.mean(df.loc[y,:])
@@ -578,12 +584,12 @@ def read_clim_ind(ind):
 			index_col=0,sep="  ",skiprows=[0,1,2],skipfooter=6,engine="python")
 		time_series = pd.DataFrame(columns=np.append(names,"ANN"),index=years)
 		for y in years:
-		    for s in np.arange(0,len(seasons)):
-			if s == 3:	#IF NDJ
-				mean = np.mean([df.loc[y,seasons[s][0]],df.loc[y,seasons[s][1]],\
+			for s in np.arange(0,len(seasons)):
+				if s == 3:	#IF NDJ
+					mean = np.mean([df.loc[y,seasons[s][0]],df.loc[y,seasons[s][1]],\
 					df.loc[y+1,seasons[s][2]]])
-			else:
-				mean = np.mean([df.loc[y,seasons[s][0]],df.loc[y,seasons[s][1]],\
+				else:
+					mean = np.mean([df.loc[y,seasons[s][0]],df.loc[y,seasons[s][1]],\
 					df.loc[y,seasons[s][2]]])
 			time_series.loc[y,names[s]] = mean
 			time_series.loc[y,"ANN"] = np.mean(df.loc[y,:])
@@ -594,13 +600,13 @@ def read_clim_ind(ind):
 			index_col=0,sep="  | ",engine="python")
 		time_series = pd.DataFrame(columns=np.append(names,"ANN"),index=years)
 		for y in years:
-		    for s in np.arange(0,len(seasons)):
-			if s == 3:	#IF NDJ
-				mean = np.mean([df.loc[y,seasons[s][0]],df.loc[y,seasons[s][1]],\
+			for s in np.arange(0,len(seasons)):
+				if s == 3:	#IF NDJ
+					mean = np.mean([df.loc[y,seasons[s][0]],df.loc[y,seasons[s][1]],\
 					df.loc[y+1,seasons[s][2]]])
-			else:
-				mean = np.mean([df.loc[y,seasons[s][0]],df.loc[y,seasons[s][1]],\
-				df.loc[y,seasons[s][2]]])
+				else:
+					mean = np.mean([df.loc[y,seasons[s][0]],df.loc[y,seasons[s][1]],\
+					df.loc[y,seasons[s][2]]])
 			time_series.loc[y,names[s]] = mean
 			time_series.loc[y,"ANN"] = np.mean(df.loc[y,:])
 

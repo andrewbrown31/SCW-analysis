@@ -5,54 +5,201 @@
 from event_analysis import *
 import matplotlib.colors as colors
 
-def environment_scatter(df,title,event,dlm=26,s06=30,dcape_mf=350,dcape_sf=500):
+def environment_scatter(df,title,event,mlm=26,s06=30,dcape_mf=350,dcape_sf=500):
 	#CAPE/S06/DCAPE/DLM
 
 	for x in [s06]:
 	   cnt=1
-	   fig,ax = plt.subplots(figsize=[15,11])
-	   for c in [-1,0,100,200,400,600]:
-		plt.subplot(3,2,cnt)
-		h = plt.hist2d(df[(df[event]==0) & (df["ml_cape"]>c)]["dlm"],\
+	   for c in [-1,0,200]:
+	   	fig,ax = plt.subplots()
+		#plt.subplot(3,2,cnt)
+		h = plt.hist2d(df[(df[event]==0) & (df["ml_cape"]>c)]["mlm"],\
 			df[(df[event]==0) & (df["ml_cape"]>c)]["dcape"],bins=20,\
 			norm=colors.LogNorm(1,10000),cmap=plt.get_cmap("Greys",8))
 		#High S06 high CAPE
-		plt.scatter(df[(df[event]==1) & (df.s06>=x) & (df.ml_cape>c)]["dlm"],df[(df[event]==1) & \
-			(df.s06>x) & (df.ml_cape>c)]["dcape"],color="b",\
-			label="S06 >= "+str(x)+", MLCAPE > X")
+		if c == -1:
+			lab_mf1 = "S06 >= "+str(x)+" m.s$^{-1}$, MLCAPE >= 0" + " J.kg$^{-1}$"
+			lab_mf2 = "S06 < "+str(x)+" m.s$^{-1}$, MLCAPE >= 0" + " J.kg$^{-1}$"
+			lab_null = "MLCAPE >= 0" + " J.kg$^{-1}$"
+		elif c == 0:
+			lab_mf1 = "S06 >= "+str(x)+" m.s$^{-1}$, MLCAPE > 0" + " J.kg$^{-1}$"
+			lab_mf2 = "S06 < "+str(x)+" m.s$^{-1}$, MLCAPE > 0" + " J.kg$^{-1}$"
+			lab_sf1 = "S06 >= "+str(x)+" m.s$^{-1}$, MLCAPE = 0" + " J.kg$^{-1}$"
+			lab_sf2 = "S06 < "+str(x)+" m.s$^{-1}$, MLCAPE = 0" + " J.kg$^{-1}$"
+			lab_null = "MLCAPE > 0" + " J.kg$^{-1}$"
+		else:
+			lab_mf1 = "S06 >= "+str(x)+" m.s$^{-1}$, MLCAPE >= " +str(c)+ " J.kg$^{-1}$"
+			lab_mf2 = "S06 < "+str(x)+" m.s$^{-1}$, MLCAPE >= " + str(c) + " J.kg$^{-1}$"
+			lab_sf1 = "S06 >= "+str(x)+" m.s$^{-1}$, MLCAPE < " + str(c) + " J.kg$^{-1}$"
+			lab_sf2 = "S06 < "+str(x)+" m.s$^{-1}$, MLCAPE < " + str(c) + " J.kg$^{-1}$"
+			lab_null = "MLCAPE > "+ str(c) + " J.kg$^{-1}$"
+		plt.scatter(df[(df[event]==1) & (df.s06>=x) & (df.ml_cape>c)]["mlm"],df[(df[event]==1) & \
+			(df.s06>x) & (df.ml_cape>c)]["dcape"],color="darkblue",\
+			label=lab_mf1)
 		#High S06 low CAPE
-		plt.scatter(df[(df[event]==1) & (df.s06>=x) & (df.ml_cape<=c)]["dlm"],df[(df[event]==1) & \
-			(df.s06>x) & (df.ml_cape<=c)]["dcape"],color="b",marker="^",\
-			label="S06 >= "+str(x)+", MLCAPE <= X") 
+		if c >= 0:
+			plt.scatter(df[(df[event]==1) & (df.s06>=x) & (df.ml_cape<=c)]["mlm"],df[(df[event]==1) & \
+			   (df.s06>x) & (df.ml_cape<=c)]["dcape"],color="lightblue",marker="o",\
+			   label=lab_sf1) 
 		#Low S06 high CAPE
-		plt.scatter(df[(df[event]==1) & (df.s06<x) & (df.ml_cape>c)]["dlm"],df[(df[event]==1) & \
-			(df.s06<x) & (df.ml_cape>c)]["dcape"],color="r",\
-			label="S06 < "+str(x)+", MLCAPE > X")
+		plt.scatter(df[(df[event]==1) & (df.s06<x) & (df.ml_cape>c)]["mlm"],df[(df[event]==1) & \
+			(df.s06<x) & (df.ml_cape>c)]["dcape"],color="red",\
+			label=lab_mf2)
 		#Low S06 low CAPE
-		plt.scatter(df[(df[event]==1) & (df.s06<x) & (df.ml_cape<=c)]["dlm"],df[(df[event]==1) & \
-			(df.s06<x) & (df.ml_cape<=c)]["dcape"],color="r",marker="^",\
-			label="S06 < "+str(x)+", MLCAPE <= X")
-		plt.title("X = " + str(c) + " J/kg")
-		if cnt in [5,6]:
-			plt.xlabel("MLM (m/s)",fontsize="x-large")
-		if cnt in [1,3,5]:
-			plt.ylabel("DCAPE (J/kg)",fontsize="x-large")
+		if c >= 0:
+			plt.scatter(df[(df[event]==1) & (df.s06<x) & (df.ml_cape<=c)]["mlm"],df[(df[event]==1) & \
+			   (df.s06<x) & (df.ml_cape<=c)]["dcape"],color="orange",marker="o",\
+			   label=lab_sf2)
+		#plt.title("X = " + str(c) + " J/kg")
+		plt.plot([-100,-100],[-100,-100],color="k",marker="s",linestyle="none",label=lab_null)
+		plt.xlabel("MLM (m.s$^{-1}$)",fontsize="xx-large")
+		plt.ylabel("DCAPE (J.kg$^{-1}$)",fontsize="xx-large")
 		plt.ylim([-10,2000])
 		plt.xlim([-1,40])
 		#DRAW CONDS
-		plt.plot([dlm,dlm],[0,dcape_sf],color="b",linestyle="--")
-		plt.plot([dlm,dlm],[dcape_mf,2000],color="r",linestyle="--")
-		plt.plot([dlm,40],[dcape_sf,dcape_sf],"b--")
-		plt.plot([dlm,0],[dcape_mf,dcape_mf],"r--")
-		cnt=cnt+1
-	   plt.subplot(3,2,cnt-1)
-	   plt.legend(bbox_to_anchor=(2,2),fontsize="x-large")
-	   plt.subplots_adjust(right=0.7)
-	   plt.suptitle(title)
-	   cax = fig.add_axes([0.1,0.03,0.6,0.01])
-	   cb = plt.colorbar(h[-1],cax,orientation="horizontal",extend="max")
-	   cb.ax.tick_params(labelsize="x-large")
-	   plt.show()
+		plt.plot([mlm,mlm],[0,dcape_sf],color="b",linestyle="--")
+		plt.plot([mlm,mlm],[dcape_mf,2000],color="r",linestyle="--")
+		plt.plot([mlm,40],[dcape_sf,dcape_sf],"b--")
+		plt.plot([mlm,0],[dcape_mf,dcape_mf],"r--")
+		#cnt=cnt+1
+	   	#plt.subplot(3,2,cnt-1)
+	   	plt.legend(bbox_to_anchor=(-0.5,0),fontsize="xx-large")
+	   	plt.subplots_adjust(bottom=0.2)
+	   	#plt.suptitle(title)
+	   	cax = fig.add_axes([0.1,0.03,0.6,0.01])
+	   	cb = plt.colorbar(h[-1],cax,orientation="horizontal",extend="max")
+	   	cb.ax.tick_params(labelsize="xx-large")
+	   	ax.tick_params(labelsize="xx-large")
+	   	#plt.savefig("/home/548/ab4502/working/ExtremeWind/figs/scatter/environment_scatter_sa_small_"+str(c)+"_"+str(x)+".png",bbox_inches="tight")
+	   	plt.savefig("/short/eg3/ab4502/figs/ExtremeWind/environment_scatter_sa_small_"+str(c)+"_"+str(x)+".tiff",bbox_inches="tight")
+
+def environment_scatter2(domain,event,param1,param2,param3=False,fit_points=False):
+	#CAPE/S06/DCAPE/DLM
+
+	if event == "jdh":
+		df = analyse_events(event,domain)
+	elif (event == "extreme") | (event == "strong"):
+		df = analyse_events("aws",domain)
+	else:
+		print("EVENT MUST BE jdh, strong OR extreme")
+
+	fig,ax = plt.subplots()
+	#plt.subplot(3,2,cnt)
+
+	[cmap1,mean_levels1,extreme_levels1,cb_lab1,range1,log_plot1,threshold1] = contour_properties(param1)
+	[cmap2,mean_levels2,extreme_levels2,cb_lab2,range2,log_plot2,threshold2] = contour_properties(param2)
+	if (log_plot1) & (~log_plot2):
+		ax.set_xscale("symlog")
+		plt.xlim([0,range1[1]])
+		base = len(str(int(((range1[1]/10)))))
+		factor = range1[1] / np.power(10,base)
+		xbin = factor*np.logspace(1,base,10)
+		ybin = np.linspace(0,range2[1],20)
+		h = ax.hist2d(df[(df[event]==0)][param1],\
+			df[(df[event]==0)][param2],\
+			bins = [np.concatenate(([0],xbin)),ybin],\
+			norm=colors.LogNorm(.1,10000),cmap=plt.get_cmap("Greys",14))
+		#try:
+		x = np.linspace(plt.xlim()[0]+1,plt.xlim()[1]+1)
+		c = fit_points[0][1]
+		m = (fit_points[1][1]-float(fit_points[0][1])) / np.log(fit_points[1][0]/float(fit_points[0][0]))
+		plt.plot(x, m * np.log(x) + c, color="k" ) 
+		df["eqn"] = m * np.log(df[param1]) + c
+		misses = ((df[param2] < df["eqn"]) & (df[event] == 1)).sum()
+		hits = ((df[param2] > df["eqn"]) & (df[event] == 1)).sum()
+		cn = ((df[param2] < df["eqn"]) & (df[event] == 0)).sum()
+		fa = ((df[param2] > df["eqn"]) & (df[event] == 0)).sum()
+		title1 = "m = "+str(round(float(m),3))+", c = "+str(round(c,3))
+		title2 = "Below line: Events = "+str(misses)+", Non-events = "+str(cn)
+		title3 = "Above line: Events = "+str(hits)+", Non-events = "+str(fa)
+		plt.title(title1 + "\n" + title2+ "\n" + title3)
+		#except:
+		#	pass
+	elif (~log_plot1) & (log_plot2):
+		ax.set_yscale("symlog",linthreshy=0.1)
+		plt.ylim([0,range2[1]])
+		base = len(str(int(((range2[1]/10)))))
+		factor = range2[1] / np.power(10,base)
+		xbin = np.linspace(0,range1[1],20)
+		ybin = factor*np.logspace(1,base,10)
+		h = ax.hist2d(df[(df[event]==0)][param1],\
+			df[(df[event]==0)][param2],\
+			bins = [xbin,np.concatenate(([0],ybin))],\
+			norm=colors.LogNorm(.1,10000),cmap=plt.get_cmap("Greys",14))
+
+		try:
+			x = np.linspace(plt.xlim()[0],plt.xlim()[1]+1)
+			lam = fit_points[0][1]
+			gam = np.log(fit_points[1][1]/float(fit_points[0][1])) / float(fit_points[1][0]-fit_points[0][0])
+			plt.plot(x, lam * \
+				np.exp( x * gam )  \
+				, color="k" ) 
+			df["eqn"] = lam * np.exp(df[param1] * gam)
+			misses = ((df[param2] < df["eqn"]) & (df[event] == 1)).sum()
+			hits = ((df[param2] > df["eqn"]) & (df[event] == 1)).sum()
+			cn = ((df[param2] < df["eqn"]) & (df[event] == 0)).sum()
+			fa = ((df[param2] > df["eqn"]) & (df[event] == 0)).sum()
+			title1 = "Lambda = "+str(round(float(lam),3))+", Gamma = "+str(round(gam,3))
+			title2 = "Below line: Events = "+str(misses)+", Non-events = "+str(cn)
+			title3 = "Above line: Events = "+str(hits)+", Non-events = "+str(fa)
+			plt.title(title1 + "\n" + title2+ "\n" + title3)
+		except:
+			pass
+	elif (log_plot1) & (log_plot2):
+		print("loglog")
+		ax.set_yscale("symlog",linthreshy=0.1)
+		ax.set_xscale("symlog",linthreshy=0.1)
+		plt.xlim([0,range1[1]])
+		plt.ylim([0,range2[1]])
+		base1 = len(str(int(((range1[1]/10)))))
+		base2 = len(str(int(((range2[1]/10)))))
+		factor1 = range1[1] / float(np.power(10,base1))
+		factor2 = range2[1] / float(np.power(10,base2))
+		xbin = factor1*np.logspace(.1,base1,10)
+		ybin = factor2*np.logspace(.1,base2,10)
+		h = ax.hist2d(df[(df[event]==0)][param1],\
+			df[(df[event]==0)][param2],\
+			bins = [np.concatenate(([0],xbin)),np.concatenate(([0],ybin))],\
+			norm=colors.LogNorm(.1,10000),cmap=plt.get_cmap("Greys",14))
+		
+	else:
+		base = len(str(int(((range2[1]/10)))))
+		h = ax.hist2d(df[(df[event]==0)][param1],\
+			df[(df[event]==0)][param2],\
+			bins = 20,\
+			norm=colors.LogNorm(.1,10000),cmap=plt.get_cmap("Greys",14))
+		x = np.linspace(plt.xlim()[0],plt.xlim()[1]+1)
+		try:
+			c = fit_points[0][1]
+			m = (fit_points[1][1] - fit_points[0][1]) / float(fit_points[1][0] - fit_points[0][0])
+			plt.plot(x, m * x + c, color="k")
+			df["eqn"] = c + (df[param1] * m)
+			misses = ((df[param2] < df["eqn"]) & (df[event] == 1)).sum()
+			hits = ((df[param2] > df["eqn"]) & (df[event] == 1)).sum()
+			cn = ((df[param2] < df["eqn"]) & (df[event] == 0)).sum()
+			fa = ((df[param2] > df["eqn"]) & (df[event] == 0)).sum()
+			title1 = "m = "+str(round(float(m),3))+", c = "+str(round(c,3))
+			title2 = "Below line: Events = "+str(misses)+", Non-events = "+str(cn)
+			title3 = "Above line: Events = "+str(hits)+", Non-events = "+str(fa)
+			plt.title(title1 + "\n" + title2+ "\n" + title3)
+		except:
+			pass
+
+	plt.colorbar(h[3])
+	plt.ylabel(param2)
+	plt.xlabel(param1)
+		
+	
+	if param3 == False:
+		ax.scatter(df[(df[event]==1)][param1],df[(df[event]==1)][param2])
+	else:	
+		plt.scatter(df[(df[event]==1)][param1],df[(df[event]==1)][param2],c=df[(df[event]==1)][param3])
+		plt.colorbar()
+
+
+
+	plt.show()
+
 
 def test_daily_cond():
 
@@ -167,12 +314,16 @@ if __name__ == "__main__":
 
 	#6_HOURLY COND TESTING....
 	#LOAD 6-HOURLY ERA-INTERIM DATA
-	df6 = pd.read_pickle("/g/data/eg3/ab4502/ExtremeWind/points/erai_points_1979_2017.pkl")
-	df,t1,t2 = analyse_jdh_events()
-	test_cond_6hr(df6,pd.DataFrame(df[["wind_gust","jdh"]]),False)
+	#df6 = pd.read_pickle("/g/data/eg3/ab4502/ExtremeWind/points/erai_points_sa_small_1979_2017.pkl")
+	df = analyse_events("jdh","sa_small","barra")
+	#test_cond_6hr(df6,pd.DataFrame(df[["wind_gust","jdh"]]),False)
 
 	test  = False
-	plot = True
+	plot = False
+	plot_boxplot = False
+
+	#environment_scatter2("sa_small","jdh","mmp","dcp")
+	environment_scatter(df,"BARRA","jdh")
 	
 	if test:
 	    import itertools
@@ -242,27 +393,33 @@ if __name__ == "__main__":
 	    np.save("/short/eg3/ab4502/ExtremeWind/far.npy",far_out)
 	    np.save("/short/eg3/ab4502/ExtremeWind/params.npy",l_out)
 
+	if plot_boxplot:
 
-	#Inspect station wind speed distributions for the two types of environmental conditions
-	#SF
-	sf = ( (df["s06"]>=30) & (df["dlm"]>=26) & (df["dcape"]<500) )
-	#MF
-	mf = ( (df["ml_cape"]>120) & (df["dcape"]>350) & (df["dlm"]<26) )
-	df["sf"]=sf;df["mf"]=mf
-	df=df.dropna(subset=["wind_gust"])
-	plt.boxplot([df[(df.sf)]["wind_gust"].dropna(),df[(df.mf)]["wind_gust"].dropna(),\
-		df[~(df.sf | df.mf)]["wind_gust"].dropna()],\
-		labels=["Synoptic forcing\n"+"("+str(df.mf.sum())+")",\
-		"Mesoscale forcing\n"+"("+str(df.sf.sum())+")",\
-		"Neither condition met\n"+"("+str((~(df.sf | df.mf)).sum())+")"],sym="+")
-	plt.plot(np.ones(((df.sf)&(df.jdh==1)).sum())+0.1,df[(df.sf)&(df.jdh==1)]["wind_gust"].dropna(),\
-		color="g",marker="^",linestyle="none")
-	plt.plot(2*np.ones(((df.mf)&(df.jdh==1)).sum())+0.1,df[(df.mf)&(df.jdh==1)]["wind_gust"].dropna(),\
-		color="g",marker="^",linestyle="none")
-	plt.plot(3*np.ones(((~(df.sf | df.mf))&(df.jdh==1)).sum())+0.1,df[(~(df.sf | df.mf))&(df.jdh==1)]["wind_gust"].dropna(),\
-		color="g",marker="^",linestyle="none")
-	plt.ylabel("Daily maximum station wind gust (m/s)")
-	#plt.show()
+		#Inspect station wind speed distributions for the two types of environmental conditions
+		plt.figure(figsize=[8,5])
+		#SF
+		#sf = ( (df["s06"]>=30) & (df["mlm"]>=26) & (df["dcape"]<500) )
+		#MF
+		#mf = ( (df["ml_cape"]>120) & (df["dcape"]>350) & (df["mlm"]<26) )
+		#df["sf"]=sf;df["mf"]=mf
+		sf = df["sf"];mf=df["mf"]
+		df=df.dropna(subset=["wind_gust"])
+		plt.boxplot([df[(df.sf==1)]["wind_gust"].dropna(),df[(df.mf==1)]["wind_gust"].dropna(),\
+			df[~((df.sf==1) | (df.mf==1))]["wind_gust"].dropna()],\
+			labels=["Synoptic\nforcing\n"+"("+str(int(df.mf.sum()))+")",\
+			"Mesoscale\nforcing\n"+"("+str(int(df.sf.sum()))+")",\
+			"Neither condition\nmet\n"+"("+str((~((df.sf==1) | (df.mf==1))).sum())+")"],sym="+")
+		plt.plot(np.ones(((df.sf==1)&(df.jdh==1)).sum())+0.1,df[(df.sf==1)&(df.jdh==1)]["wind_gust"].dropna(),\
+			color="g",marker="^",linestyle="none")
+		plt.plot(2*np.ones(((df.mf==1)&(df.jdh==1)).sum())+0.1,df[(df.mf==1)&(df.jdh==1)]["wind_gust"].dropna(),\
+			color="g",marker="^",linestyle="none")
+		plt.plot(3*np.ones(((~((df.sf==1) | (df.mf==1)))&(df.jdh==1)).sum())+0.1,df[(~((df.sf==1) | (df.mf==1)))&(df.jdh==1)]["wind_gust"].dropna(),\
+			color="g",marker="^",linestyle="none")
+		plt.ylabel("Daily maximum station\n wind gust (m.s$^{-1}$)",fontsize="xx-large")
+		ax = plt.gca()
+		ax.tick_params(labelsize="xx-large")
+		#plt.savefig("/home/548/ab4502/working/ExtremeWind/figs/distributions/environmental_wind_gust_boxplot.png",bbox_inches="tight")
+		plt.savefig("/short/eg3/ab4502/figs/ExtremeWind/environmental_wind_gust_boxplot.tiff",bbox_inches="tight")
 
 	if plot:
 		#MAKE PLOTS

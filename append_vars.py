@@ -139,7 +139,7 @@ def append_cond():
 	#Load each ERA-Interim sa_small netcdf file, and append COND
 
 	model = "erai"
-	region = "sa_small"
+	region = "aus"
 	dates = []
 	for y in np.arange(1979,2018):
 		for m in [1,2,3,4,5,6,7,8,9,10,11,12]:
@@ -255,4 +255,4 @@ if __name__ == "__main__":
 	#append_dp()
 	#append_capeS06()
 	#rename_barra_wg()
-	append_cond_barra()
+	append_cond()

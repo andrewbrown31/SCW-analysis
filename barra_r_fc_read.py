@@ -11,7 +11,6 @@ import datetime as dt
 import glob
 import matplotlib.pyplot as plt
 from mpl_toolkits.basemap import Basemap
-from matplotlib.mlab import griddata
 import pandas as pd
 
 from calc_param import *
@@ -60,22 +59,22 @@ def read_barra_r_fc(domain,times,wg_only):
 	+"max_wndgust10m/"+year+"/"+month+"/max_wndgust10m-fc-spec-PT1H-BARRA_R-*-"\
 	+year+month+day+"T"+hour+"*.nc")[0])
 		if not wg_only:
-                    ta_file = nc.Dataset(glob.glob("/g/data/ma05/BARRA_R/v1/forecast/prs/air_temp/"\
-                        +year+"/"+month+"/air_temp-fc-prs-PT1H-BARRA_R*-"+year+month+day+"T"+hour+"*.nc")[0])
-                    z_file = nc.Dataset(glob.glob("/g/data/ma05/BARRA_R/v1/forecast/prs/geop_ht/"\
-                        +year+"/"+month+"/geop_ht-fc-prs-PT1H-BARRA_R*-"+year+month+day+"T"+hour+"*.nc")[0])
-                    ua_file = nc.Dataset(glob.glob("/g/data/ma05/BARRA_R/v1/forecast/prs/wnd_ucmp/"\
-                        +year+"/"+month+"/wnd_ucmp-fc-prs-PT1H-BARRA_R*-"+year+month+day+"T"+hour+"*.nc")[0])
-                    va_file = nc.Dataset(glob.glob("/g/data/ma05/BARRA_R/v1/forecast/prs/wnd_vcmp/"\
-                        +year+"/"+month+"/wnd_vcmp-fc-prs-PT1H-BARRA_R*-"+year+month+day+"T"+hour+"*.nc")[0])
-                    hur_file = nc.Dataset(glob.glob("/g/data/ma05/BARRA_R/v1/forecast/prs/relhum/"\
-                        +year+"/"+month+"/relhum-fc-prs-PT1H-BARRA_R*-"+year+month+day+"T"+hour+"*.nc")[0])
-                    uas_file = nc.Dataset(glob.glob("/g/data/ma05/BARRA_R/v1/forecast/spec/uwnd10m/"\
-                        +year+"/"+month+"/uwnd10m-fc-spec-PT1H-BARRA_R*-"+year+month+day+"T"+hour+"*.nc")[0])
-                    vas_file = nc.Dataset(glob.glob("/g/data/ma05/BARRA_R/v1/forecast/spec/vwnd10m/"\
-                        +year+"/"+month+"/vwnd10m-fc-spec-PT1H-BARRA_R*-"+year+month+day+"T"+hour+"*.nc")[0])
-                    ps_file = nc.Dataset(glob.glob("/g/data/ma05/BARRA_R/v1/forecast/spec/sfc_pres/"\
-                        +year+"/"+month+"/sfc_pres-fc-spec-PT1H-BARRA_R*-"+year+month+day+"T"+hour+"*.nc")[0])
+			ta_file = nc.Dataset(glob.glob("/g/data/ma05/BARRA_R/v1/forecast/prs/air_temp/"\
+                        	+year+"/"+month+"/air_temp-fc-prs-PT1H-BARRA_R*-"+year+month+day+"T"+hour+"*.nc")[0])
+			z_file = nc.Dataset(glob.glob("/g/data/ma05/BARRA_R/v1/forecast/prs/geop_ht/"\
+                       		+year+"/"+month+"/geop_ht-fc-prs-PT1H-BARRA_R*-"+year+month+day+"T"+hour+"*.nc")[0])
+			ua_file = nc.Dataset(glob.glob("/g/data/ma05/BARRA_R/v1/forecast/prs/wnd_ucmp/"\
+                        	+year+"/"+month+"/wnd_ucmp-fc-prs-PT1H-BARRA_R*-"+year+month+day+"T"+hour+"*.nc")[0])
+			va_file = nc.Dataset(glob.glob("/g/data/ma05/BARRA_R/v1/forecast/prs/wnd_vcmp/"\
+                        	+year+"/"+month+"/wnd_vcmp-fc-prs-PT1H-BARRA_R*-"+year+month+day+"T"+hour+"*.nc")[0])
+			hur_file = nc.Dataset(glob.glob("/g/data/ma05/BARRA_R/v1/forecast/prs/relhum/"\
+                        	+year+"/"+month+"/relhum-fc-prs-PT1H-BARRA_R*-"+year+month+day+"T"+hour+"*.nc")[0])
+			uas_file = nc.Dataset(glob.glob("/g/data/ma05/BARRA_R/v1/forecast/spec/uwnd10m/"\
+ 				+year+"/"+month+"/uwnd10m-fc-spec-PT1H-BARRA_R*-"+year+month+day+"T"+hour+"*.nc")[0])
+			vas_file = nc.Dataset(glob.glob("/g/data/ma05/BARRA_R/v1/forecast/spec/vwnd10m/"\
+                        	+year+"/"+month+"/vwnd10m-fc-spec-PT1H-BARRA_R*-"+year+month+day+"T"+hour+"*.nc")[0])
+			ps_file = nc.Dataset(glob.glob("/g/data/ma05/BARRA_R/v1/forecast/spec/sfc_pres/"\
+                       		+year+"/"+month+"/sfc_pres-fc-spec-PT1H-BARRA_R*-"+year+month+day+"T"+hour+"*.nc")[0])
 
 
 
@@ -90,35 +89,35 @@ def read_barra_r_fc(domain,times,wg_only):
 
 		if not wg_only:
                         #Load data
-                        temp_ta = ta_file["air_temp"][:,p_ind,lat_ind,lon_ind] - 273.15
-                        temp_ua = ua_file["wnd_ucmp"][:,p_ind,lat_ind,lon_ind]
-                        temp_va = va_file["wnd_vcmp"][:,p_ind,lat_ind,lon_ind]
-                        temp_hgt = z_file["geop_ht"][:,p_ind,lat_ind,lon_ind]
-                        temp_hur = hur_file["relhum"][:,p_ind,lat_ind,lon_ind]
-                        temp_hur[temp_hur<0] = 0
-                        temp_dp = get_dp(temp_ta,temp_hur)
-                        temp_uas = uas_file["uwnd10m"][:,lat_ind,lon_ind]
-                        temp_vas = vas_file["vwnd10m"][:,lat_ind,lon_ind]
-                        temp_ps = ps_file["sfc_pres"][:,lat_ind,lon_ind]/100
+			temp_ta = ta_file["air_temp"][:,p_ind,lat_ind,lon_ind] - 273.15
+			temp_ua = ua_file["wnd_ucmp"][:,p_ind,lat_ind,lon_ind]
+			temp_va = va_file["wnd_vcmp"][:,p_ind,lat_ind,lon_ind]
+			temp_hgt = z_file["geop_ht"][:,p_ind,lat_ind,lon_ind]
+			temp_hur = hur_file["relhum"][:,p_ind,lat_ind,lon_ind]
+			temp_hur[temp_hur<0] = 0
+			temp_dp = get_dp(temp_ta,temp_hur)
+			temp_uas = uas_file["uwnd10m"][:,lat_ind,lon_ind]
+			temp_vas = vas_file["vwnd10m"][:,lat_ind,lon_ind]
+			temp_ps = ps_file["sfc_pres"][:,lat_ind,lon_ind]/100
 
                         #Flip pressure axes for compatibility with SHARPpy
-                        temp_ta = np.fliplr(temp_ta)
-                        temp_dp = np.fliplr(temp_dp)
-                        temp_hur = np.fliplr(temp_hur)
-                        temp_hgt = np.fliplr(temp_hgt)
-                        temp_ua = np.fliplr(temp_ua)
-                        temp_va = np.fliplr(temp_va)
+			temp_ta = np.fliplr(temp_ta)
+			temp_dp = np.fliplr(temp_dp)
+			temp_hur = np.fliplr(temp_hur)
+			temp_hgt = np.fliplr(temp_hgt)
+			temp_ua = np.fliplr(temp_ua)
+			temp_va = np.fliplr(temp_va)
 
                         #Fill arrays with current time steps
-                        ta = np.append(ta,temp_ta,axis=0)
-                        ua = np.append(ua,temp_ua,axis=0)
-                        va = np.append(va,temp_va,axis=0)
-                        hgt = np.append(hgt,temp_hgt,axis=0)
-                        hur = np.append(hur,temp_hur,axis=0)
-                        dp = np.append(dp,temp_dp,axis=0)
-                        uas = np.append(uas,temp_uas,axis=0)
-                        vas = np.append(vas,temp_vas,axis=0)
-                        ps = np.append(ps,temp_ps,axis=0)
+			ta = np.append(ta,temp_ta,axis=0)
+			ua = np.append(ua,temp_ua,axis=0)
+			va = np.append(va,temp_va,axis=0)
+			hgt = np.append(hgt,temp_hgt,axis=0)
+			hur = np.append(hur,temp_hur,axis=0)
+			dp = np.append(dp,temp_dp,axis=0)
+			uas = np.append(uas,temp_uas,axis=0)
+			vas = np.append(vas,temp_vas,axis=0)
+			ps = np.append(ps,temp_ps,axis=0)
 		
 			ta_file.close();z_file.close();ua_file.close();va_file.close();hur_file.close()
 			uas_file.close();vas_file.close();ps_file.close()
@@ -180,7 +179,7 @@ def get_terrain(lat_ind,lon_ind):
 
 
 def remove_corrupt_dates(date_list):
-	corrupt_dates = [dt.datetime(2014,11,22,06,0)]
+	corrupt_dates = [dt.datetime(2014,11,22,6,0)]
 	date_list = np.array(date_list)
 	for i in np.arange(0,len(corrupt_dates)):
 		date_list = date_list[~(date_list==corrupt_dates[i])]

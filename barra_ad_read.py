@@ -11,7 +11,6 @@ import datetime as dt
 import glob
 import matplotlib.pyplot as plt
 from mpl_toolkits.basemap import Basemap
-from matplotlib.mlab import griddata
 import pandas as pd
 
 from calc_param import *
@@ -189,7 +188,7 @@ def get_terrain(lat_ind,lon_ind):
 
 
 def remove_corrupt_dates(date_list):
-	corrupt_dates = [dt.datetime(2014,11,22,06,0)]
+	corrupt_dates = [dt.datetime(2014,11,22,6,0)]
 	date_list = np.array(date_list)
 	for i in np.arange(0,len(corrupt_dates)):
 		date_list = date_list[~(date_list==corrupt_dates[i])]

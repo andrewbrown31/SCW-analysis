@@ -142,23 +142,23 @@ def get_mean_wind(u,v,hgt,hgt_bot,hgt_top,density_weighted,density,method,p=None
 		u_mean = np.empty((u.shape[1],u.shape[2]))
 		v_mean = np.empty((u.shape[1],u.shape[2]))
 		for i in np.arange(0,u.shape[1]):
-		    for j in np.arange(0,u.shape[2]):
-			if hgt_bot == 0:
-				x = np.arange(hgt[:,i,j].min().round(-1),hgt_top+10,10)
-			else:
-				x = np.arange(hgt_bot,hgt_top+10,10)
-			xp = hgt[:,i,j]
-			u_interp = np.interp(x,xp,u[:,i,j])
-			v_interp = np.interp(x,xp,v[:,i,j])
-			if density_weighted:
-				temp_density = np.interp(x,xp,density[:,i,j])
-				u_mean[i,j] = (np.sum(temp_density*u_interp)) / \
-					(np.sum(temp_density))
-				v_mean[i,j] = (np.sum(temp_density*v_interp)) / \
-					(np.sum(temp_density))
-			else:
-				u_mean[i,j] = np.mean(u_interp)
-				v_mean[i,j] = np.mean(v_interp)
+			for j in np.arange(0,u.shape[2]):
+				if hgt_bot == 0:
+					x = np.arange(hgt[:,i,j].min().round(-1),hgt_top+10,10)
+				else:
+					x = np.arange(hgt_bot,hgt_top+10,10)
+				xp = hgt[:,i,j]
+				u_interp = np.interp(x,xp,u[:,i,j])
+				v_interp = np.interp(x,xp,v[:,i,j])
+				if density_weighted:
+					temp_density = np.interp(x,xp,density[:,i,j])
+					u_mean[i,j] = (np.sum(temp_density*u_interp)) / \
+						(np.sum(temp_density))
+					v_mean[i,j] = (np.sum(temp_density*v_interp)) / \
+						(np.sum(temp_density))
+				else:
+					u_mean[i,j] = np.mean(u_interp)
+					v_mean[i,j] = np.mean(v_interp)
 
 	return [u_mean,v_mean]
 
@@ -173,14 +173,14 @@ def get_shear_hgt(u,v,hgt,hgt_bot,hgt_top,uas=None,vas=None):
 		u_bot = uas
 		v_bot = vas
 	else:
-	    if u.ndim == 1:
-		u_bot = np.array(np.interp(hgt_bot,hgt,u))
-		v_bot = np.array(np.interp(hgt_bot,hgt,v))
-	    else:
-		u_bot = np.array(wrf.interplevel(u, hgt, hgt_bot))
-		v_bot = np.array(wrf.interplevel(v, hgt, hgt_bot))
-		u_bot[hgt[0] >= hgt_bot] = u[0,hgt[0] >= hgt_bot]
-		v_bot[hgt[0] >= hgt_bot] = v[0,hgt[0] >= hgt_bot]
+		if u.ndim == 1:
+			u_bot = np.array(np.interp(hgt_bot,hgt,u))
+			v_bot = np.array(np.interp(hgt_bot,hgt,v))
+		else:
+			u_bot = np.array(wrf.interplevel(u, hgt, hgt_bot))
+			v_bot = np.array(wrf.interplevel(v, hgt, hgt_bot))
+			u_bot[hgt[0] >= hgt_bot] = u[0,hgt[0] >= hgt_bot]
+			v_bot[hgt[0] >= hgt_bot] = v[0,hgt[0] >= hgt_bot]
 	
 	if u.ndim == 1:
 		u_top = np.array(np.interp(hgt_top,hgt,u))
@@ -254,18 +254,18 @@ def get_td_diff(t,td,p,p_level):
 	if t.ndim == 1:
 		t_plevel = np.interp(p_level,p,t)
 	else:
-	    if p_level in p:
-		t_plevel = t[p[:,0,0]==p_level]
-	    else:
-		t_plevel = np.array(wrf.interpz3d(t, p, p_level))
+		if p_level in p:
+			t_plevel = t[p[:,0,0]==p_level]
+		else:
+			t_plevel = np.array(wrf.interpz3d(t, p, p_level))
 
 	if t.ndim == 1:
 		td_plevel = np.interp(p_level,p,td)
 	else:
-	    if p_level in p:
-		td_plevel = td[p[:,0,0]==p_level]
-	    else:
-		td_plevel = np.array(wrf.interpz3d(td, p, p_level))
+		if p_level in p:
+			td_plevel = td[p[:,0,0]==p_level]
+		else:
+			td_plevel = np.array(wrf.interpz3d(td, p, p_level))
 	
 	return (t_plevel - td_plevel)
 
@@ -277,28 +277,28 @@ def get_srh(u,v,hgt,hgt_top,papprox,storm_bot,storm_top,p=None):
 	u_storm, v_storm = get_mean_wind(u,v,hgt,storm_bot,storm_top,False,None,"plevels",p)
 
 	if papprox:
-	    if u.ndim == 1:
-		top_ind = np.argmin(abs(hgt - hgt_top))
-	    else:
-		top_ind = np.argmin(abs(np.mean(hgt,axis=(1,2)) - hgt_top))
-	    hgt_inds = np.arange(0,top_ind+1,1)
-	    u_hgt = u[hgt_inds]
-	    v_hgt = v[hgt_inds]
-	    sru = u_hgt - u_storm
-	    srv = v_hgt - v_storm
-	    layers = (sru[1:] * srv[:-1]) - (sru[:-1] * srv[1:])
-	    srh = abs(np.sum(layers,axis=0))
+		if u.ndim == 1:
+			top_ind = np.argmin(abs(hgt - hgt_top))
+		else:
+			top_ind = np.argmin(abs(np.mean(hgt,axis=(1,2)) - hgt_top))
+		hgt_inds = np.arange(0,top_ind+1,1)
+		u_hgt = u[hgt_inds]
+		v_hgt = v[hgt_inds]
+		sru = u_hgt - u_storm
+		srv = v_hgt - v_storm
+		layers = (sru[1:] * srv[:-1]) - (sru[:-1] * srv[1:])
+		srh = abs(np.sum(layers,axis=0))
 
 	else:
-	    srh = np.empty(u[0].shape)
-	    for i in np.arange(0,u[0].shape[0]):
-	        for j in np.arange(0,u[0].shape[1]):
-			u_hgt = u[(hgt[:,i,j] <= hgt_top),i,j]
-			v_hgt = v[(hgt[:,i,j] <= hgt_top),i,j]
-			sru = u_hgt - u_storm[i,j]
-			srv = v_hgt - v_storm[i,j]
-			layers = (sru[1:] * srv[:-1]) - (sru[:-1] * srv[1:])
-			srh[i,j] = abs(np.sum(layers))
+		srh = np.empty(u[0].shape)
+		for i in np.arange(0,u[0].shape[0]):
+			for j in np.arange(0,u[0].shape[1]):
+				u_hgt = u[(hgt[:,i,j] <= hgt_top),i,j]
+				v_hgt = v[(hgt[:,i,j] <= hgt_top),i,j]
+				sru = u_hgt - u_storm[i,j]
+				srv = v_hgt - v_storm[i,j]
+				layers = (sru[1:] * srv[:-1]) - (sru[:-1] * srv[1:])
+				srh[i,j] = abs(np.sum(layers))
 
 	return srh
 
@@ -771,11 +771,11 @@ def calc_param_wrf(times,ta,dp,hur,hgt,terrain,p,ps,ua,va,uas,vas,lon,lat,param,
 			param_ind = np.where(param=="td950")[0][0]
 			param_out[param_ind][t,:,:] = get_td_diff(ta[t],dp[t],p_3d[t],950)
 		if "wg" in param:
-		    try:
-			param_ind = np.where(param=="wg")[0][0]
-			param_out[param_ind][t,:,:] = wg[t]
-		    except ValueError:
-			print("wg field expected, but not parsed")
+			try:
+				param_ind = np.where(param=="wg")[0][0]
+				param_out[param_ind][t,:,:] = wg[t]
+			except ValueError:
+				print("wg field expected, but not parsed")
 		if "dcape" in param:
 			param_ind = np.where(param=="dcape")[0][0]
 			dcape = np.nanmax(get_dcape(p_3d[t],ta[t],hgt[t],p,ps[t]),axis=0)
@@ -823,7 +823,15 @@ def calc_param_wrf_par(it):
 	#a one month period, so this has the effect of calculating a month-worth of CAPE in parallel (on somewhere
 	#between 16 and 30 cores)
 
-	times,t,ta,dp,hur,hgt,terrain,p,ps,ua,va,uas,vas,lon,lat,param,model,out_name,save,region,wg = it
+	#times,t,ta,dp,hur,hgt,terrain,p,ps,ua,va,uas,vas,lon,lat,param,model,out_name,save,region,wg = it
+
+	t = it
+	wg=False
+	param = ["ml_cape","ml_cin","mu_cin","mu_cape","srh01","srh03","srh06","scp",\
+		"stp","ship","mmp","relhum850-500","vo10","lr1000","lcl",\
+		"relhum1000-700","s06","s0500","s01","s03",\
+		"cape*s06","dcp","td850","td800","td950","dcape","mlm","dlm",\
+		"dcape*cs6","mlm+dcape","mlm*dcape*cs6"]
 
 	#Assign p levels to a 4d array, with same dimensions as input variables (ta, hgt, etc.)
 	p_3d = np.moveaxis(np.tile(p,[ta.shape[0],ta.shape[2],ta.shape[3],1]),[0,1,2,3],[0,2,3,1])
@@ -1069,11 +1077,11 @@ def calc_param_wrf_par(it):
 		param_ind = np.where(param=="td950")[0][0]
 		param_out[param_ind] = get_td_diff(ta[t],dp[t],p_3d[t],950)
 	if "wg" in param:
-	    try:
-		param_ind = np.where(param=="wg")[0][0]
-		param_out[param_ind] = wg[t]
-	    except ValueError:
-		print("wg field expected, but not parsed")
+		try:
+			param_ind = np.where(param=="wg")[0][0]
+			param_out[param_ind] = wg[t]
+		except ValueError:
+			print("wg field expected, but not parsed")
 	if "dcape" in param:
 		param_ind = np.where(param=="dcape")[0][0]
 		dcape = np.nanmax(get_dcape(p_3d[t],ta[t],hgt[t],p,ps[t]),axis=0)
@@ -1111,165 +1119,6 @@ def calc_param_wrf_par(it):
 		param_out[param_ind] = (dcape/980)*(mu_cape/2000)*(s06/10)*(dlm/8)
 	
 	return param_out
-
-def calc_param_sharppy(times,ta,dp,hur,hgt,p,ua,va,uas,vas,lon,lat,param,model,out_name,save,region):
-	#Calculate parameters based on the SHARPpy package for creating profiles
-
-	#For each time in "times", loop over lat/lon points in domain and calculate:
-	# 1) profile 2) parcel (if create_parcel is set) 3) parameter
-	#NOTE the choice of parameter may affect both steps 2) and 3)
-	#Input vars are of shape [time, levels, lat, lon]
-	#Output is a list of numpy arrays of length=len(params) with dimensions [time,lat,lon]
-	#Option to save as a netcdf file
-
-	param = np.array(param)
-	param_out = [0] * (len(param))
-	for i in np.arange(0,len(param)):
-		param_out[i] = np.empty((len(times),len(lat),len(lon)))
-
-	np.warnings.filterwarnings('ignore')
-
-	for t in np.arange(0,len(times)):
-		print(times[t])
-
-		temp_ta = ta[t]; temp_dp = dp[t]; temp_hur = hur[t]; temp_hgt = hgt[t]; 
-		temp_ua = ua[t]; temp_va = va[t]; temp_uas = uas[t]; temp_vas = vas[t]
-		xyt = itertools.product(np.arange(0,len(lat)),np.arange(0,len(lon)),\
-			[lon],[lat],[temp_ta],[temp_dp],[temp_hur],[temp_hgt],[p],[temp_ua],[temp_va],\
-			[temp_uas],[temp_vas])
-		pool = multiprocessing.Pool()
-		result = pool.map(sharp_parcel,xyt)
-
-		param_out[np.where(param=="mu_cape")[0][0]][t] = np.array([pcl[0].bplus for pcl in result]).\
-			reshape((len(lat),len(lon)))
-		param_out[np.where(param=="ml_cape")[0][0]][t] = np.array([pcl[1].bplus for pcl in result]).\
-			reshape((len(lat),len(lon)))
-		pool.close()
-		pool.join()
-
-		##Get storm motion vectors
-		#u_storm, v_storm = winds.mean_wind(prof,pbot=1000,ptop=500)
-
-		#if "relhum850-500" in param:
-		#	param_ind = np.where(param=="relhum850-500")[0][0]
-		#	param_out[param_ind][t,y,x] = \
-		#		np.mean(hur_p[(p<=851) & (p>=499)])
-		#if "mu_cape" in param:
-		##CAPE for most unstable parcel
-		#	param_ind = np.where(param=="mu_cape")[0][0]
-		#	param_out[param_ind][t,y,x] = mu_parcel.bplus
-		#if "s06" in param:
-		##Wind shear 10 m (sfc) to 6 km
-		#	ua_0km = uas_p
-		#	ua_6km = np.interp(6000,hgt_p,ua_p)
-		#	va_0km = vas_p
-		#	va_6km = np.interp(6000,hgt_p,va_p)
-		#	shear = np.sqrt(np.square(ua_6km-ua_0km)+\
-		#		np.square(va_6km-va_0km))
-		#	param_ind = np.where(param=="s06")[0][0]
-		#	param_out[param_ind][t,y,x] = shear
-		#if "mu_cin" in param:
-		##CIN for most unstable parcel
-		#	param_ind = np.where(param=="mu_cin")[0][0]
-		#	param_out[param_ind][t,y,x] = -1*mu_parcel.bminus
-		#if "srh01" in param:
-		##Combined (+ve and -ve) rel. helicity from 0-1 km
-		#	param_ind = np.where(param=="srh01")[0][0]
-		#	param_out[param_ind][t,y,x] = abs(winds.helicity(prof,0,\
-		#			1000,stu=u_storm,stv=v_storm)[0])
-		#if "srh03" in param:
-		##Combined (+ve and -ve) rel. helicity from 0-3 km
-		#	param_ind = np.where(param=="srh03")[0][0]
-		#	srh03 = abs(winds.helicity(prof,\
-		#			0,3000,stu=u_storm,stv=v_storm)[0])
-		#	param_out[param_ind][t,y,x] = srh03
-		#if "srh06" in param:
-		##Combined (+ve and -ve) rel. helicity from 0-6 km
-		#	param_ind = np.where(param=="srh06")[0][0]
-		#	param_out[param_ind][t,y,x] = abs(winds.helicity(prof,0,\
-		#			6000,stu=u_storm,stv=v_storm)[0])
-		#if "ship" in param:
-		##Significant hail parameter
-		#	param_ind = np.where(param=="ship")[0][0]
-		#	param_out[param_ind][t,y,x] = params.ship(prof,\
-		#		mupcl=mu_parcel)
-		#if "lhp" in param:
-		##Large Hail Paramerer; NOTE requires convective profile (costly).
-		#	conf_prof = profile.create_profile(profile="convective",\
-		#		pres=p, hght=hgt_p, tmpc=ta_p, \
-		#		dwpc=dp_p, u=ua_p_kts, v=va_p_kts)
-		#	param_ind = np.where(param=="lhp")[0][0]
-		#	param_out[param_ind][t,y,x] = params.lhp(prof)
-		#if "hgz_depth" in param:
-		##Hail growzth zone (in hPa)
-		#	param_ind = np.where(param=="hgz_depth")[0][0]
-		#	param_out[param_ind][t,y,x] = abs(params.hgz(prof)[1]\
-		#		 - params.hgz(prof)[0])
-		#if "dcp" in param:
-		##Derecho Composite Parameter ~ cold pool driven wind events
-		#	param_ind = np.where(param=="dcp")[0][0]
-		#	param_out[param_ind][t,y,x] = params.dcp(prof)
-		#if "mburst" in param:
-		##Microburst composite index
-		#	param_ind = np.where(param=="mburst")[0][0]
-		#	param_out[param_ind][t,y,x] = params.mburst(prof)
-		#if "mmp" in param:
-		##Mesoscale Convective System Maintanance Probability
-		#	param_ind = np.where(param=="mmp")[0][0]
-		#	param_out[param_ind][t,y,x] = params.mmp(prof,\
-		#		mupcl=mu_parcel)
-		#if "scp" in param:
-		##Mesoscale Convective System Maintanance Probability
-		#	param_ind = np.where(param=="scp")[0][0]
-		#	param_out[param_ind][t,y,x] = params.scp(mu_parcel.bplus,\
-		#		srh03,shear)
-		#if "stp" in param:
-		##Sig. tornado parameter (w/CIN)
-		#	ml_cape = mu_parcel.bplus
-		#	esrh = abs(winds.helicity(prof,0,\
-		#			1000,stu=u_storm,stv=v_storm)[0])
-		#	ebwd = shear
-		#	ml_cin = mu_parcel.bminus
-		#	ml_lcl = mu_parcel.lclhght
-		#	param_ind = np.where(param=="stp")[0][0]
-		#	param_out[param_ind][t,y,x] = params.stp_cin(ml_cape,\
-		#		esrh,ebwd,ml_lcl,ml_cin)
-		#	print(dt.datetime.now()-start)
-
-
-	if save:
-		save_netcdf(region,model,out_name,times,lat,lon,param,param_out)
-
-	return param_out
-
-def sharp_parcel(i):
-
-	#Function which produces an array of parcel and/or wind objects from SHARPpy in parallel
-	
-			y,x,lon,lat,temp_ta,temp_dp,temp_hur,temp_hgt,p,temp_ua,temp_va,temp_uas,temp_vas = i
-	
-	#for x in np.arange(0,len(lon)):
-	#	print(str(x)+"/"+str(len(lon)))
-	#	for y in np.arange(0,len(lat)):
-			#Restrict to a single spatial point
-			start = dt.datetime.now()
-			point = [lon[x],lat[y]]   
-			ta_p,dp_p,hgt_p,ua_p,va_p,uas_p,vas_p,hur_p = get_point(point,\
-				lon,lat,temp_ta,temp_dp,temp_hgt,temp_ua,\
-				temp_va,temp_uas,temp_vas,temp_hur)
-
-			#Convert u and v to kts for use in profile
-			ua_p_kts = utils.MS2KTS(ua_p)
-			va_p_kts = utils.MS2KTS(va_p)
-
-			#Create profile
-			prof = profile.create_profile(pres=p, hght=hgt_p, tmpc=ta_p, \
-					dwpc=dp_p, u=ua_p_kts, v=va_p_kts, missing=np.nan)
-			#Create most unstable parcel
-			mu_parcel = params.parcelx(prof, flag=3, dp=-10) #3 = mu
-			ml_parcel = params.parcelx(prof, flag=4, dp=-10) #4 = ml
-
-			return (mu_parcel,ml_parcel)
 
 
 def calc_param_points(times,ta,dp,hur,hgt,terrain,p,ps,ua,va,uas,vas,lon,lat,lon_used,lat_used,param,loc_id,method):

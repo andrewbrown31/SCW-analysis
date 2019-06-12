@@ -4,7 +4,6 @@ import datetime as dt
 import glob
 import matplotlib.pyplot as plt
 from mpl_toolkits.basemap import Basemap
-from matplotlib.mlab import griddata
 import matplotlib.cm as cm
 import netCDF4 as nc
 import matplotlib.animation as animation
@@ -66,17 +65,23 @@ def plot_netcdf(domain,fname,outname,time,model,vars=False):
 		plt.figure()
 
 		m.drawcoastlines()
-		m.drawmeridians(np.arange(np.floor(lon.min()),np.floor(lon.max()),5),\
-				labels=[True,False,False,True],fontsize="x-large")
-		m.drawparallels(np.arange(np.floor(lat.min()),np.floor(lat.max()),5),\
-				labels=[True,False,True,False],fontsize="x-large")
+		if (domain[0]==-38) & (domain[1]==-26):
+			m.drawmeridians([134,137,140],\
+					labels=[True,False,False,True],fontsize="xx-large")
+			m.drawparallels([-36,-34,-32,-30,-28],\
+					labels=[True,False,True,False],fontsize="xx-large")
+		else:
+			m.drawmeridians(np.arange(np.floor(lon.min()),np.floor(lon.max()),3),\
+					labels=[True,False,False,True])
+			m.drawparallels(np.arange(np.floor(lat.min()),np.floor(lat.max()),3),\
+					labels=[True,False,True,False])
 		if param == "cond":
 			m.pcolor(x,y,values,latlon=True,cmap=plt.get_cmap("Reds",2))
 		else:
 			m.contourf(x,y,values,latlon=True,cmap=cmap,levels=levels,extend="max")
 		cb = plt.colorbar()
-		cb.set_label(cb_lab)
-		cb.ax.tick_params(labelsize="x-large")
+		cb.set_label(cb_lab,fontsize="xx-large")
+		cb.ax.tick_params(labelsize="xx-large")
 		if param == "cond":
 			cb.set_ticks([0,1])
 		m.contour(x,y,values,latlon=True,colors="grey",levels=threshold)
@@ -84,25 +89,35 @@ def plot_netcdf(domain,fname,outname,time,model,vars=False):
 			tx = (138.5159,138.3505,138.0996)
 			ty = (-33.7804,-32.8809,-32.6487)
 			m.plot(tx,ty,color="k",linestyle="none",marker="^",markersize=10)
-		plt.savefig("/home/548/ab4502/working/ExtremeWind/figs/"+model+"/"+outname+\
-			"_"+param+".png",bbox_inches="tight")
+		#plt.savefig("/home/548/ab4502/working/ExtremeWind/figs/"+model+"/"+outname+\
+		#	"_"+param+".png",bbox_inches="tight")
+		plt.savefig("/short/eg3/ab4502/figs/ExtremeWind/"+model+"_"+outname+\
+			"_"+param+".tiff",bbox_inches="tight")
 		plt.close()
 		#IF COND, ALSO DRAW COND TYPES
 		if param == "cond":
 			plt.figure()
 			m.drawcoastlines()
-			m.drawmeridians(np.arange(np.floor(lon.min()),np.floor(lon.max()),5),\
-					labels=[True,False,False,True],fontsize="x-large")
-			m.drawparallels(np.arange(np.floor(lat.min()),np.floor(lat.max()),5),\
-					labels=[True,False,True,False],fontsize="x-large")
+			if (domain[0]==-38) & (domain[1]==-26):
+				m.drawmeridians([134,137,140],\
+						labels=[True,False,False,True],fontsize="xx-large")
+				m.drawparallels([-36,-34,-32,-30,-28],\
+						labels=[True,False,True,False],fontsize="xx-large")
+			else:
+				m.drawmeridians(np.arange(np.floor(lon.min()),np.floor(lon.max()),3),\
+						labels=[True,False,False,True])
+				m.drawparallels(np.arange(np.floor(lat.min()),np.floor(lat.max()),3),\
+						labels=[True,False,True,False])
 			m.pcolor(x,y,values_disc,latlon=True,cmap=plt.get_cmap("Accent_r",3),vmin=0,vmax=2)
 			cb = plt.colorbar()
-			cb.set_label("Forcing type",fontsize="x-large")
+			cb.set_label("Forcing type",fontsize="xx-large")
 			cb.set_ticks([0,1,2,3])
 			cb.set_ticklabels(["None","SF","MF","Both"])
-			cb.ax.tick_params(labelsize="x-large")
-			plt.savefig("/home/548/ab4502/working/ExtremeWind/figs/"+model+"/"+outname+\
-				"_"+"forcing_types"+".png",bbox_inches="tight")
+			cb.ax.tick_params(labelsize="xx-large")
+			plt.savefig("/short/eg3/ab4502/figs/ExtremeWind/"+model+"_"+outname+\
+				"_"+"forcing_types"+".tiff",bbox_inches="tight")
+			#plt.savefig("/home/548/ab4502/working/ExtremeWind/figs/"+model+"/"+outname+\
+			#	"_"+"forcing_types"+".png",bbox_inches="tight")
 			plt.close()
 
 def plot_netcdf_animate(fname,param,outname,domain):
@@ -150,7 +165,7 @@ def animate(i):
 	m.drawparallels(np.arange(domain[0],domain[1],5),\
 			labels=[True,False,True,False])
 	im = m.contourf(x,y,values[i],latlon=True,levels=levels,cmap=cmap,extend="both")
-        plt.title(times_str[i] + " UTC")
+	plt.title(times_str[i] + " UTC")
 	return im
 	
 def contour_properties(param):
@@ -159,7 +174,7 @@ def contour_properties(param):
 		cmap = cm.YlGnBu
 		mean_levels = np.linspace(0,2000,11)
 		extreme_levels = np.linspace(0,2000,11)
-		cb_lab = "J/Kg"
+		cb_lab = "J.kg$^{-1}$"
 		range = [0,4000]
 		log_plot = True
 	if param in ["dlm*dcape*cs6","mlm*dcape*cs6"]:
@@ -174,7 +189,7 @@ def contour_properties(param):
 		cmap = cm.YlGnBu
 		mean_levels = np.linspace(0,60,11)
 		extreme_levels = np.linspace(0,2000,11)
-		cb_lab = "J/Kg"
+		cb_lab = "J.kg$^{-1}$"
 		threshold = [127]
 		range = [0,4000]
 		log_plot = True
@@ -190,15 +205,15 @@ def contour_properties(param):
 		mean_levels = np.linspace(0,200,11)
 		extreme_levels = np.linspace(0,400,11)
 		cb_lab = "J/Kg"
-		range = [0,500]
-		log_plot = True
+		range = [0,600]
+		log_plot = False
 	elif param in ["s06","ssfc6"]:
 		cmap = cm.Reds
 		mean_levels = np.linspace(14,18,17)
 		extreme_levels = np.linspace(0,50,11)
-		cb_lab = "m/s"
+		cb_lab = "m.s$^{-1}$"
 		threshold = [23.83]
-		range = [0,50]
+		range = [0,60]
 		log_plot = False
 	elif param in ["ssfc3"]:
 		cmap = cm.Reds
@@ -225,7 +240,7 @@ def contour_properties(param):
 		cmap = cm.Reds
 		mean_levels = np.linspace(0,0.5,11)
 		extreme_levels = np.linspace(0,4,11)
-		cb_lab = ""
+		cb_lab = "DCP"
 		range = [0,3]
 		threshold = [0.028,1]
 		log_plot = True
@@ -323,7 +338,7 @@ def contour_properties(param):
 		cb_lab = "degC"
 		range = [-20,20]
 		log_plot = False
-	elif param in ["dlm"]:
+	elif param in ["dlm","mlm"]:
 		cmap = cm.YlGnBu
 		mean_levels = np.linspace(5,15,11)
 		extreme_levels = np.linspace(0,50,11)
@@ -339,7 +354,7 @@ def contour_properties(param):
 		cb_lab = "J/kg"
 		range = [0,2000]
 		log_plot = False
-	elif param in ["wfper"]:
+	elif param in ["mfper"]:
 		cmap = cm.YlGnBu
 		mean_levels = np.linspace(0,0.1,11)
 		extreme_levels = np.linspace(0,1,2)
@@ -347,12 +362,12 @@ def contour_properties(param):
 		cb_lab = "% of WF"
 		range = [0,1]
 		log_plot = False
-	elif param in ["cond","sf","wf"]:
+	elif param in ["cond","sf","mf"]:
 		cmap = cm.Reds
 		mean_levels = np.linspace(0,0.1,11)
 		extreme_levels = np.linspace(0,1,2)
 		threshold = [1]
-		cb_lab = "Is condition met?"
+		cb_lab = "CEWP"
 		range = [0,1]
 		log_plot = False
 	elif param in ["max_wg10","wg10"]:
@@ -361,7 +376,7 @@ def contour_properties(param):
 		extreme_levels = np.linspace(-10,10,11)
 		threshold = [12.817,21.5]
 		cb_lab = "no. of days"
-		range = [-20,20]
+		range = [0,30]
 		log_plot = False
 	elif param in ["tas","ta850","ta700","tos"]:
 		cmap = cm.Reds
@@ -452,8 +467,9 @@ def plot_daily_data_monthly_dist(aws,stns,outname):
 
 	#Plot seasonal distribution of wind gusts over certain thresholds for each AWS station
 	s = 11
+	no_years = float(2018-1979)
 	for i in np.arange(0,len(stns)):
-		fig = plt.figure()
+		fig = plt.figure(figsize=[8,6])
 		aws_mth_cnt5,mths = get_monthly_dist(aws[(aws.stn_name==stns[i])],\
 			threshold=[5,15])
 		aws_mth_cnt15,mths = get_monthly_dist(aws[(aws.stn_name==stns[i])],\
@@ -462,24 +478,26 @@ def plot_daily_data_monthly_dist(aws,stns,outname):
 			threshold=[25,30])
 		aws_mth_cnt30,mths = get_monthly_dist(aws[(aws.stn_name==stns[i])],\
 			threshold=[30])
-		plt.plot(mths,aws_mth_cnt15,linestyle="none",marker="s",markersize=s)
-		plt.plot(mths,aws_mth_cnt25,linestyle="none",marker="s",markersize=s)
-		plt.plot(mths,aws_mth_cnt5,linestyle="none",marker="s",markersize=s)
-		plt.plot(mths,aws_mth_cnt30,linestyle="none",marker="x",markersize=17.5,color="k",\
+		plt.plot(mths,aws_mth_cnt15/no_years,linestyle="none",marker="s",markersize=s)
+		plt.plot(mths,aws_mth_cnt25/no_years,linestyle="none",marker="s",markersize=s)
+		plt.plot(mths,aws_mth_cnt5/no_years,linestyle="none",marker="s",markersize=s)
+		plt.plot(mths,aws_mth_cnt30/no_years,linestyle="none",marker="x",markersize=17.5,color="k",\
 			markeredgewidth=1.5)
-		plt.title(stns[i])
-		plt.xlabel("Month",fontsize="large");plt.ylabel("Counts",fontsize="large")
+		plt.title(stns[i],fontsize="xx-large")
+		plt.xlabel("Month",fontsize="xx-large");plt.ylabel("Gusts per month",fontsize="xx-large")
 		#plt.legend(loc="upper left")
 		ax=plt.gca();ax.set_yscale('log')
 		ax.set_xticks(np.arange(1,13,1))
 		ax.set_xticklabels(["J","F","M","A","M","J","J","A","S","O","N","D"])
-		ax.set_xlim([0.5,12.5])
-		ax.set_ylim([0.5,ax.get_ylim()[1]])
-		ax.tick_params(labelsize=20)
+		ax.set_xlim([0.01,12.5])
+		ax.set_ylim([0.01,ax.get_ylim()[1]])
+		ax.tick_params(labelsize="xx-large")
 		ax.grid()
 		fig.subplots_adjust(bottom=0.2)
-		plt.savefig("/home/548/ab4502/working/ExtremeWind/figs/temporal_distributions/"\
-			+outname+"_"+"monthly_"+stns[i]+"_1979_2017.png")
+		plt.savefig("/short/eg3/ab4502/figs/ExtremeWind/"\
+			+outname+"_"+"monthly_"+stns[i]+"_1979_2017.tiff",bbox_inches="tight")
+		#plt.savefig("/home/548/ab4502/working/ExtremeWind/figs/temporal_distributions/"\
+		#	+outname+"_"+"monthly_"+stns[i]+"_1979_2017.png")
 		plt.close()
 
 def get_diurnal_dist(aws):
@@ -543,7 +561,7 @@ if __name__ == "__main__":
 	param = "cape*s06"
 	region = "sa_small"
 
-	time = [dt.datetime(2014,10,6,6,0,0),dt.datetime(2014,06,10,12,0,0)]
+	time = [dt.datetime(2014,10,6,6,0,0),dt.datetime(2014,6,10,12,0,0)]
 	outname = param+"_"+dt.datetime.strftime(time[0],"%Y%m%d_%H%M")+"_"+\
 			dt.datetime.strftime(time[-1],"%Y%m%d_%H%M")
 
@@ -559,44 +577,46 @@ if __name__ == "__main__":
 	domain = [start_lat,end_lat,start_lon,end_lon]
 
 #	PLOT SEASONAL DISTRIBUTIONS
-#	plot_daily_data_monthly_dist(pd.read_pickle("/g/data/eg3/ab4502/ExtremeWind/points/"+\
-#		"erai_fc_points_1979_2017_daily_max.pkl").reset_index().\
-#		rename(columns={"wg10":"wind_gust","loc_id":"stn_name"}),\
-#		["Adelaide AP","Woomera","Mount Gambier","Port Augusta"],outname="ERA-Interim")
-#	plot_daily_data_monthly_dist(pd.read_pickle("/g/data/eg3/ab4502/ExtremeWind/points/barra_r_fc/"+\
-#		"barra_r_fc_points_daily_2006_2016.pkl").reset_index().\
-#		rename(columns={"max_wg10":"wind_gust","loc_id":"stn_name"}),\
-#		["Adelaide AP","Woomera","Mount Gambier","Port Augusta"],outname="BARRA-R")
-#	plot_daily_data_monthly_dist(remove_incomplete_aws_years(\
-#			pd.read_pickle("/short/eg3/ab4502/ExtremeWind/aws/"+\
-#			"all_daily_max_wind_gusts_sa_1979_2017.pkl"),"Port Augusta").reset_index()\
-#			,["Adelaide AP","Woomera","Mount Gambier","Port Augusta"],outname="AWS")
-#	plot_daily_data_monthly_dist(pd.read_pickle("/g/data/eg3/ab4502/ExtremeWind/points/barra_ad/"+\
-#		"barra_ad_points_daily_2006_2016.pkl").reset_index().\
-#		rename(columns={"max_wg10":"wind_gust","loc_id":"stn_name"}),\
-#		["Adelaide AP","Woomera","Mount Gambier","Port Augusta"],outname="BARRA-AD")
+	#plot_daily_data_monthly_dist(pd.read_pickle("/g/data/eg3/ab4502/ExtremeWind/points/"+\
+	#	"erai_fc_points_1979_2017_daily_max.pkl").reset_index().\
+	#	rename(columns={"wg10":"wind_gust","loc_id":"stn_name"}),\
+	#	["Adelaide AP","Woomera","Mount Gambier","Port Augusta"],outname="ERA-Interim")
+	barra_r_df = pd.read_pickle("/g/data/eg3/ab4502/ExtremeWind/points/barra_r_fc/"+\
+		"barra_r_fc_points_daily_2003_2016.pkl").reset_index()
+	barra_r_df["month"] = [t.month for t in barra_r_df.date]
+	plot_daily_data_monthly_dist(barra_r_df.rename(columns={"max_wg10":"wind_gust","loc_id":"stn_name"}),\
+		["Adelaide AP","Woomera","Mount Gambier","Port Augusta"],outname="BARRA-R")
+	#plot_daily_data_monthly_dist(remove_incomplete_aws_years(\
+	#		pd.read_pickle("/short/eg3/ab4502/ExtremeWind/aws/"+\
+	#		"all_daily_max_wind_gusts_sa_1979_2017.pkl"),"Port Augusta").reset_index()\
+	#		,["Adelaide AP","Woomera","Mount Gambier","Port Augusta"],outname="AWS")
+	barra_ad_df = pd.read_pickle("/g/data/eg3/ab4502/ExtremeWind/points/barra_ad/"+\
+		"barra_ad_points_daily_2006_2016.pkl").reset_index()
+	barra_ad_df["month"] = [t.month for t in barra_ad_df.date]
+	plot_daily_data_monthly_dist(barra_ad_df.rename(columns={"max_wg10":"wind_gust","loc_id":"stn_name"}),\
+		["Adelaide AP","Woomera","Mount Gambier","Port Augusta"],outname="BARRA-AD")
 
 	#CASE STUDIES
-#	for time in date_seq([dt.datetime(1979,11,14,0),dt.datetime(1979,11,14,12)],"hours",6):
-#		plot_netcdf(domain,"/g/data/eg3/ab4502/ExtremeWind/sa_small/erai/"+\
-#			"erai_19791101_19791130.nc"\
-#			,"event_1979_"+time.strftime("%Y%m%d%H"),\
-#			[time],"erai",vars=["dcp"])
-#	for time in date_seq([dt.datetime(2016,9,28,0),dt.datetime(2016,9,28,12)],"hours",6):
-#		plot_netcdf(domain,"/g/data/eg3/ab4502/ExtremeWind/sa_small/erai/"+\
-#			"erai_20160901_20160930.nc"\
-#			,"system_black_"+time.strftime("%Y%m%d%H"),\
-#			[time],"erai",vars=["dcp"])
-#	for time in date_seq([dt.datetime(2016,9,28,0),dt.datetime(2016,9,28,12)],"hours",6):
-#		plot_netcdf(domain,"/g/data/eg3/ab4502/ExtremeWind/sa_small/barra/"+\
-#			"barra_20160901_20160930.nc"\
-#			,"system_black_"+time.strftime("%Y%m%d%H"),\
-#			[time],"barra",vars=["dcp"])
-#	for time in date_seq([dt.datetime(2016,9,28,0),dt.datetime(2016,9,28,12)],"hours",6):
-#		plot_netcdf(domain,"/g/data/eg3/ab4502/ExtremeWind/sa_small/barra_ad/"+\
-#			"barra_ad_20160928_20160929.nc"\
-#			,"system_black_"+time.strftime("%Y%m%d%H"),\
-#			[time],"barra_ad",vars=["dcp"])
+	#for time in date_seq([dt.datetime(1979,11,14,0),dt.datetime(1979,11,14,12)],"hours",6):
+	#	plot_netcdf(domain,"/g/data/eg3/ab4502/ExtremeWind/sa_small/erai/"+\
+	#		"erai_19791101_19791130.nc"\
+	#		,"event_1979_"+time.strftime("%Y%m%d%H"),\
+	#		[time],"erai",vars=["scp"])
+	#for time in date_seq([dt.datetime(2016,9,28,0),dt.datetime(2016,9,28,12)],"hours",6):
+	#	plot_netcdf(domain,"/g/data/eg3/ab4502/ExtremeWind/sa_small/erai/"+\
+	#		"erai_20160901_20160930.nc"\
+	#		,"system_black_"+time.strftime("%Y%m%d%H"),\
+	#		[time],"erai",vars=["scp"])
+	#for time in date_seq([dt.datetime(2016,9,28,0),dt.datetime(2016,9,28,12)],"hours",6):
+	#	plot_netcdf(domain,"/g/data/eg3/ab4502/ExtremeWind/sa_small/barra/"+\
+	#		"barra_20160901_20160930.nc"\
+	#		,"system_black_"+time.strftime("%Y%m%d%H"),\
+	#		[time],"barra",vars=["scp"])
+	#for time in date_seq([dt.datetime(2016,9,28,0),dt.datetime(2016,9,28,12)],"hours",6):
+	#	plot_netcdf(domain,"/g/data/eg3/ab4502/ExtremeWind/sa_small/barra_ad/"+\
+	#		"barra_ad_20160928_20160929.nc"\
+	#		,"system_black_"+time.strftime("%Y%m%d%H"),\
+	#		[time],"barra_ad",vars=["scp"])
 
 #	PLOT OBSERVED DIURNAL DISTRIBUTION
-	plot_diurnal_wind_distribution()
+	#plot_diurnal_wind_distribution()

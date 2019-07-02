@@ -9,6 +9,8 @@ from barra_ad_read import get_lat_lon as get_barra_ad_lat_lon
 from erai_read import get_lat_lon, drop_erai_fc_duplicates
 from obs_read import read_clim_ind
 from scipy.stats import spearmanr as rho
+import numpy as np
+from event_analysis import hypothesis_test
 
 def clim(domain,model,year_range,var_list,seasons=[[1,2,3,4,5,6,7,8,9,10,11,12]],levels=False,\
 		plot_trends=False):
@@ -145,18 +147,18 @@ def load_ncdf(domain,model,year_range,var_list=False,exclude_vars=False):
 			"_"+str(y)+"*.nc"))
 	fnames.sort()
 	#Only get dataset for var_list (unless False). For BARRA-R, inconsistent name, for wg, need to change 
-	file_vars = np.array(nc.Dataset(fnames[0]).variables.keys())
+	file_vars = np.array(list(nc.Dataset(fnames[0]).variables.keys()))
 	if var_list != False:
 		if exclude_vars:
 			print("EXCLUDING ALL VARIABLES FROM LOAD_NCDF EXCEPT THOSE PARSED BY VAR_LIST...")
-			if (model == "barra_r_fc") | (model == "erai_fc"):
+			if (model == "barra_r_fc") | (model == "erai_fc") | (model == "barra_ad"):
 				exclude_vars = file_vars[~(np.in1d(file_vars,var_list)) & ~(file_vars=="lon") & \
 				~(file_vars=="lat") & ~(file_vars=="time")]
 			else:
 				exclude_vars = file_vars[~(np.in1d(file_vars,var_list)) & ~(file_vars=="lon") & \
 				~(file_vars=="lat") & ~(file_vars=="time") & ~(file_vars=="ml_cape") & \
 				~(file_vars=="s06")]
-				return(nc.MFDataset(fnames,exclude=exclude_vars))
+			return(nc.MFDataset(fnames,exclude=exclude_vars))
 		else:
 	    		return(nc.MFDataset(fnames))
 	else:
@@ -401,6 +403,11 @@ def plot_trend_function(var,threshold,dmax,daily_dates,daily_months,season,time1
 		a = dmax[np.in1d(daily_months,np.array(season)) & (t1)]
 		b = dmax[np.in1d(daily_months,np.array(season)) & (t2)]
 
+	#Get the trends for variable var for the region bound by [137,-35,139,-33]. Output a time series of 
+	# events in this region (events1 and events2)
+	x,y=np.meshgrid(lon,lat)
+	events1, events2 = spatial_trends(var, a, b, [137,-35,139,-33], x, y, year_range, n_boot)
+
 	if trend_on_cond_days == "cond":
 		print("Getting trends for COND days...")
 		f_temp = load_ncdf(domain,model,year_range,["cond"])
@@ -414,14 +421,21 @@ def plot_trend_function(var,threshold,dmax,daily_dates,daily_months,season,time1
 		trend = (b.mean(axis=0) - a.mean(axis=0))
 	elif trend_on_cond_days == "mf":
 		print("Getting trends for MF days...")
+
 		f_temp = load_ncdf(domain,model,year_range,["mf"])
 		time = nc.num2date(f_temp.variables["time"][:],f_temp.variables["time"].units)
 		mf,daily_dates = daily_resample(f_temp,time,"mf",model,"max")
+
+		mf_events1, mf_events2 = spatial_trends(var,\
+			mf[np.in1d(daily_months,np.array(season)) & (t1)],\
+			mf[np.in1d(daily_months,np.array(season)) & (t2)],\
+			[137,-35,139,-33], x, y, year_range, n_boot)
+
 		f_temp.close()
-		a = np.ma.masked_where(mf[np.in1d(daily_months,np.array(season)) \
-			& (t1)]==0,a)
-		b = np.ma.masked_where(mf[np.in1d(daily_months,np.array(season)) \
-			& (t2)]==0,b)
+		a[mf_events1==0] = np.nan
+		b[mf_events2==0] = np.nan
+		a = np.ma.masked_where(np.isnan(a),a)
+		b = np.ma.masked_where(np.isnan(b),b)
 		trend = (b.mean(axis=0) - a.mean(axis=0))
 	elif trend_on_cond_days == "sf":
 		print("Getting trends for SF days...")
@@ -451,7 +465,6 @@ def plot_trend_function(var,threshold,dmax,daily_dates,daily_months,season,time1
 		sig[np.isnan(np.nansum(a,axis=0))|np.isnan(np.nansum(b,axis=0))] = np.nan
 
 	#Plot trend
-	x,y=np.meshgrid(lon,lat)
 	plt.figure()
 	m.drawcoastlines()
 	try:
@@ -479,8 +492,6 @@ def plot_trend_function(var,threshold,dmax,daily_dates,daily_months,season,time1
 	#	model+"_"+var+"_"+str(season[0])+"_"+str(season[-1])+"_"+str(threshold)+"_"+\
 	#	str(year_range[0])+"_"+str(year_range[1])+".png",bbox_inches="tight")
 
-	#Now, do a spatial trend
-	spatial_trends(var,a, b, [137,-35,139,-33], x, y, year_range, n_boot)
 
 	return [trend,sig]
 
@@ -630,7 +641,7 @@ def plot_corr_func(m,lon,lat,model,nino34,dmi,sam,dmax,daily_years,daily_months,
 			,extend="both")
 			plt.plot(x[np.where(years_p[s]<=0.05)],y[np.where(years_p[s]<=0.05)],"ko")
 			plt.colorbar()
-			plt.savefig("/home/548/ab4502/working/ExtremeWind/figs/corr/years_"+\
+			plt.savefig("/short/eg3/ab4502/figs/ExtremeWind/corr/years_"+\
 			model+"_"+var_name+"_"+names[s]+"_"+str(threshold)\
 			+"_"+str(year_range[0])+"_"+str(year_range[1])+".png",bbox_inches="tight")
 			plt.close()
@@ -691,7 +702,7 @@ def plot_diurnal_clim(hours_clim,lon,lat,model,var,threshold,outname):
 	m.drawcoastlines()
 	m.contourf(lon,lat,hours_clim,latlon=True,levels = np.arange(0,27,3))
 	plt.colorbar()
-	fig.savefig("/home/548/ab4502/working/ExtremeWind/figs/clim/"+model+\
+	fig.savefig("/short/eg3/ab4502/figs/ExtremeWind/clim/"+model+\
 		"_"+var+"_hours_"+str(threshold)+"_"+outname+".png")
 	plt.close()
 
@@ -768,7 +779,7 @@ def plot_clim(f,m,lat,lon,mean,var,model,domain,year_range,season,levels=False,t
 		#	"_"+str(season[0])+"_"+str(season[-1])+"_"+str(threshold)+"_"+str(year_range[0])+"_"+\
 		#	str(year_range[-1])+".png",bbox_inches="tight")
 	else:
-		plt.savefig("/home/548/ab4502/working/ExtremeWind/figs/clim/"+model+"_"+var+\
+		plt.savefig("/short/eg3/548/ab4502/figs/ExtremeWind/clim/"+model+"_"+var+\
 			"_"+domain+"_"+str(season[0])+"_"+str(season[-1])+"_"+str(threshold)+"_"+\
 			str(year_range[0])+"_"+str(year_range[-1])+".png",bbox_inches="tight")
 		
@@ -813,15 +824,19 @@ def spatial_trends(var,arr1, arr2, domain, lon, lat, year_range, n_boot):
 		
 	df = pd.DataFrame({"Trend":trend,"Upper trend (95%)":np.percentile(trend_samples,97.5),"Lower trend (95%)":np.percentile(trend_samples,2.5),\
 				"Days1":days1,"Days2":days2},index=["Value"])
-	df.to_csv("/home/548/ab4502/working/ExtremeWind/figs/trends/erai_spatial_events_"+var+".csv")
+	df.to_csv("/short/eg3/ab4502/figs/ExtremeWind/trends/erai_spatial_events_"+var+".csv")
+
+	return [events1, events2]
 
 
 if __name__ == "__main__":
 
-	daily_max_clim("sa_small","erai",[1979,2017],\
-		var_list=["cond","mf","sf"],\
-		threshold=[False,False,False],\
-		plot_trends=True, n_boot = 1000, plot_corr = False)
+	#daily_max_clim("sa_small","erai",[1979,2017],\
+		#var_list=["scp"],\
+		#threshold=[0.018],\
+		#levels=[np.arange(0,55,5)],\
+		#trend_levels = [np.arange(-50,60,10)],\
+		#plot_trends=True, trend_on_cond_days="mf",n_boot = 1000, plot_corr = False)
 
 	#FIGURE 7:
 	#daily_max_clim("sa_small","erai_fc",[1979,2017],threshold=[21.5],var_list=["wg10"],\
@@ -859,10 +874,11 @@ if __name__ == "__main__":
 	#	levels=[np.linspace(0,2,11)],seasons=[[11,12,1],[2,3,4],[5,6,7],[8,9,10]],log_cscale=True)
 
 	#Ingredients
-	#daily_max_clim("sa_small","erai",[1979,2017],var_list=["ta2d","tas","tos"],\
-	#		plot_trends=True,\
-	#		threshold = [False,False,False],\
-	#		trend_levels=[np.linspace(-1.5,1.5,11),np.linspace(-1.5,1.5,11),\
-	#		np.linspace(-2,2,11)]\
-	#		,n_boot=1000,trend_on_cond_days=True,\
-	#		seasons=[np.arange(1,13,1),[11,12,1],[2,3,4],[5,6,7],[8,9,10]])
+	daily_max_clim("sa_small","erai",[1979,2017],var_list=["tos"],\
+			plot_trends=True,\
+			threshold = [False,False,False],\
+			trend_levels=[np.linspace(-1.5,1.5,11),np.linspace(-1.5,1.5,11),\
+			np.linspace(-2,2,11)]\
+			,n_boot=1000,trend_on_cond_days=True,\
+			seasons=[np.arange(1,13,1),[11,12,1],[2,3,4],[5,6,7],[8,9,10]])
+			#seasons=[np.arange(1,13,1)])

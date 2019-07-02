@@ -4,6 +4,8 @@ from scipy.stats import spearmanr as rho
 from statsmodels.distributions.empirical_distribution import ECDF
 from event_analysis import *
 from plot_param import *
+import matplotlib
+matplotlib.use("TkAgg")
 
 def load_wind_gusts(include_barra,remove_incomplete_years='True'):
 	#Load dataframes
@@ -15,8 +17,10 @@ def load_wind_gusts(include_barra,remove_incomplete_years='True'):
 
 	#Combine ERA-Interim, AWS and BARRA-R daily max wind gusts 
 	if include_barra:
-	    barra_r = pd.read_pickle("/g/data/eg3/ab4502/ExtremeWind/points/barra_r_fc/"+\
-			"barra_r_fc_points_daily_2003_2016.pkl")
+	    #barra_r = pd.read_pickle("/g/data/eg3/ab4502/ExtremeWind/points/barra_r_fc/"+\
+	#		"barra_r_fc_points_daily_2003_2016.pkl")
+	    barra_r = pd.read_pickle("/g/data/eg3/ab4502/ExtremeWind/points/"+\
+			"barra_r_fc_points_sa_small_2003_2016_daily_max_6hr.pkl")
 	    barra_ad = pd.read_pickle("/g/data/eg3/ab4502/ExtremeWind/points/barra_ad/"+\
 			"barra_ad_points_daily_2006_2016.pkl")
 	    combined = pd.concat([aws.set_index(["date","stn_name"]).\
@@ -153,9 +157,11 @@ def plot_scatter(combined,model_list,name_list,location=False):
 			ax = plt.gca()
 			ax.set_xticks([0,10,20,30,40])			
 			ax.set_xticklabels(['0','10','20','30','40'])			
-	   		cax = fig.add_axes([0.2,0.05,0.6,0.01])
-	   		cb = plt.colorbar(h[-1],cax,orientation="horizontal",extend="max")
-	   		cb.ax.tick_params(labelsize="xx-large")
+			if (n == 1) | (n == 2):
+				ax.set_yticklabels("")	
+			cax = fig.add_axes([0.2,0.05,0.6,0.01])
+			cb = plt.colorbar(h[-1],cax,orientation="horizontal",extend="max")
+			cb.ax.tick_params(labelsize="xx-large")
 		if n>0:
 			ax = plt.gca()
 			ax.set_yticklabels("")			
@@ -164,7 +170,7 @@ def plot_scatter(combined,model_list,name_list,location=False):
 	#plt.savefig("/home/548/ab4502/working/ExtremeWind/figs/scatter/aws/"+location+".png",\
 	#	bbox_inches="tight")
 	plt.show()
-    plt.close()
+	#plt.close()
 
 def plot_monthly_dist(combined,gust_list,threshold):
 	for n in np.arange(0,len(gust_list)):
@@ -198,17 +204,17 @@ def plot_extreme_dist_loc(combined,model_list,locations,threshold,bins,log=False
 	
 	combined = combined.reset_index().rename(columns={"level_0":"date","level_1":"loc_id"})
 	for l in np.arange(0,len(locations)):
-	    plt.subplot(2,2,l+1)
-	    data = list()
-	    for n in np.arange(0,len(model_list)):
-		df = combined[(combined[model_list[n]]>=threshold)&(combined.loc_id==locations[l])]
-		data.append(df[model_list[n]].values)
-	    plt.hist(data,histtype="bar",bins=bins,label=model_list,\
+		plt.subplot(2,2,l+1)
+		data = list()
+		for n in np.arange(0,len(model_list)):
+			df = combined[(combined[model_list[n]]>=threshold)&(combined.loc_id==locations[l])]
+			data.append(df[model_list[n]].values)
+		plt.hist(data,histtype="bar",bins=bins,label=model_list,\
 			normed=False,range=[0,50],log=log)
-	    plt.title(locations[l])
+		plt.title(locations[l])
 	    #plt.axvline(x=df.aws_gust.mean(),color="k",linestyle="--",label="Observed Mean")
 	    #plt.axvline(x=threshold,color="k")
-	    plt.xlim([threshold,45])
+		plt.xlim([threshold,45])
 	plt.legend()
 	plt.show()
 
@@ -231,14 +237,14 @@ def test_dist_assumption(combined,gust_type,stns=False,threshold=0):
 	stn_lab = list()
 	plot_cols = list()
 	for s in np.arange(0,len(stns)):
-	   for n in np.arange(0,len(gust_type)):
-		aws.append(combined[(combined.stn_name == stns[s]) & \
+		for n in np.arange(0,len(gust_type)):
+			aws.append(combined[(combined.stn_name == stns[s]) & \
 			(combined[gust_type[n]]>=threshold)][gust_type[n]].values)
-		if n == 0:
-			stn_lab.append(stns[s])
-		else:
-			stn_lab.append("")
-		plot_cols.append(cols[n])
+			if n == 0:
+				stn_lab.append(stns[s])
+			else:
+				stn_lab.append("")
+			plot_cols.append(cols[n])
 	
 	for n in np.arange(0,len(gust_type)):
 		if n == 0:

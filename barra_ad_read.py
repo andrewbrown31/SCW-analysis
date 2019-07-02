@@ -1,10 +1,3 @@
-import sharppy
-import sharppy.sharptab.profile as profile
-import sharppy.sharptab.interp as interp
-import sharppy.sharptab.winds as winds
-import sharppy.sharptab.utils as utils
-import sharppy.sharptab.params as params
-import sharppy.sharptab.thermo as thermo
 import netCDF4 as nc
 import numpy as np
 import datetime as dt

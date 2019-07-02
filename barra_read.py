@@ -1,19 +1,10 @@
-import sharppy
-import sharppy.sharptab.profile as profile
-import sharppy.sharptab.interp as interp
-import sharppy.sharptab.winds as winds
-import sharppy.sharptab.utils as utils
-import sharppy.sharptab.params as params
-import sharppy.sharptab.thermo as thermo
 import netCDF4 as nc
 import numpy as np
 import datetime as dt
 import glob
-import matplotlib.pyplot as plt
-from mpl_toolkits.basemap import Basemap
 import pandas as pd
 
-from calc_param import *
+from calc_param import get_dp
 
 def read_barra(domain,times):
 	#Open BARRA netcdf files and extract variables needed for a range of times and given
@@ -52,6 +43,7 @@ def read_barra(domain,times):
 	uas = np.empty((len(date_list),len(lat_ind),len(lon_ind)))
 	vas = np.empty((len(date_list),len(lat_ind),len(lon_ind)))
 	ps = np.empty((len(date_list),len(lat_ind),len(lon_ind)))
+	wg10 = np.zeros(ps.shape)
 
 	for t in np.arange(0,len(date_list)):
 		year = dt.datetime.strftime(date_list[t],"%Y")
@@ -88,6 +80,7 @@ def read_barra(domain,times):
 		temp_hgt = z_file["geop_ht"][p_ind,lat_ind,lon_ind]
 		temp_hur = hur_file["relhum"][p_ind,lat_ind,lon_ind]
 		temp_hur[temp_hur<0] = 0
+		temp_hur[temp_hur>100] = 100
 		temp_dp = get_dp(temp_ta,temp_hur)
 		uas[t,:,:] = uas_file["uwnd10m"][lat_ind,lon_ind]
 		vas[t,:,:] = vas_file["vwnd10m"][lat_ind,lon_ind]
@@ -101,11 +94,28 @@ def read_barra(domain,times):
 		ua[t,:,:,:] = np.flipud(temp_ua)
 		va[t,:,:,:] = np.flipud(temp_va)
 
+		#Load forecast data
+		fc_year = dt.datetime.strftime(date_list[t] - dt.timedelta(hours=6),"%Y")
+		fc_month = dt.datetime.strftime(date_list[t] - dt.timedelta(hours=6),"%m")
+		fc_day = dt.datetime.strftime(date_list[t] - dt.timedelta(hours=6),"%d")
+		fc_hour = dt.datetime.strftime(date_list[t]- dt.timedelta(hours=6),"%H")
+		#try:
+		wg10_file = nc.Dataset(glob.glob("/g/data/ma05/BARRA_R/v1/forecast/spec/"\
+				+"max_wndgust10m/"+fc_year+"/"+fc_month+"/max_wndgust10m-fc-spec-PT1H-BARRA_R-*-"\
+				+fc_year+fc_month+fc_day+"T"+fc_hour+"*.nc")[0])
+		fc_times = nc.num2date(wg10_file["time"][:], wg10_file["time"].units)
+		an_times = nc.num2date(ps_file["time"][:], ps_file["time"].units)
+		wg10[t] = wg10_file.variables["max_wndgust10m"]\
+			[np.where(np.array(an_times) == np.array(fc_times))[0][0],lat_ind,lon_ind]
+		wg10_file.close()
+		#except:
+		#wg10[t][:] = np.nan
+
 		ta_file.close();z_file.close();ua_file.close();va_file.close();hur_file.close();uas_file.close();vas_file.close();ps_file.close()
 		
 	p = np.flipud(pres)
 
-	return [ta,dp,hur,hgt,terrain,p,ps,ua,va,uas,vas,lon,lat,date_list]
+	return [ta,dp,hur,hgt,terrain,p,ps,ua,va,uas,vas,wg10,lon,lat,date_list]
 	
 #IF WANTING TO LOOP OVER TIME, CHANGE READ_BARRA TO READ ALL TIMES IN A RANGE, THEN LOOP OVER TIME DIMENSION WITHIN CALC_PARAM
 
@@ -162,6 +172,7 @@ def read_barra_points(points,times):
 	+year+"/"+month+"/vwnd10m-an-spec-PT0H-BARRA_R-v1-"+year+month+day+"T"+hour+"*.nc")[0])
 		ps_file = nc.Dataset(glob.glob("/g/data/ma05/BARRA_R/v1/analysis/spec/sfc_pres/"\
 	+year+"/"+month+"/sfc_pres-an-spec-PT0H-BARRA_R-v1-"+year+month+day+"T"+hour+"*.nc")[0])
+		
 
 		times = ta_file["time"][:]
 		

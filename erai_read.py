@@ -1,20 +1,10 @@
-import sharppy
-import sharppy.sharptab.profile as profile
-import sharppy.sharptab.interp as interp
-import sharppy.sharptab.winds as winds
-import sharppy.sharptab.utils as utils
-import sharppy.sharptab.params as params
-import sharppy.sharptab.thermo as thermo
 import netCDF4 as nc
 import numpy as np
 import datetime as dt
 import glob
-import matplotlib.pyplot as plt
-from mpl_toolkits.basemap import Basemap
 import pandas as pd
-
-from calc_param import *
 from barra_read import date_seq
+from calc_param import get_dp
 
 def read_erai(domain,times):
 	#Open ERA-Interim netcdf files and extract variables needed for a range of times 
@@ -73,27 +63,56 @@ uas_6hrs_ERAI_historical_an-sfc_"+date+"*.nc")[0])
 vas_6hrs_ERAI_historical_an-sfc_"+date+"*.nc")[0])
 		ps_file = nc.Dataset(glob.glob("/g/data/ub4/erai/netcdf/6hr/atmos/oper_an_sfc/v01/ps/\
 ps_6hrs_ERAI_historical_an-sfc_"+date+"*.nc")[0])
+		cp_file = nc.Dataset(glob.glob("/g/data/ub4/erai/netcdf/3hr/atmos/oper_fc_sfc/v01/cp/\
+cp_3hrs_ERAI_historical_fc-sfc_"+date+"*.nc")[0])
+		cape_file = nc.Dataset(glob.glob("/g/data/ub4/erai/netcdf/3hr/atmos/oper_fc_sfc/v01/cape/\
+cape_3hrs_ERAI_historical_fc-sfc_"+date+"*.nc")[0])
+		wg10_file = nc.Dataset(glob.glob("/g/data/ub4/erai/netcdf/3hr/atmos/oper_fc_sfc/v01/wg10/\
+wg10_3hrs_ERAI_historical_fc-sfc_"+date+"*.nc")[0])
 
 		#Get times to load in from file
 		times = ta_file["time"][:]
 		time_ind = [np.where(x==times)[0][0] for x in time_hours if (x in times)]
 		date_ind = np.where(np.array(formatted_dates) == date)[0]
 
-		#Load data
+		#Load analysis data
 		ta[date_ind,:,:,:] = ta_file["ta"][time_ind,p_ind,lat_ind,lon_ind] - 273.15
 		ua[date_ind,:,:,:] = ua_file["ua"][time_ind,p_ind,lat_ind,lon_ind]
 		va[date_ind,:,:,:] = va_file["va"][time_ind,p_ind,lat_ind,lon_ind]
 		hgt[date_ind,:,:,:] = z_file["z"][time_ind,p_ind,lat_ind,lon_ind] / 9.8
 		hur[date_ind,:,:,:] = hur_file["hur"][time_ind,p_ind,lat_ind,lon_ind]
 		hur[hur<0] = 0
+		hur[hur>100] = 100
 		dp[date_ind,:,:,:] = get_dp(ta[date_ind,:,:,:],hur[date_ind,:,:,:])
 		uas[date_ind,:,:] = uas_file["uas"][time_ind,lat_ind,lon_ind]
 		vas[date_ind,:,:] = vas_file["vas"][time_ind,lat_ind,lon_ind]
 		ps[date_ind,:,:] = ps_file["ps"][time_ind,lat_ind,lon_ind] / 100
 
-		ta_file.close();z_file.close();ua_file.close();va_file.close();hur_file.close();uas_file.close();vas_file.close();ps_file.close()
+		#Load forecast data
+		fc_times = nc.num2date(cp_file["time"][:], cp_file["time"].units)
+		an_times = nc.num2date(ps_file["time"][time_ind], ps_file["time"].units)
+		cp = np.zeros(ps.shape)
+		fc_cp = cp_file.variables["cp"][:,lat_ind,lon_ind]
+		cape = np.zeros(ps.shape)
+		fc_cape = cape_file.variables["cape"][:,lat_ind,lon_ind]
+		wg10 = np.zeros(ps.shape)
+		fc_wg10 = wg10_file.variables["wg10"][:,lat_ind,lon_ind]
+		cnt = 0
+		for an_t in an_times:
+			try:
+				fc_ind = np.where(an_t == np.array(fc_times))[0][0]
+				cp[cnt] = ((fc_cp[fc_ind] - fc_cp[fc_ind - 1]) * 1000.) / 3.
+				cape[cnt] = (fc_cape[fc_ind])
+				wg10[cnt] = (fc_wg10[fc_ind])
+			except:
+				cp[cnt][:] = np.nan
+				cape[cnt][:] = np.nan
+				wg10[cnt][:] = np.nan
+			cnt = cnt + 1
+
+		ta_file.close();z_file.close();ua_file.close();va_file.close();hur_file.close();uas_file.close();vas_file.close();ps_file.close();cp_file.close();wg10_file.close();cape_file.close()
 	
-	return [ta,dp,hur,hgt,terrain,p,ps,ua,va,uas,vas,lon,lat,date_list]
+	return [ta,dp,hur,hgt,terrain,p,ps,ua,va,uas,vas,cp,wg10,cape,lon,lat,date_list]
 	
 def read_erai_fc(domain,times):
 	#Open ERA-Interim forecast netcdf files and extract variables needed for a range of times 

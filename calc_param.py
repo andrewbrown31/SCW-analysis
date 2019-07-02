@@ -1,27 +1,20 @@
 import itertools
 import multiprocessing
-import sharppy
-import sharppy.sharptab.profile as profile
-#import sharppy.sharptab.interp as interp
-import sharppy.sharptab.winds as winds
-import sharppy.sharptab.utils as utils
-import sharppy.sharptab.params as params
-import sharppy.sharptab.thermo as thermo
 import netCDF4 as nc
 import numpy as np
 import datetime as dt
 import glob
 import pandas as pd
 import os
-from SkewT import get_dcape
 #For some reason, with numpy 1.16.0, metpy import doesn't work at first, but then works when you try it again
 try:
-	import metpy.units.units as units
+	from SkewT import get_dcape
+	import metpy.units as units
 	import metpy.calc as mpcalc
 except:
 	pass
-from metpy.units import units as units
-import metpy.calc as mpcalc
+#from metpy.units import units as units
+#import metpy.calc as mpcalc
 #import metpy
 import wrf
 
@@ -35,11 +28,6 @@ import wrf
 #		Extract parameters in a vectorised fashion, such that calculations are done once
 #		for a spatial domain at each time step. Uses wrf-python for CAPE and
 #		user-written functions for winds.
-#
-#	- calc_param_sharppy
-#		Extract parameters by looping over time, latitude and longitude, and creating 
-#		"profiles" with the SHARPpy package. Too slow to run for the whole reanalysis 
-#		period
 #
 #	- calc_param_points
 #		Extract parameters by looping over time, at a set of points provided by the 
@@ -66,11 +54,12 @@ import wrf
 def get_dp(ta,hur):
 	#Dew point approximation found at https://gist.github.com/sourceperl/45587ea99ff123745428
 	#Same as "Magnus formula" https://en.wikipedia.org/wiki/Dew_point
+	#For points where RH is zero, set the dew point temperature to -85 deg C
 	a = 17.27
 	b = 237.7
 	alpha = ((a * ta) / (b + ta)) + np.log(hur/100.0)
 	dp = (b*alpha) / (a - alpha)
-	#print("\n	WARNING DUE TO DEW POINT BEING UNDEFINED FOR ZERO RELATIVE HUMIDITY\n")
+	dp[np.isnan(dp)] = -85.
 	return dp
 
 def get_point(point,lon,lat,ta,dp,hgt,ua,va,uas,vas,hur):
@@ -1446,7 +1435,7 @@ def nc_attributes(param):
 		long_name = "most_unstable_lifting_condensation_level"
 	elif param == "cape*s06":
 		units = ""
-		long_name = "cape*s06"
+		long_name = "erai_cape_times_s06167"
 	elif param == "cape*ssfc6":
 		units = ""
 		long_name = "cape*ssfc6"
@@ -1486,6 +1475,225 @@ def nc_attributes(param):
 	elif param == "dlm":
 		units = "m/s"
 		long_name = "deep_layer_mean_wind_speed"
+	elif param == "sb_cape":
+		units = "J/kg"
+		long_name = "surface_based_cape"
+	elif param == "sb_cin":
+		units = "J/kg"
+		long_name = "surface_based_cin"
+	elif param == "ml_lcl":
+		units = "m"
+		long_name = "mixed_layer_parcel_lcl"
+	elif param == "mu_lcl":
+		units = "m"
+		long_name = "most_unstable_parcel_lcl"
+	elif param == "sb_lcl":
+		units = "m"
+		long_name = "sfc_based_parcel_lcl"
+	elif param == "cp":
+		units = "mm/hr"
+		long_name = "convective_precipitation_erai"
+	elif param == "dcp2":
+		units = ""
+		long_name = "dcp_erai_cape"
+	elif param == "srhe":
+		units = "m^2/s^2"
+		long_name = "effective_layer_storm_relative_helicity"
+	elif param == "ebwd":
+		units = "m/s"
+		long_name = "effective_layer_bulk_wind_fifference(shear)"
+	elif param == "Umean06":
+		units = "m/s"
+		long_name = "mean_wind_0km_6km"
+	elif param == "U500":
+		units = "m/s"
+		long_name = "wind_speed_500hPa"
+	elif param == "U10":
+		units = "m/s"
+		long_name = "diagnostic_wind_speed_10m"
+	elif param == "Uwindinf":
+		units = "m/s"
+		long_name = "wind_speed_top_of_effective_layer"
+	elif param == "Umeanwindinf":
+		units = "m/s"
+		long_name = "mean_wind_speed_effective_layer"
+	elif param == "Umean800_600":
+		units = "m/s"
+		long_name = "mean_wind_speed800_600hPa"
+	elif param == "stp_cin":
+		units = ""
+		long_name = "significant_tornado_parameter_with_cin"
+	elif param == "stp_fixed":
+		units = ""
+		long_name = "significant_tornado_parameter_with_fixed_layer"
+	elif param == "mlcape*s06":
+		units = ""
+		long_name = "mixed_layer_cape_times_s06167"
+	elif param == "mucape*s06":
+		units = ""
+		long_name = "most_unstable_cape_times_s06167"
+	elif param == "dmgwind":
+		units = ""
+		long_name = "damaging_wind_kuchera"
+	elif param == "ducs6":
+		units = ""
+		long_name = "convgust_times_mlcape*s06"
+	elif param == "convgust":
+		units = ""
+		long_name = "convective_gust_ewd"
+	elif param == "windex":
+		units = "m/s"
+		long_name = "wind_index_mccann_microburst"
+	elif param == "gustex":
+		units = "m/s"
+		long_name = "gust_index_geerts_original"
+	elif param == "gustex2":
+		units = "m/s"
+		long_name = "gust_index_geerts_Umean06"
+	elif param == "gustex3":
+		units = ""
+		long_name = "gust_index_geerts_times_mlcape*s06"
+	elif param == "lr01":
+		units = "deg/km"
+		long_name = "lapse_rate_0_1km"
+	elif param == "lr03":
+		units = "deg/km"
+		long_name = "lapse_rate_0_3km"
+	elif param == "lr13":
+		units = "deg/km"
+		long_name = "lapse_rate_1_3km"
+	elif param == "lr36":
+		units = "deg/km"
+		long_name = "lapse_rate_3_6km"
+	elif param == "lr_freezing":
+		units = "deg/km"
+		long_name = "lapse_rate_sfc_to_freezing"
+	elif param == "qmean01":
+		units = "g/kg"
+		long_name = "water_vapour_mean_mixing_ratio_0_1km"
+	elif param == "qmean03":
+		units = "g/kg"
+		long_name = "water_vapour_mean_mixing_ratio_0_3km"
+	elif param == "qmean06":
+		units = "g/kg"
+		long_name = "water_vapour_mean_mixing_ratio_0_6km"
+	elif param == "qmean13":
+		units = "g/kg"
+		long_name = "water_vapour_mean_mixing_ratio_1_3km"
+	elif param == "qmean36":
+		units = "g/kg"
+		long_name = "water_vapour_mean_mixing_ratio_3_6km"
+	elif param == "qmeansubcloud":
+		units = "g/kg"
+		long_name = "water_vapour_mean_mixing_ratio_sfc_to_mllcl"
+	elif param == "q_melting":
+		units = "g/kg"
+		long_name = "water_vapour_mixing_ratio_melting_level"
+	elif param == "q1":
+		units = "g/kg"
+		long_name = "water_vapour_mixing_ratio_1km"
+	elif param == "q3":
+		units = "g/kg"
+		long_name = "water_vapour_mixing_ratio_3km"
+	elif param == "q6":
+		units = "g/kg"
+		long_name = "water_vapour_mixing_ratio_6km"
+	elif param == "rhmin01":
+		units = "%"
+		long_name = "minimum_rh_0_1km"
+	elif param == "rhmin03":
+		units = "%"
+		long_name = "minimum_rh_0_3km"
+	elif param == "rhmin06":
+		units = "%"
+		long_name = "minimum_rh_0_6km"
+	elif param == "rhmin13":
+		units = "%"
+		long_name = "minimum_rh_1_3km"
+	elif param == "rhmin36":
+		units = "%"
+		long_name = "minimum_rh_3_6km"
+	elif param == "rhminsubcloud":
+		units = "%"
+		long_name = "minimum_rh_sfc_mllcl"
+	elif param == "mhgt":
+		units = "m"
+		long_name = "melting_lvl_hgt"
+	elif param == "el":
+		units = "m"
+		long_name = "equilibrium_lvl_mu_parcel"
+	elif param == "s13":
+		units = "m/s"
+		long_name = "wind_shear_1_3km"
+	elif param == "s36":
+		units = "m/s"
+		long_name = "wind_shear_3_6km"
+	elif param == "scld":
+		units = "m/s"
+		long_name = "wind_shear_mllcl_to_half_the_el"
+	elif param == "U1":
+		units = "m/s"
+		long_name = "wind_speed_1km"
+	elif param == "U3":
+		units = "m/s"
+		long_name = "wind_speed_3km"
+	elif param == "U6":
+		units = "m/s"
+		long_name = "wind_speed_6km"
+	elif param == "Ust":
+		units = "m/s"
+		long_name = "non_parcel_bunkers_storm_motion_speed"
+	elif param == "Usr01":
+		units = "m/s"
+		long_name = "storm_relative_mean_wind_speed_using_Ust_0_1km"
+	elif param == "Usr03":
+		units = "m/s"
+		long_name = "storm_relative_mean_wind_speed_using_Ust_0_3km"
+	elif param == "Usr06":
+		units = "m/s"
+		long_name = "storm_relative_mean_wind_speed_using_Ust_0_6km"
+	elif param == "Usr13":
+		units = "m/s"
+		long_name = "storm_relative_mean_wind_speed_using_Ust_1_3km"
+	elif param == "Usr36":
+		units = "m/s"
+		long_name = "storm_relative_mean_wind_speed_using_Ust_3_6km"
+	elif param == "sherb":
+		units = ""
+		long_name = "sever_hazards_with_reduced_buoyancy_parameter"
+	elif param == "eff_sherb":
+		units = ""
+		long_name = "sever_hazards_with_reduced_buoyancy_parameter_effective_layer_form"
+	elif param == "v_totals":
+		units = ""
+		long_name = "vertical_totals_index"
+	elif param == "c_totals":
+		units = ""
+		long_name = "cross_totals_index"
+	elif param == "t_totals":
+		units = ""
+		long_name = "total_totals_index"
+	elif param == "pwat":
+		units = "in"
+		long_name = "precip_water_sfc_400_hPa"
+	elif param == "eff_cape":
+		units = "J/kg"
+		long_name = "effective_inflow_layer_parcel_define_cape"
+	elif param == "eff_cin":
+		units = "J/kg"
+		long_name = "effective_inflow_layer_parcel_define_cin"
+	elif param == "eff_lcl":
+		units = "m"
+		long_name = "effective_inflow_layer_parcel_define_lcl"
+	elif param == "wndg":
+		units = ""
+		long_name = "wind_damage_parameter_spc"
+	elif param == "mburst":
+		units = ""
+		long_name = "microburst_composite_index_spc"
+	elif param == "sweat":
+		units = ""
+		long_name = "severe_weather_threat_index_spc"
 	else:
 		units = ""
 		long_name = ""

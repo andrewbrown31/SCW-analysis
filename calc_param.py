@@ -1436,6 +1436,9 @@ def nc_attributes(param):
 	elif param == "cape*s06":
 		units = ""
 		long_name = "erai_cape_times_s06167"
+	elif param == "cape*s06_2":
+		units = ""
+		long_name = "erai_cape_times_s06"
 	elif param == "cape*ssfc6":
 		units = ""
 		long_name = "cape*ssfc6"
@@ -1502,6 +1505,12 @@ def nc_attributes(param):
 	elif param == "ebwd":
 		units = "m/s"
 		long_name = "effective_layer_bulk_wind_fifference(shear)"
+	elif param == "Umean01":
+		units = "m/s"
+		long_name = "mean_wind_0km_1km"
+	elif param == "Umean03":
+		units = "m/s"
+		long_name = "mean_wind_0km_3km"
 	elif param == "Umean06":
 		units = "m/s"
 		long_name = "mean_wind_0km_6km"
@@ -1529,9 +1538,27 @@ def nc_attributes(param):
 	elif param == "mlcape*s06":
 		units = ""
 		long_name = "mixed_layer_cape_times_s06167"
+	elif param == "mlcape*s06_2":
+		units = ""
+		long_name = "mixed_layer_cape_times_s06"
 	elif param == "mucape*s06":
 		units = ""
 		long_name = "most_unstable_cape_times_s06167"
+	elif param == "mucape*s06_2":
+		units = ""
+		long_name = "most_unstable_cape_times_s06"
+	elif param == "effcape*s06":
+		units = ""
+		long_name = "effective_cape_times_s06167"
+	elif param == "effcape*s06_2":
+		units = ""
+		long_name = "effective_cape_times_s06"
+	elif param == "sbcape*s06":
+		units = ""
+		long_name = "surface_based_cape_times_s06167"
+	elif param == "sbcape*s06_2":
+		units = ""
+		long_name = "surface_based_cape_times_s06"
 	elif param == "dmgwind":
 		units = ""
 		long_name = "damaging_wind_kuchera"
@@ -1658,6 +1685,12 @@ def nc_attributes(param):
 	elif param == "Usr36":
 		units = "m/s"
 		long_name = "storm_relative_mean_wind_speed_using_Ust_3_6km"
+	elif param == "mosh":
+		units = ""
+		long_name = "modified_sherb"
+	elif param == "moshe":
+		units = ""
+		long_name = "modified_sherb_with_effective_shear"
 	elif param == "sherb":
 		units = ""
 		long_name = "sever_hazards_with_reduced_buoyancy_parameter"
@@ -1694,6 +1727,18 @@ def nc_attributes(param):
 	elif param == "sweat":
 		units = ""
 		long_name = "severe_weather_threat_index_spc"
+	elif param == "maxtevv":
+		units = "K Pa / (km s)"
+		long_name = "max_thetae_vertical_velocity_sherburn"
+	elif param == "omega01":
+		units = "Pa/s"
+		long_name = "mean_vertical_velocity_0-1km"
+	elif param == "omega03":
+		units = "Pa/s"
+		long_name = "mean_vertical_velocity_0-3km"
+	elif param == "omega06":
+		units = "Pa/s"
+		long_name = "mean_vertical_velocity_0-6km"
 	else:
 		units = ""
 		long_name = ""

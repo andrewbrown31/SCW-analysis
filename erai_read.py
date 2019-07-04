@@ -39,9 +39,13 @@ def read_erai(domain,times):
 	hgt = np.empty((len(date_list),no_p,len(lat_ind),len(lon_ind)))
 	ua = np.empty((len(date_list),no_p,len(lat_ind),len(lon_ind)))
 	va = np.empty((len(date_list),no_p,len(lat_ind),len(lon_ind)))
+	wap = np.empty((len(date_list),no_p,len(lat_ind),len(lon_ind)))
 	uas = np.empty((len(date_list),len(lat_ind),len(lon_ind)))
 	vas = np.empty((len(date_list),len(lat_ind),len(lon_ind)))
 	ps = np.empty((len(date_list),len(lat_ind),len(lon_ind)))
+
+	tas = np.empty((len(date_list),len(lat_ind),len(lon_ind)))
+	ta2d = np.empty((len(date_list),len(lat_ind),len(lon_ind)))
 
 	for date in unique_dates:
 		#print(date)
@@ -51,6 +55,8 @@ def read_erai(domain,times):
 ta_6hrs_ERAI_historical_an-pl_"+date+"*.nc")[0])
 		z_file = nc.Dataset(glob.glob("/g/data/ub4/erai/netcdf/6hr/atmos/oper_an_pl/v01/z/\
 z_6hrs_ERAI_historical_an-pl_"+date+"*.nc")[0])
+		wap_file = nc.Dataset(glob.glob("/g/data/ub4/erai/netcdf/6hr/atmos/oper_an_pl/v01/wap/\
+wap_6hrs_ERAI_historical_an-pl_"+date+"*.nc")[0])
 		ua_file = nc.Dataset(glob.glob("/g/data/ub4/erai/netcdf/6hr/atmos/oper_an_pl/v01/ua/\
 ua_6hrs_ERAI_historical_an-pl_"+date+"*.nc")[0])
 		va_file = nc.Dataset(glob.glob("/g/data/ub4/erai/netcdf/6hr/atmos/oper_an_pl/v01/va/\
@@ -61,6 +67,10 @@ hur_6hrs_ERAI_historical_an-pl_"+date+"*.nc")[0])
 uas_6hrs_ERAI_historical_an-sfc_"+date+"*.nc")[0])
 		vas_file = nc.Dataset(glob.glob("/g/data/ub4/erai/netcdf/6hr/atmos/oper_an_sfc/v01/vas/\
 vas_6hrs_ERAI_historical_an-sfc_"+date+"*.nc")[0])
+		ta2d_file = nc.Dataset(glob.glob("/g/data/ub4/erai/netcdf/6hr/atmos/oper_an_sfc/v01/ta2d/\
+ta2d_6hrs_ERAI_historical_an-sfc_"+date+"*.nc")[0])
+		tas_file = nc.Dataset(glob.glob("/g/data/ub4/erai/netcdf/6hr/atmos/oper_an_sfc/v01/tas/\
+tas_6hrs_ERAI_historical_an-sfc_"+date+"*.nc")[0])
 		ps_file = nc.Dataset(glob.glob("/g/data/ub4/erai/netcdf/6hr/atmos/oper_an_sfc/v01/ps/\
 ps_6hrs_ERAI_historical_an-sfc_"+date+"*.nc")[0])
 		cp_file = nc.Dataset(glob.glob("/g/data/ub4/erai/netcdf/3hr/atmos/oper_fc_sfc/v01/cp/\
@@ -77,6 +87,7 @@ wg10_3hrs_ERAI_historical_fc-sfc_"+date+"*.nc")[0])
 
 		#Load analysis data
 		ta[date_ind,:,:,:] = ta_file["ta"][time_ind,p_ind,lat_ind,lon_ind] - 273.15
+		wap[date_ind,:,:,:] = wap_file["wap"][time_ind,p_ind,lat_ind,lon_ind]
 		ua[date_ind,:,:,:] = ua_file["ua"][time_ind,p_ind,lat_ind,lon_ind]
 		va[date_ind,:,:,:] = va_file["va"][time_ind,p_ind,lat_ind,lon_ind]
 		hgt[date_ind,:,:,:] = z_file["z"][time_ind,p_ind,lat_ind,lon_ind] / 9.8
@@ -86,6 +97,8 @@ wg10_3hrs_ERAI_historical_fc-sfc_"+date+"*.nc")[0])
 		dp[date_ind,:,:,:] = get_dp(ta[date_ind,:,:,:],hur[date_ind,:,:,:])
 		uas[date_ind,:,:] = uas_file["uas"][time_ind,lat_ind,lon_ind]
 		vas[date_ind,:,:] = vas_file["vas"][time_ind,lat_ind,lon_ind]
+		tas[date_ind,:,:] = tas_file["tas"][time_ind,lat_ind,lon_ind] - 273.15
+		ta2d[date_ind,:,:] = ta2d_file["ta2d"][time_ind,lat_ind,lon_ind] - 273.15
 		ps[date_ind,:,:] = ps_file["ps"][time_ind,lat_ind,lon_ind] / 100
 
 		#Load forecast data
@@ -110,9 +123,9 @@ wg10_3hrs_ERAI_historical_fc-sfc_"+date+"*.nc")[0])
 				wg10[cnt][:] = np.nan
 			cnt = cnt + 1
 
-		ta_file.close();z_file.close();ua_file.close();va_file.close();hur_file.close();uas_file.close();vas_file.close();ps_file.close();cp_file.close();wg10_file.close();cape_file.close()
+		ta_file.close();z_file.close();ua_file.close();va_file.close();hur_file.close();uas_file.close();vas_file.close();tas_file.close();ta2d_file.close();ps_file.close();cp_file.close();wg10_file.close();cape_file.close();wap_file.close()
 	
-	return [ta,dp,hur,hgt,terrain,p,ps,ua,va,uas,vas,cp,wg10,cape,lon,lat,date_list]
+	return [ta,dp,hur,hgt,terrain,p,ps,wap,ua,va,uas,vas,tas,ta2d,cp,wg10,cape,lon,lat,date_list]
 	
 def read_erai_fc(domain,times):
 	#Open ERA-Interim forecast netcdf files and extract variables needed for a range of times 

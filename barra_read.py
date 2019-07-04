@@ -6,6 +6,9 @@ import pandas as pd
 
 from calc_param import get_dp
 
+from metpy.calc import vertical_velocity_pressure as omega
+from metpy.units import units
+
 def read_barra(domain,times):
 	#Open BARRA netcdf files and extract variables needed for a range of times and given
 	# spatial domain
@@ -38,12 +41,16 @@ def read_barra(domain,times):
 	dp = np.empty((len(date_list),no_p,len(lat_ind),len(lon_ind)))
 	hur = np.empty((len(date_list),no_p,len(lat_ind),len(lon_ind)))
 	hgt = np.empty((len(date_list),no_p,len(lat_ind),len(lon_ind)))
+	wap = np.empty((len(date_list),no_p,len(lat_ind),len(lon_ind)))
 	ua = np.empty((len(date_list),no_p,len(lat_ind),len(lon_ind)))
 	va = np.empty((len(date_list),no_p,len(lat_ind),len(lon_ind)))
 	uas = np.empty((len(date_list),len(lat_ind),len(lon_ind)))
 	vas = np.empty((len(date_list),len(lat_ind),len(lon_ind)))
+	tas = np.empty((len(date_list),len(lat_ind),len(lon_ind)))
+	ta2d = np.empty((len(date_list),len(lat_ind),len(lon_ind)))
 	ps = np.empty((len(date_list),len(lat_ind),len(lon_ind)))
 	wg10 = np.zeros(ps.shape)
+	p_3d = np.moveaxis(np.tile(pres,[ta.shape[2],ta.shape[3],1]),2,0)
 
 	for t in np.arange(0,len(date_list)):
 		year = dt.datetime.strftime(date_list[t],"%Y")
@@ -61,12 +68,18 @@ def read_barra(domain,times):
 	+year+"/"+month+"/wnd_ucmp-an-prs-PT0H-BARRA_R-v1*"+year+month+day+"T"+hour+"*.nc")[0])
 		va_file = nc.Dataset(glob.glob("/g/data/ma05/BARRA_R/v1/analysis/prs/wnd_vcmp/"\
 	+year+"/"+month+"/wnd_vcmp-an-prs-PT0H-BARRA_R-v1*"+year+month+day+"T"+hour+"*.nc")[0])
+		w_file = nc.Dataset(glob.glob("/g/data/ma05/BARRA_R/v1/analysis/prs/vertical_wnd/"\
+	+year+"/"+month+"/vertical_wnd-an-prs-PT0H-BARRA_R-v1*"+year+month+day+"T"+hour+"*.nc")[0])
 		hur_file = nc.Dataset(glob.glob("/g/data/ma05/BARRA_R/v1/analysis/prs/relhum/"\
 	+year+"/"+month+"/relhum-an-prs-PT0H-BARRA_R-v1*"+year+month+day+"T"+hour+"*.nc")[0])
 		uas_file = nc.Dataset(glob.glob("/g/data/ma05/BARRA_R/v1/analysis/spec/uwnd10m/"\
 	+year+"/"+month+"/uwnd10m-an-spec-PT0H-BARRA_R-v1*"+year+month+day+"T"+hour+"*.nc")[0])
 		vas_file = nc.Dataset(glob.glob("/g/data/ma05/BARRA_R/v1/analysis/spec/vwnd10m/"\
 	+year+"/"+month+"/vwnd10m-an-spec-PT0H-BARRA_R-v1*"+year+month+day+"T"+hour+"*.nc")[0])
+		ta2d_file = nc.Dataset(glob.glob("/g/data/ma05/BARRA_R/v1/analysis/spec/dewpt_scrn/"\
+	+year+"/"+month+"/dewpt_scrn-an-spec-PT0H-BARRA_R-v1*"+year+month+day+"T"+hour+"*.nc")[0])
+		tas_file = nc.Dataset(glob.glob("/g/data/ma05/BARRA_R/v1/analysis/spec/temp_scrn/"\
+	+year+"/"+month+"/temp_scrn-an-spec-PT0H-BARRA_R-v1*"+year+month+day+"T"+hour+"*.nc")[0])
 		ps_file = nc.Dataset(glob.glob("/g/data/ma05/BARRA_R/v1/analysis/spec/sfc_pres/"\
 	+year+"/"+month+"/sfc_pres-an-spec-PT0H-BARRA_R-v1*"+year+month+day+"T"+hour+"*.nc")[0])
 
@@ -82,8 +95,13 @@ def read_barra(domain,times):
 		temp_hur[temp_hur<0] = 0
 		temp_hur[temp_hur>100] = 100
 		temp_dp = get_dp(temp_ta,temp_hur)
+		temp_wap = omega( w_file["vertical_wnd"][p_ind,lat_ind,lon_ind] * (units.metre / units.second),\
+			p_3d * (units.hPa), \
+			temp_ta * units.degC )
 		uas[t,:,:] = uas_file["uwnd10m"][lat_ind,lon_ind]
 		vas[t,:,:] = vas_file["vwnd10m"][lat_ind,lon_ind]
+		tas[t,:,:] = tas_file["temp_scrn"][lat_ind,lon_ind] - 273.15
+		ta2d[t,:,:] = ta2d_file["dewpt_scrn"][lat_ind,lon_ind] - 273.15
 		ps[t,:,:] = ps_file["sfc_pres"][lat_ind,lon_ind]/100 
 
 		#Flip pressure axes for compatibility with SHARPpy
@@ -91,8 +109,10 @@ def read_barra(domain,times):
 		dp[t,:,:,:] = np.flipud(temp_dp)
 		hur[t,:,:,:] = np.flipud(temp_hur)
 		hgt[t,:,:,:] = np.flipud(temp_hgt)
+		wap[t,:,:,:] = np.flipud(temp_wap)
 		ua[t,:,:,:] = np.flipud(temp_ua)
 		va[t,:,:,:] = np.flipud(temp_va)
+
 
 		#Load forecast data
 		fc_year = dt.datetime.strftime(date_list[t] - dt.timedelta(hours=6),"%Y")
@@ -111,11 +131,11 @@ def read_barra(domain,times):
 		#except:
 		#wg10[t][:] = np.nan
 
-		ta_file.close();z_file.close();ua_file.close();va_file.close();hur_file.close();uas_file.close();vas_file.close();ps_file.close()
+		ta_file.close();z_file.close();ua_file.close();va_file.close();hur_file.close();uas_file.close();vas_file.close();ps_file.close();tas_file.close();ta2d_file.close();w_file.close()
 		
 	p = np.flipud(pres)
 
-	return [ta,dp,hur,hgt,terrain,p,ps,ua,va,uas,vas,wg10,lon,lat,date_list]
+	return [ta,dp,hur,hgt,terrain,p,ps,wap,ua,va,uas,vas,tas,ta2d,wg10,lon,lat,date_list]
 	
 #IF WANTING TO LOOP OVER TIME, CHANGE READ_BARRA TO READ ALL TIMES IN A RANGE, THEN LOOP OVER TIME DIMENSION WITHIN CALC_PARAM
 

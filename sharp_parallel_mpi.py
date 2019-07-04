@@ -19,7 +19,7 @@ import sys
 
 #---------------------------------------------------------------------------------------------------
 #TO RUN:
-# > mpiexec python sharp_parallel_mpi.py model region t1 t2 (out_name)
+# > mpiexec python -m mpi4py sharp_parallel_mpi.py model region t1 t2 (save) (out_name)
 #
 #	- model 
 #		Is either "barra" or "erai"
@@ -30,9 +30,11 @@ import sys
 #	- t2
 #		Is the end time, specified by "YYYYMMDDHH"
 #
+#	- save
+#		Whether the output is to be saved (default is True)
+#
 #	- out_name
-#		Optional, specifies the prefix of the netcdf output. If ommited,
-#		out_name will be the same as model
+#		Specifies the prefix of the netcdf output.
 #
 #Before running
 # > source activate sharppy
@@ -40,10 +42,10 @@ import sys
 # > module unload python3/3.6.2
 #
 #
-#See line 160 for a list of parameters to get
+#See line ~200 for a list of parameters to get
 #---------------------------------------------------------------------------------------------------
 
-def sharp_parcel_mpi(p,ua,va,hgt,ta,dp,ps):
+def sharp_parcel_mpi(p,wap,ua,va,hgt,ta,dp,ps,uas,vas,tas,ta2d,terrain):
 
 	#Exact same as sharp parcel, but intended to use the "mpi4py" module
 	
@@ -51,12 +53,36 @@ def sharp_parcel_mpi(p,ua,va,hgt,ta,dp,ps):
 	# the surface pressure
 	agl_idx = (p <= ps)
 
-	#create profile
-	prof = profile.create_profile(pres=p[agl_idx], hght=hgt[agl_idx], \
-			tmpc=ta[agl_idx], \
-			dwpc=dp[agl_idx], \
-			u=ua[agl_idx], v=va[agl_idx],\
-			strictqc=False)
+	#create profile, inserting surface values at the bottom of each profile
+	#It may be the case that the surface level data does not mesh with the pressure level data, such that
+	# the surface height is higher than the bottom pressure level height, even though the surface pressure
+	# is higher than the bottom pressure level. If this is the case, replace the bottom pressure level with the
+	# surface level data
+	try:
+		prof = profile.create_profile(pres = np.insert(p[agl_idx],0,ps), \
+			hght = np.insert(hgt[agl_idx],0,terrain), \
+			tmpc = np.insert(ta[agl_idx],0,tas), \
+			dwpc = np.insert(dp[agl_idx],0,ta2d), \
+			u = np.insert(ua[agl_idx],0,uas), \
+			v = np.insert(va[agl_idx],0,vas), \
+			strictqc=False, omeg=np.insert(wap[agl_idx],0,wap[agl_idx][0]) )
+	except:
+		p = p[agl_idx]; ua = ua[agl_idx]; va = va[agl_idx]; hgt = hgt[agl_idx]; ta = ta[agl_idx]; \
+		dp = dp[agl_idx]
+		p[0] = ps
+		ua[0] = uas
+		va[0] = vas
+		hgt[0] = terrain
+		ta[0] = tas
+		dp[0] = ta2d
+		prof = profile.create_profile(pres = p, \
+			hght = hgt, \
+			tmpc = ta, \
+			dwpc = dp, \
+			u = ua, \
+			v = va, \
+			strictqc=False, omeg=wap[agl_idx])
+		
 
 	#create parcels
 	sb_parcel = params.parcelx(prof, flag=1, dp=-10)
@@ -64,6 +90,30 @@ def sharp_parcel_mpi(p,ua,va,hgt,ta,dp,ps):
 	ml_parcel = params.parcelx(prof, flag=4, dp=-10)
 	eff_parcel = params.parcelx(prof, flag=6, ecape=100, ecinh=-250, dp=-10)
 	return (prof, mu_parcel ,ml_parcel, sb_parcel, eff_parcel)
+
+def maxtevv_fn(prof):
+	
+	#Calculate the maximum d(theta-e)/d(z) * omega product calculated from the 0-2 km layer through the 0-6 km
+	# layer at 0.5 km intervals (Sherburn 2016)
+
+	sfc = prof.pres[prof.sfc]
+	p2km = interp.pres(prof, interp.to_msl(prof, 2000.))
+	p6km = interp.pres(prof, interp.to_msl(prof, 6000.))
+
+	idx1 = np.where((prof.pres >= p2km) & (prof.pres <= sfc))[0]
+	idx2 = np.where((prof.pres >= p6km) & (prof.pres <= sfc))[0]
+
+	maxtevv = 0
+	for i in idx1:
+		for j in idx2[~(idx2==i)]:
+			dz = (prof.hght[j] - prof.hght[i]) / 1000.
+			if dz >= 0.25:
+				dthetae = (prof.thetae[j] - prof.thetae[i])
+				res = (dthetae / dz) * prof.omeg[j]
+				if res > maxtevv:
+					maxtevv = res
+
+	return maxtevv
 
 if __name__ == "__main__":
 
@@ -75,7 +125,7 @@ if __name__ == "__main__":
 	size = comm.Get_size()
 	rank = comm.Get_rank()
 	
-	#Load data into first processer (can be thought of as "local")
+	#Load data into first processer (can be thought of as "local", processer)
 	if rank == 0:
 
 		#Parse arguments from cmd line and set up inputs (date region model)
@@ -83,40 +133,38 @@ if __name__ == "__main__":
 		region = sys.argv[2]
 		t1 = sys.argv[3]
 		t2 = sys.argv[4]
-		if len(sys.argv) > 5:
-			out_name = sys.argv[5]
-		else:
-			out_name = model
-
+		issave = sys.argv[5]
+		out_name = sys.argv[6]
 		if region == "sa_small":
 			start_lat = -38; end_lat = -26; start_lon = 132; end_lon = 142
 		elif region == "aus":
        	    		start_lat = -44.525; end_lat = -9.975; start_lon = 111.975; end_lon = 156.275
 		else:
 			raise ValueError("INVALID REGION\n")
-
 		domain = [start_lat,end_lat,start_lon,end_lon]
-
 		try:
 			time = [dt.datetime.strptime(t1,"%Y%m%d%H"),dt.datetime.strptime(t2,"%Y%m%d%H")]
 		except:
 			raise ValueError("INVALID START OR END TIME. SHOULD BE YYYYMMDDHH\n")
+		if not ((issave=="True") | (issave=="False")):
+			raise ValueError("\n INVALID ISSAVE...SHOULD BE True OR False")
 
-		#Load data and setup base array, which has been reformed into a 2d array, with rows as 
-		# spatial-temporal coordinates and columns as vertical levels
+		#Load data and setup base array, which is reformed from a 4d (or 3d for surface data) array to 
+		# a 2d array, with rows as spatial-temporal coordinates and columns as vertical levels
 		if model == "erai":
-			ta,temp1,hur,hgt,terrain,p,ps,ua,va,uas,vas,cp,wg10,cape,lon,lat,date_list = \
+			ta,temp1,hur,hgt,terrain,p,ps,wap,ua,va,uas,vas,tas,ta2d,cp,wg10,cape,lon,lat,date_list = \
 				read_erai(domain,time)
 			dp = get_dp(hur=hur, ta=ta)
 			lsm = np.repeat(get_erai_mask(lon,lat)[np.newaxis],ta.shape[0],0)
+			terrain = np.repeat(terrain[np.newaxis],ta.shape[0],0)
 		elif model == "barra":
-			ta,temp1,hur,hgt,terrain,p,ps,ua,va,uas,vas,wg10,lon,lat,date_list = \
+			ta,temp1,hur,hgt,terrain,p,ps,wap,ua,va,uas,vas,tas,ta2d,wg10,lon,lat,date_list = \
 				read_barra(domain,time)
 			dp = get_dp(hur=hur, ta=ta)
 			lsm = np.repeat(get_barra_mask(lon,lat)[np.newaxis],ta.shape[0],0)
+			terrain = np.repeat(terrain[np.newaxis],ta.shape[0],0)
 		else:
 			raise ValueError("INVALID MODEL NAME\n")
-		
 		orig_shape = ta.shape
 		ta = np.moveaxis(ta,[0,1,2,3],[0,3,1,2]).\
 			reshape((ta.shape[0]*ta.shape[2]*ta.shape[3],ta.shape[1])).astype("double",order="C")
@@ -126,12 +174,18 @@ if __name__ == "__main__":
 			reshape((hur.shape[0]*hur.shape[2]*hur.shape[3],hur.shape[1])).astype("double",order="C")
 		hgt = np.moveaxis(hgt,[0,1,2,3],[0,3,1,2]).\
 			reshape((hgt.shape[0]*hgt.shape[2]*hgt.shape[3],hgt.shape[1])).astype("double",order="C")
+		wap = np.moveaxis(wap,[0,1,2,3],[0,3,1,2]).\
+			reshape((wap.shape[0]*wap.shape[2]*wap.shape[3],wap.shape[1])).astype("double",order="C")
 		ua = utils.MS2KTS(np.moveaxis(ua,[0,1,2,3],[0,3,1,2]).\
 			reshape((ua.shape[0]*ua.shape[2]*ua.shape[3],ua.shape[1]))).astype("double",order="C")
 		va = utils.MS2KTS(np.moveaxis(va,[0,1,2,3],[0,3,1,2]).\
 			reshape((va.shape[0]*va.shape[2]*va.shape[3],va.shape[1]))).astype("double",order="C")
 		uas = utils.MS2KTS(uas.reshape((uas.shape[0]*uas.shape[1]*uas.shape[2]))).astype("double",order="C")
 		vas = utils.MS2KTS(vas.reshape((vas.shape[0]*vas.shape[1]*vas.shape[2]))).astype("double",order="C")
+		tas = (tas.reshape((tas.shape[0]*tas.shape[1]*tas.shape[2]))).astype("double",order="C")
+		ta2d = (ta2d.reshape((ta2d.shape[0]*ta2d.shape[1]*ta2d.shape[2]))).astype("double",order="C")
+		terrain = np.array(terrain.reshape((terrain.shape[0]*terrain.shape[1]*terrain.shape[2]))).\
+			astype("double",order="C")
 		ps = ps.reshape((ps.shape[0]*ps.shape[1]*ps.shape[2])).astype("double",order="C")
 		wg10 = wg10.reshape((wg10.shape[0]*wg10.shape[1]*wg10.shape[2])).astype("double",order="C")
 		lsm = np.array(lsm.reshape((lsm.shape[0]*lsm.shape[1]*lsm.shape[2]))).astype("double",order="C")
@@ -139,64 +193,81 @@ if __name__ == "__main__":
 			cape = cape.reshape((cape.shape[0]*cape.shape[1]*cape.shape[2])).astype("double",order="C")
 			cp = cp.reshape((cp.shape[0]*cp.shape[1]*cp.shape[2])).astype("double",order="C")
 		
-		#Restricting base data to land points
+		#Restricting base data to land points. Keep original shape and land sea mask to put data back in
+		# to at the end for saving
 		orig_length = ta.shape[0]
 		lsm_orig = lsm
 		ta = ta[lsm==1]
 		dp = dp[lsm==1]
+		wap = wap[lsm==1]
 		hur = hur[lsm==1]
 		hgt = hgt[lsm==1]
 		ua = ua[lsm==1]
 		va = va[lsm==1]
 		uas = uas[lsm==1]
 		vas = vas[lsm==1]
+		tas = tas[lsm==1]
+		ta2d = ta2d[lsm==1]
 		ps = ps[lsm==1]
+		terrain = terrain[lsm==1]
 		wg10 = wg10[lsm==1]
 		if model == "erai":
 			cp = cp[lsm==1]
 			cape = cape[lsm==1]
 		lsm = lsm[lsm==1]
 
-		#Set the ouput array (in this case, a vector with length given by the number of spatial-temporal 
-		# points)
+		#Set the ouput array (in this case, a matrix with rows given by the number of spatial-temporal 
+		# points, and columns given by the length of "param")
 		param = np.array(["ml_cape", "mu_cape", "sb_cape", "ml_cin", "sb_cin", "mu_cin",\
 					"ml_lcl", "mu_lcl", "sb_lcl", "eff_cape", "eff_cin", "eff_lcl", "dcape", \
 					"lr01", "lr03", "lr13", "lr36", "lr_freezing",\
 					"qmean01", "qmean03", "qmean06", "qmean13", "qmean36", "qmeansubcloud", \
 					"q_melting", "q1", "q3", "q6",\
 					"rhmin01", "rhmin03", "rhmin06", "rhmin13", "rhmin36", "rhminsubcloud", \
-					"mhgt", "el", "pwat", "v_totals", "c_totals", "t_totals",
+					"mhgt", "el", "pwat", "v_totals", "c_totals", "t_totals", "maxtevv",
 					\
 					"cp", "cape", "dcp2", "cape*s06",\
 					\
 					"srhe", "srh01", "srh03", "srh06", \
 					"ebwd", "s06", "s03", "s01", "s13", "s36", "scld", \
+					"omega01", "omega03", "omega06", \
 					"U500", "U10", "U1", "U3", "U6", \
 					"Ust", "Usr01", "Usr03", "Usr06", "Usr13", "Usr36", \
-					"Uwindinf", "Umeanwindinf", "Umean800_600", "Umean06", \
+					"Uwindinf", "Umeanwindinf", "Umean800_600", "Umean06", "Umean01", "Umean03",\
 					"wg10",\
 					\
 					"dcp", "stp_cin", "stp_fixed", "scp", "ship",\
-					"mlcape*s06", "mucape*s06", "dmgwind", \
+					"mlcape*s06", "mucape*s06", "sbcape*s06", "effcape*s06", \
+					"mlcape*s06_2", "mucape*s06_2", "sbcape*s06_2", "effcape*s06_2",\
+					"dmgwind", \
 					"ducs6", "convgust","windex","gustex", "gustex2","gustex3",\
-					"eff_sherb", "sherb", "wndg","mburst","sweat"])
+					"eff_sherb", "sherb", "moshe", "mosh", "wndg","mburst","sweat"])
 		output_data = np.zeros((ta.shape[0], len(param)))
+	
+		#Set effective layer params, as the missing values (over land) need to be set to zeros later
 		effective_layer_params = ["srhe", "ebwd", "Uwindinf", "stp_cin", "dcp", "Umeanwindinf", "scp", \
-						"dmgwind", "scld", "eff_sherb"]
+						"dmgwind", "scld", "eff_sherb", "moshe"]
+
+		#Check there are no double-ups in the param string vector
 		if len(param) != len(np.unique(param)):
 			unique_params, name_cts = np.unique(param,return_counts=True)
-			raise ValueError("THE FOLLOWING PARAMS HAVE BEEN ENTERED TWICE IN THE PARAM LIST %s" %(unique_params[name_cts>1],))
+			raise ValueError("THE FOLLOWING PARAMS HAVE BEEN ENTERED TWICE IN THE PARAM LIST %s"\
+				 %(unique_params[name_cts>1],))
 
 		#Split/chunk the base arrays on the spatial-temporal grid point dimension, for parallel processing
 		ta_split = np.array_split(ta, size, axis = 0)
 		dp_split = np.array_split(dp, size, axis = 0)
-		hur_split = np.array_split(hgt, size, axis = 0)
+		wap_split = np.array_split(wap, size, axis = 0)
+		hur_split = np.array_split(hur, size, axis = 0)
 		hgt_split = np.array_split(hgt, size, axis = 0)
 		ua_split = np.array_split(ua, size, axis = 0)
 		va_split = np.array_split(va, size, axis = 0)
 		uas_split = np.array_split(uas, size, axis = 0)
 		vas_split = np.array_split(vas, size, axis = 0)
+		tas_split = np.array_split(tas, size, axis = 0)
+		ta2d_split = np.array_split(ta2d, size, axis = 0)
 		ps_split = np.array_split(ps, size, axis = 0)
+		terrain_split = np.array_split(terrain, size, axis = 0)
 		wg10_split = np.array_split(wg10, size, axis = 0)
 		if model == "erai":
 			cape_split = np.array_split(cape, size, axis = 0)
@@ -207,7 +278,8 @@ if __name__ == "__main__":
 			split_sizes = np.append(split_sizes, ta_split[i].shape[0])
 
 		#Remember the points at which splits occur on (noting that Gatherv and Scatterv act on a 
-		# "C" style (row-major) flattened array)
+		# "C" style (row-major) flattened array). This will be different for pressure-level and sfc-level
+		# variables
 		split_sizes_input = split_sizes*ta.shape[1]
 		displacements_input = np.insert(np.cumsum(split_sizes_input),0,0)[0:-1]
 		split_sizes_output = split_sizes*len(param)
@@ -216,15 +288,18 @@ if __name__ == "__main__":
 		displacements_input_2d = np.insert(np.cumsum(split_sizes_input_2d),0,0)[0:-1]
 
 	else:
-		#Initialise variables on other cores, including the name of the model
+		#Initialise variables on other cores (can be thought of as "remote"), including the name of the 
+		# model (as each processer needs to know whether ERA-Interim specific parameters are being included
 		model = sys.argv[1]
 		split_sizes_input = None; displacements_input = None; split_sizes_output = None;\
 			displacements_output = None; split_sizes_input_2d = None; displacements_input_2d = None
 		ta_split = None; dp_split = None; hur_split = None; hgt_split = None; ua_split = None;\
 			va_split = None; uas_split = None; vas_split = None; lsm_split = None;\
-			wg10_split = None; ps_split = None
-		ta = None; dp = None; hur = None; hgt = None; ua = None;\
-			va = None; uas = None; vas = None; lsm = None; wg10 = None; ps = None
+			wg10_split = None; ps_split = None; tas_split = None; ta2d_split = None;\
+			terrain_split = None; wap_split = None
+		ta = None; dp = None; hur = None; hgt = None; ua = None; wap = None;\
+			va = None; uas = None; vas = None; lsm = None; wg10 = None; ps = None; tas = None; \
+			ta2d = None; terrain = None
 		p = None
 		output_data = None
 		param = None
@@ -234,13 +309,17 @@ if __name__ == "__main__":
 	#Broadcast split arrays to other cores
 	ta_split = comm.bcast(ta_split, root=0)
 	dp_split = comm.bcast(dp_split, root=0)
+	wap_split = comm.bcast(wap_split, root=0)
 	hur_split = comm.bcast(hur_split, root=0)
 	hgt_split = comm.bcast(hgt_split, root=0)
 	ua_split = comm.bcast(ua_split, root=0)
 	va_split = comm.bcast(va_split, root=0)
 	uas_split = comm.bcast(uas_split, root=0)
 	vas_split = comm.bcast(vas_split, root=0)
+	tas_split = comm.bcast(tas_split, root=0)
+	ta2d_split = comm.bcast(ta2d_split, root=0)
 	ps_split = comm.bcast(ps_split, root=0)
+	terrain_split = comm.bcast(terrain_split, root=0)
 	wg10_split = comm.bcast(wg10_split, root=0)
 	if model == "erai":
 		cp_split = comm.bcast(cp_split, root=0)
@@ -256,24 +335,32 @@ if __name__ == "__main__":
 	#Create arrays to receive chunked/split data on each core, where rank specifies the core
 	ta_chunk = np.zeros(np.shape(ta_split[rank]))
 	dp_chunk = np.zeros(np.shape(dp_split[rank]))
+	wap_chunk = np.zeros(np.shape(wap_split[rank]))
 	hur_chunk = np.zeros(np.shape(hur_split[rank]))
 	hgt_chunk = np.zeros(np.shape(hgt_split[rank]))
 	ua_chunk = np.zeros(np.shape(ua_split[rank]))
 	va_chunk = np.zeros(np.shape(va_split[rank]))
 	uas_chunk = np.zeros(np.shape(uas_split[rank]))
 	vas_chunk = np.zeros(np.shape(vas_split[rank]))
+	tas_chunk = np.zeros(np.shape(tas_split[rank]))
+	ta2d_chunk = np.zeros(np.shape(ta2d_split[rank]))
 	ps_chunk = np.zeros(np.shape(ps_split[rank]))
+	terrain_chunk = np.zeros(np.shape(terrain_split[rank]))
 	wg10_chunk = np.zeros(np.shape(wg10_split[rank]))
 	lsm_chunk = np.zeros(np.shape(lsm_split[rank]))
 	comm.Scatterv([ta,split_sizes_input, displacements_input, MPI.DOUBLE],ta_chunk,root=0)
 	comm.Scatterv([dp,split_sizes_input, displacements_input, MPI.DOUBLE],dp_chunk,root=0)
+	comm.Scatterv([wap,split_sizes_input, displacements_input, MPI.DOUBLE],wap_chunk,root=0)
 	comm.Scatterv([hur,split_sizes_input, displacements_input, MPI.DOUBLE],hur_chunk,root=0)
 	comm.Scatterv([hgt,split_sizes_input, displacements_input, MPI.DOUBLE],hgt_chunk,root=0)
 	comm.Scatterv([ua,split_sizes_input, displacements_input, MPI.DOUBLE],ua_chunk,root=0)
 	comm.Scatterv([va,split_sizes_input, displacements_input, MPI.DOUBLE],va_chunk,root=0)
 	comm.Scatterv([uas,split_sizes_input_2d, displacements_input_2d, MPI.DOUBLE],uas_chunk,root=0)
 	comm.Scatterv([vas,split_sizes_input_2d, displacements_input_2d, MPI.DOUBLE],vas_chunk,root=0)
+	comm.Scatterv([tas,split_sizes_input_2d, displacements_input_2d, MPI.DOUBLE],tas_chunk,root=0)
+	comm.Scatterv([ta2d,split_sizes_input_2d, displacements_input_2d, MPI.DOUBLE],ta2d_chunk,root=0)
 	comm.Scatterv([ps,split_sizes_input_2d, displacements_input_2d, MPI.DOUBLE],ps_chunk,root=0)
+	comm.Scatterv([terrain,split_sizes_input_2d, displacements_input_2d, MPI.DOUBLE],terrain_chunk,root=0)
 	comm.Scatterv([wg10,split_sizes_input_2d, displacements_input_2d, MPI.DOUBLE],wg10_chunk,root=0)
 	comm.Scatterv([lsm,split_sizes_input_2d, displacements_input_2d, MPI.DOUBLE],lsm_chunk,root=0)
 	if model == "erai":
@@ -284,6 +371,11 @@ if __name__ == "__main__":
 
 	comm.Barrier()
 
+	#Print diagnostics
+	if rank == 0:
+		print("TOTAL (LAND) POINTS: %s" %(ta.shape[0]))
+		print("CHUNKSIZE: %s" %(ua_chunk.shape,))
+
 #----------------------------------------------------------------------------------------------------------------
 	#Run SHARPpy
 	start = dt.datetime.now()
@@ -291,15 +383,22 @@ if __name__ == "__main__":
 	for i in np.arange(0,ta_chunk.shape[0]):
 		#Get profile and parcels
 		prof, mu_pcl ,ml_pcl, sb_pcl, eff_pcl= sharp_parcel_mpi(p, \
+			wap_chunk[i],\
 			ua_chunk[i],\
 			va_chunk[i],\
 			hgt_chunk[i],\
 			ta_chunk[i],\
 			dp_chunk[i],\
-			ps_chunk[i])
+			ps_chunk[i],\
+			uas_chunk[i],\
+			vas_chunk[i],\
+			tas_chunk[i],\
+			ta2d_chunk[i],\
+			terrain_chunk[i])
 
 		#Extract varibales relevant for output
-		#Levels
+		#Levels (note that all are agl. However, profile heights are stored as msl, hence they need to be 
+		# converted during calls to interp.pres)
 		sfc = prof.pres[prof.sfc]
 		p1km = interp.pres(prof, interp.to_msl(prof, 1000.))
 		p3km = interp.pres(prof, interp.to_msl(prof, 3000.))
@@ -312,7 +411,7 @@ if __name__ == "__main__":
 		ebotp, etopp = params.effective_inflow_layer(prof, mupcl=mu_pcl, ecape=100, ecinh=-250)
 		ebot_hgt = interp.to_agl(prof, interp.hght(prof,ebotp))
 		etop_hgt = interp.to_agl(prof, interp.hght(prof,etopp))
-		#Winds
+		#Winds. Note that mean winds through layers are pressure-weighted
 		u01, v01 = interp.components(prof, p1km)
 		u03, v03 = interp.components(prof, p3km)
 		u06, v06 = interp.components(prof, p6km)
@@ -325,8 +424,8 @@ if __name__ == "__main__":
 		s13 = np.array(np.sqrt(np.square(u03-u01)+np.square(v03-v01)))
 		s36 = np.array(np.sqrt(np.square(u06-u03)+np.square(v06-v03)))
 		scld = np.array(np.sqrt(np.square(ucld-umllcl)+np.square(vcld-vmllcl)))
-		umean01 , vmean01 = winds.mean_wind(prof, pbot = sfc, ptop = p6km)
-		umean03 , vmean03 = winds.mean_wind(prof, pbot = sfc, ptop = p6km)
+		umean01 , vmean01 = winds.mean_wind(prof, pbot = sfc, ptop = p1km)
+		umean03 , vmean03 = winds.mean_wind(prof, pbot = sfc, ptop = p3km)
 		umean06 , vmean06 = winds.mean_wind(prof, pbot = sfc, ptop = p6km)
 		umean800_600 , vmean800_600 = winds.mean_wind(prof, pbot = 800, ptop = 600)
 		Umean01 = utils.mag(umean01, vmean01)
@@ -365,20 +464,13 @@ if __name__ == "__main__":
 		prof.ebwd = ebwd
 		ebwd = utils.mag(ebwd[0],ebwd[1])
 		#Thermodynamic
-		try:
-			rhmin01 = prof.relh[(prof.hght >= 0) & (prof.hght <= 1000)].min()
-		except:
-			rhmin01 = prof.relh[0]
-		rhmin03 = prof.relh[(prof.hght >= 0) & (prof.hght <= 3000)].min()
-		rhmin06 = prof.relh[(prof.hght >= 0) & (prof.hght <= 6000)].min()
-		rhmin13 = prof.relh[(prof.hght >= 1000) & (prof.hght <= 3000)].min()
-		rhmin36 = prof.relh[(prof.hght >= 3000) & (prof.hght <= 6000)].min()
-			#Subcloud layer is below the mixed layer parcel lcl. If the mixed layer parcel lcl is
-			# below the first height layer, than let the subcloud rh equal the lowest rh
-		try:
-			rhminsubcloud = prof.relh[(prof.hght >= 0) & (prof.hght <= ml_pcl.lclhght)].min()
-		except:
-			rhminsubcloud = prof.relh[0]
+		rhmin01 = prof.relh[(prof.pres <= sfc) & (prof.pres >= p1km)].min()
+		rhmin03 = prof.relh[(prof.pres <= sfc) & (prof.pres >= p3km)].min()
+		rhmin06 = prof.relh[(prof.pres <= sfc) & (prof.pres >= p6km)].min()
+		rhmin13 = prof.relh[(prof.pres <= p1km) & (prof.pres >= p3km)].min()
+		rhmin36 = prof.relh[(prof.pres <= p3km) & (prof.pres >= p6km)].min()
+			#Subcloud layer is below the mixed layer parcel lcl
+		rhminsubcloud = prof.relh[(prof.pres <= sfc) & (prof.pres >= pmllcl)].min()
 		qmean01 = params.mean_mixratio(prof, pbot = sfc, ptop = p1km)
 		qmean03 = params.mean_mixratio(prof, pbot = sfc, ptop = p3km)
 		qmean06 = params.mean_mixratio(prof, pbot = sfc, ptop = p6km)
@@ -394,6 +486,7 @@ if __name__ == "__main__":
 		lr03 = params.lapse_rate(prof, lower = sfc, upper = p3km)
 		lr13 = params.lapse_rate(prof, lower = p1km, upper = p3km)
 		lr36 = params.lapse_rate(prof, lower = p3km, upper = p6km)
+		maxtevv = maxtevv_fn(prof)
 		pwat = params.precip_water(prof)
 		v_totals = params.v_totals(prof)
 		c_totals = params.c_totals(prof)
@@ -406,7 +499,15 @@ if __name__ == "__main__":
 			dcape = 0
 		#Composite
 		stp_fixed = params.stp_fixed(sb_pcl.bplus, sb_pcl.lclhght, srh01, s06)
-		windex = 5. * np.power((melting_hgt/1000.)*Rq*(np.power(lr_freezing,2)-30.+qmean01-2.*q_melting),0.5) 
+		mosh = ((lr03 - 4.)/4.) * ((utils.KTS2MS(s01) - 8)/10.) * ((maxtevv + 10.)/9.)
+		moshe = ((lr03 - 4.)/4.) * ((utils.KTS2MS(s01) - 8)/10.) * ((utils.KTS2MS(ebwd) - 8)/10.)\
+				 * ((maxtevv + 10.)/9.)
+		if mosh < 0:
+			mosh = 0
+		if moshe < 0:
+			moshe = 0
+		windex = 5. * np.power((melting_hgt/1000.)*Rq*(np.power(lr_freezing,2)-30.+\
+				qmean01-2.*q_melting),0.5) 
 			#WINDEX UNDEFINED FOR HIGHLY STABLE CONDITIONS
 		if np.isnan(windex):
 			windex = 0
@@ -454,6 +555,7 @@ if __name__ == "__main__":
 			output[i,np.where(param=="c_totals")[0][0]] = c_totals
 			output[i,np.where(param=="t_totals")[0][0]] = t_totals
 			output[i,np.where(param=="pwat")[0][0]] = pwat
+			output[i,np.where(param=="maxtevv")[0][0]] = maxtevv
 			#From model convection scheme (available for ERA-Interim only)
 			if model == "erai":
 				output[i,np.where(param=="cp")[0][0]] = cp_chunk[i]
@@ -486,6 +588,10 @@ if __name__ == "__main__":
 				utils.KTS2MS(s36)
 			output[i,np.where(param=="scld")[0][0]] = \
 				utils.KTS2MS(scld)
+			output[i,np.where(param=="Umean01")[0][0]] = \
+				utils.KTS2MS(Umean01)  
+			output[i,np.where(param=="Umean03")[0][0]] = \
+				utils.KTS2MS(Umean03)  
 			output[i,np.where(param=="Umean06")[0][0]] = \
 				utils.KTS2MS(Umean06)  
 			output[i,np.where(param=="Umean800_600")[0][0]] = \
@@ -517,13 +623,19 @@ if __name__ == "__main__":
 			output[i,np.where(param=="Umeanwindinf")[0][0]] = \
 				utils.KTS2MS(Umeanwindinf)
 			output[i,np.where(param=="wg10")[0][0]] = wg10_chunk[i]
+			output[i,np.where(param=="omega01")[0][0]] = \
+				params.mean_omega(prof, pbot=sfc, ptop=p1km)
+			output[i,np.where(param=="omega03")[0][0]] = \
+				params.mean_omega(prof, pbot=sfc, ptop=p3km)
+			output[i,np.where(param=="omega06")[0][0]] = \
+				params.mean_omega(prof, pbot=sfc, ptop=p6km)
 			#Wind Composite parameters
 			output[i,np.where(param=="dmgwind")[0][0]] = \
 				(dcape/800.)* (utils.KTS2MS(Uwindinf) / 8.)
 			output[i,np.where(param=="convgust")[0][0]] = \
-				utils.KTS2MS(Umean800_600) + 2 * np.sqrt(dcape)
+				utils.KTS2MS(Umean800_600) + 2 * np.sqrt(2 * dcape)
 			output[i,np.where(param=="ducs6")[0][0]] = \
-				(utils.KTS2MS(Umean800_600) + 2 * np.sqrt(dcape)) / 30. \
+				(utils.KTS2MS(Umean800_600) + 2 * np.sqrt(2 * dcape)) / 30. \
 				* ((ml_pcl.bplus * np.power(utils.KTS2MS(s06), 1.67)) / 20000.)
 			output[i,np.where(param=="dcp")[0][0]] = \
 				(dcape/980.) * (ml_pcl.bplus/2000.) * (utils.KTS2MS(s06) / 20.) * \
@@ -545,15 +657,31 @@ if __name__ == "__main__":
 			output[i,np.where(param=="scp")[0][0]] = params.scp( \
 				mu_pcl.bplus, srhe, utils.KTS2MS(ebwd))
 			output[i,np.where(param=="ship")[0][0]] = params.ship( \
-				prof, mupcl=mu_pcl, srh06=srh06)
+				prof, mupcl=mu_pcl)
 			output[i,np.where(param=="mlcape*s06")[0][0]] = \
 				ml_pcl.bplus * np.power(utils.KTS2MS(s06), 1.67)
 			output[i,np.where(param=="mucape*s06")[0][0]] = \
 				mu_pcl.bplus * np.power(utils.KTS2MS(s06), 1.67)
+			output[i,np.where(param=="sbcape*s06")[0][0]] = \
+				sb_pcl.bplus * np.power(utils.KTS2MS(s06), 1.67)
+			output[i,np.where(param=="effcape*s06")[0][0]] = \
+				eff_pcl.bplus * np.power(utils.KTS2MS(s06), 1.67)
+			output[i,np.where(param=="mlcape*s06_2")[0][0]] = \
+				ml_pcl.bplus * utils.KTS2MS(s06)
+			output[i,np.where(param=="mucape*s06_2")[0][0]] = \
+				mu_pcl.bplus * utils.KTS2MS(s06)
+			output[i,np.where(param=="sbcape*s06_2")[0][0]] = \
+				sb_pcl.bplus * utils.KTS2MS(s06)
+			output[i,np.where(param=="effcape*s06_2")[0][0]] = \
+				eff_pcl.bplus * utils.KTS2MS(s06)
 			output[i,np.where(param=="eff_sherb")[0][0]] = \
 				params.sherb(prof, effective=True, ebottom=ebotp, etop=etopp, mupcl=mu_pcl)
 			output[i,np.where(param=="sherb")[0][0]] = \
 				params.sherb(prof, effective=False)
+			output[i,np.where(param=="moshe")[0][0]] = \
+				moshe
+			output[i,np.where(param=="mosh")[0][0]] = \
+				mosh
 			output[i,np.where(param=="wndg")[0][0]] = \
 				params.wndg(prof, mlpcl=ml_pcl)
 			output[i,np.where(param=="mburst")[0][0]] = \
@@ -568,10 +696,9 @@ if __name__ == "__main__":
 
 	#Print diagnostics
 	if rank == 0:
-		print("TOTAL (LAND) POINTS: %s" %(ta.shape[0]))
-		print("CHUNKSIZE: %s" %(ua_chunk.shape,))
 		print("Time taken for SHARPPy on processor 1: %s" %(dt.datetime.now() - start), )
-		print("Time taken for each element: %s" %((dt.datetime.now() - start)/float(ua_chunk.shape[0])), )
+		print("Time taken for each element on processor 1: %s" \
+			%((dt.datetime.now() - start)/float(ua_chunk.shape[0])), )
 
 	#Gather output data together to root node
 	comm.Gatherv(output, \
@@ -595,5 +722,6 @@ if __name__ == "__main__":
 			output_reshaped = output_reshaped.reshape((orig_shape[0],orig_shape[2],orig_shape[3]))
 			param_out.append(output_reshaped)
 
-		save_netcdf(region, model, out_name, date_list, lat, lon, param, param_out)
+		if issave == "True":
+			save_netcdf(region, model, out_name, date_list, lat, lon, param, param_out)
 

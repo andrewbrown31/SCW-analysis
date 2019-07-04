@@ -13,6 +13,8 @@ from scipy.stats import gaussian_kde
 from matplotlib.colors import LogNorm
 from obs_read import load_lightning
 import pandas as pd
+from event_analysis import bootstrap_slope
+import seaborn as sb
 
 def three_month_average(a):
 
@@ -212,14 +214,26 @@ def var_trends(df,var,loc,method,dataset,year_range=[1979,2017],months=np.arange
 		ax1.set_xlim([dt.datetime(years.min(),1,1),dt.datetime(years.max(),12,31)])
 		ax3.set_xlim([events.years.min()-1,events.years.max()+1])
 		ax3.set_ylim([0.5,1000])
-		ax3.set_ylabel("Days",fontsize="xx-large")
-		ax3.set_xlabel("Year",fontsize="xx-large")
+		ax3.set_ylabel("Days",fontsize=fs)
+		ax3.set_xlabel("Year",fontsize=fs)
 		ax3.set_yscale('log')
-		ax1.set_title(loc,fontsize="xx-large")
-		ax3.tick_params(labelsize="xx-large")
-		ax2.tick_params(labelsize="xx-large")
-		ax1.tick_params(labelsize="xx-large")
+		ax1.set_title(loc,fontsize=fs)
+		ax3.tick_params(labelsize=fs)
+		ax2.tick_params(labelsize=fs)
+		ax1.tick_params(labelsize=fs)
 	if method=="threshold_only":
+		fs=35
+		if dataset=="ERA-Interim":
+			ssize=150
+			xticklabs = np.arange(1980, 2020, 5)
+		elif dataset=="BARRA-R":
+			ssize=500
+			xticklabs = np.array([2002, 2004, 2006, 2008, 2010, 2012, 2014, 2016])
+		elif dataset=="BARRA-AD":
+			ssize=500
+			xticklabs = np.array([2006, 2008, 2010, 2012, 2014, 2016])
+		else:
+			raise ValueError("Incorrect Dataset")
 		years = df.year.unique()
 		fig,ax=plt.subplots(figsize=[12,5])
 		cnt = [df[(df.stn_name==loc)&(df.year==y)].shape[0] for y in np.arange(1979,2018,1)]
@@ -247,11 +261,11 @@ def var_trends(df,var,loc,method,dataset,year_range=[1979,2017],months=np.arange
 			if cnt==2:
 				sb.regplot("years","event_years",events,ci=95,fit_reg=False,\
 					n_boot=10000,order=1,label=lab,ax=ax,marker="x",color="k",\
-					scatter_kws={"s":75,"linewidth":2})
+					scatter_kws={"s":ssize,"linewidth":2})
 			else:
 				sb.regplot("years","event_years",events,ci=95,fit_reg=False,\
 					n_boot=10000,order=1,label=lab,ax=ax,marker="s",\
-					scatter_kws={"s":75})
+					scatter_kws={"s":ssize})
 			cnt=cnt+1
 		if dataset == "BARRA-AD":
 			ax.set_xlim([events.years.min()-1,events.years.max()-0.5])
@@ -260,11 +274,15 @@ def var_trends(df,var,loc,method,dataset,year_range=[1979,2017],months=np.arange
 		else:
 			ax.set_xlim([events.years.min()-1,events.years.max()+1])
 		ax.set_ylim([0.5,1000])
-		ax.set_ylabel("Days",fontsize="large")
-		ax.set_xlabel("Year",fontsize="large")
+		ax.set_ylabel("Days",fontsize=fs)
 		ax.set_yscale('log')
-		ax.tick_params(labelsize="large")
-		ax.set_title(loc)
+		ax.tick_params(labelsize=fs)
+		ax.set_title(loc,fontsize=fs)
+		ax.set_xlabel("")
+		for label in ax.get_xticklabels():
+        		label.set_rotation(90) 
+		plt.grid()
+		plt.xticks(xticklabs, xticklabs.astype(str))
 	if method=="percentile":
 		years = df.year.unique()
 		thresh = np.percentile(df[var],percentile)
@@ -1207,6 +1225,27 @@ if __name__ == "__main__":
 
 	#probability_plot("ml_cape","mlm")
 	
-	erai = pd.read_pickle("/g/data/eg3/ab4502/ExtremeWind/points/erai_points_sa_small_1979_2017_daily_max.pkl")
-	locs = ["Woomera", "Port Augusta", "Adelaide AP", "Mount Gambier"]
-	[plot_conv_seasonal_cycle(erai, l, ["ml_cape", "s06", "cape*s06"] ) for l in locs]
+	#INTERANNUAL TIME SERIES
+	erai = pd.read_pickle("/g/data/eg3/ab4502/ExtremeWind/points/erai_points_1979_2017_daily_max.pkl").rename(columns={"loc_id":"stn_name"}).reset_index()   
+	erai_fc = pd.read_pickle("/g/data/eg3/ab4502/ExtremeWind/points/erai_fc_points_1979_2017_daily_max.pkl").rename(columns={"loc_id":"stn_name"}).reset_index()   
+	barra_r_fc = pd.read_pickle("/g/data/eg3/ab4502/ExtremeWind/points/barra_r_fc/barra_r_fc_points_daily_2003_2016.pkl").rename(columns={"loc_id":"stn_name"}).reset_index()   
+	barra_r_fc["month"] = [t.month for t in barra_r_fc.date]
+	barra_r_fc["year"] = [t.year for t in barra_r_fc.date]
+	barra_r = pd.read_pickle("/g/data/eg3/ab4502/ExtremeWind/points/barra_points_daily_2003_2016.pkl").rename(columns={"loc_id":"stn_name"}).reset_index()   
+	barra_ad = pd.read_pickle("/g/data/eg3/ab4502/ExtremeWind/points/barra_ad/barra_ad_points_daily_2006_2016.pkl").rename(columns={"loc_id":"stn_name"}).reset_index()   
+	barra_ad["month"] = [t.month for t in barra_ad.date]
+	barra_ad["year"] = [t.year for t in barra_ad.date]
+	locs = ["Adelaide AP","Woomera","Mount Gambier","Port Augusta"]
+	#locs = ["Adelaide AP"]
+	#[var_trends(aws,"wind_gust",l,"threshold","AWS",threshold=[[15,25],[25,30],[30]]) \
+	#	for l in locs]
+	[var_trends(erai_fc,"wg10",l,"threshold_only","ERA-Interim",threshold=[[15,25],[25,30],[30]]) \
+		for l in locs]
+	[var_trends(barra_r_fc,"max_wg10",l,"threshold_only","BARRA-R",threshold=[[15,25],[25,30],[30]],year_range=[2003,2016]) \
+		for l in locs]
+	[var_trends(barra_ad,"max_wg10",l,"threshold_only","BARRA-AD",threshold=[[15,25],[25,30],[30]],year_range=[2006,2016]) \
+		for l in locs]
+
+	#erai = pd.read_pickle("/g/data/eg3/ab4502/ExtremeWind/points/erai_points_sa_small_1979_2017_daily_max.pkl")
+	#locs = ["Woomera", "Port Augusta", "Adelaide AP", "Mount Gambier"]
+	#[plot_conv_seasonal_cycle(erai, l, ["ml_cape", "s06", "cape*s06"] ) for l in locs]

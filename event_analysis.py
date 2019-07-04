@@ -998,15 +998,6 @@ if __name__ == "__main__":
 	#barra_ad["year"] = [t.year for t in barra_ad.date]
 	#interannual_time_series([aws,erai_fc],["wind_gust","wg10"],["AWS","ERA-Interim"],\
 	#		"Adelaide AP",[1989,2017],"am",[10,11,12,1,2,3])
-	#locs = ["Adelaide AP","Edinburgh","Mount Gambier","Port Augusta"]
-	#[var_trends(aws,"wind_gust",l,"threshold","AWS",threshold=[[15,25],[25,30],[30]]) \
-	#	for l in locs]
-	#[var_trends(erai_fc,"wg10",l,"threshold_only","ERA-Interim",threshold=[[15,25],[25,30],[30]]) \
-	#	for l in locs]
-	#[var_trends(barra_r_fc,"max_wg10",l,"threshold_only","BARRA-R",threshold=[[15,25],[25,30],[30]],year_range=[2003,2016]) \
-	#	for l in locs]
-	#[var_trends(barra_ad,"max_wg10",l,"threshold_only","BARRA-AD",threshold=[[15,25],[25,30],[30]],year_range=[2006,2016]) \
-	#	for l in locs]
 	#trend_table()
 	#seasons = [np.arange(1,13,1),[11,12,1],[2,3,4],[5,6,7],[8,9,10]]
 	#for loc in ["Woomera","Adelaide AP","Mount Gambier", "Port Augusta"]:

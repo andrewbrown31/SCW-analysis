@@ -51,16 +51,26 @@ import wrf
 #-------------------------------------------------------------------------------------------------
 
 
-def get_dp(ta,hur):
+def get_dp(ta,hur,dp_mask=True):
 	#Dew point approximation found at https://gist.github.com/sourceperl/45587ea99ff123745428
 	#Same as "Magnus formula" https://en.wikipedia.org/wiki/Dew_point
 	#For points where RH is zero, set the dew point temperature to -85 deg C
-	a = 17.27
-	b = 237.7
-	alpha = ((a * ta) / (b + ta)) + np.log(hur/100.0)
-	dp = (b*alpha) / (a - alpha)
-	dp[np.isnan(dp)] = -85.
-	return dp
+	#EDIT: Leave points where RH is zero masked as NaNs. Hanlde them after creating a SHARPpy object (by 
+	# making the missing dp equal to the mean of the above and below layers)
+	#EDIT: Replace with metpy code
+
+	#a = 17.27
+	#b = 237.7
+	#alpha = ((a * ta) / (b + ta)) + np.log(hur/100.0)
+	#dp = (b*alpha) / (a - alpha)
+
+	dp = mpcalc.dewpoint_rh(ta * units.units.degC, hur * units.units.percent).data
+
+	if dp_mask:
+		return dp
+	else:
+		dp[np.isnan(dp)] = -85.
+		return dp
 
 def get_point(point,lon,lat,ta,dp,hgt,ua,va,uas,vas,hur):
 	# Return 1d arrays for all variables, at a given spatial point (now a function
@@ -1367,6 +1377,9 @@ def nc_attributes(param):
 	elif param=="ssfc850":
 		units = "m/s"
 		long_name = "bulk_wind_shear_sfc-850hPa"
+	elif param=="s010":
+		units = "m/s"
+		long_name = "bulk_wind_shear_0-10km"
 	elif param=="s06":
 		units = "m/s"
 		long_name = "bulk_wind_shear_0-6km"
@@ -1388,6 +1401,21 @@ def nc_attributes(param):
 	elif param=="ssfc1":
 		units = "m/s"
 		long_name = "bulk_wind_shear_sfc-1km"
+	elif param == "srhe_left":
+		units = "m^2/s^2"
+		long_name = "effective_layer_storm_relative_helicity_left_moving_storm"
+	elif param=="srh01_left":
+		units = "m^2/s^2"
+		long_name = "storm_relative_helicity_0-1km_left_moving_storm"
+	elif param=="srh03_left":
+		units = "m^2/s^2"
+		long_name = "storm_relative_helicity_0-3km_left_moving_storm"
+	elif param=="srh06_left":
+		units = "m^2/s^2"
+		long_name = "storm_relative_helicity_0-6 km_left_moving_storm"
+	elif param == "srhe":
+		units = "m^2/s^2"
+		long_name = "effective_layer_storm_relative_helicity"
 	elif param=="srh01":
 		units = "m^2/s^2"
 		long_name = "storm_relative_helicity_0-1km"
@@ -1484,6 +1512,9 @@ def nc_attributes(param):
 	elif param == "sb_cin":
 		units = "J/kg"
 		long_name = "surface_based_cin"
+	elif param == "eff_lcl":
+		units = "m"
+		long_name = "effective_layer_parcel_lcl"
 	elif param == "ml_lcl":
 		units = "m"
 		long_name = "mixed_layer_parcel_lcl"
@@ -1499,9 +1530,6 @@ def nc_attributes(param):
 	elif param == "dcp2":
 		units = ""
 		long_name = "dcp_erai_cape"
-	elif param == "srhe":
-		units = "m^2/s^2"
-		long_name = "effective_layer_storm_relative_helicity"
 	elif param == "ebwd":
 		units = "m/s"
 		long_name = "effective_layer_bulk_wind_fifference(shear)"
@@ -1529,6 +1557,12 @@ def nc_attributes(param):
 	elif param == "Umean800_600":
 		units = "m/s"
 		long_name = "mean_wind_speed800_600hPa"
+	elif param == "stp_cin_left":
+		units = ""
+		long_name = "significant_tornado_parameter_with_cin_left_moving_storm"
+	elif param == "stp_fixed_left":
+		units = ""
+		long_name = "significant_tornado_parameter_with_fixed_layer_left_moving_storm"
 	elif param == "stp_cin":
 		units = ""
 		long_name = "significant_tornado_parameter_with_cin"
@@ -1586,6 +1620,9 @@ def nc_attributes(param):
 	elif param == "lr03":
 		units = "deg/km"
 		long_name = "lapse_rate_0_3km"
+	elif param == "lr24":
+		units = "deg/km"
+		long_name = "lapse_rate_2_4km"
 	elif param == "lr13":
 		units = "deg/km"
 		long_name = "lapse_rate_1_3km"
@@ -1646,9 +1683,18 @@ def nc_attributes(param):
 	elif param == "mhgt":
 		units = "m"
 		long_name = "melting_lvl_hgt"
-	elif param == "el":
+	elif param == "mu_el":
 		units = "m"
 		long_name = "equilibrium_lvl_mu_parcel"
+	elif param == "ml_el":
+		units = "m"
+		long_name = "equilibrium_lvl_ml_parcel"
+	elif param == "sb_el":
+		units = "m"
+		long_name = "equilibrium_lvl_sb_parcel"
+	elif param == "eff_el":
+		units = "m"
+		long_name = "equilibrium_lvl_eff_parcel"
 	elif param == "s13":
 		units = "m/s"
 		long_name = "wind_shear_1_3km"
@@ -1667,9 +1713,21 @@ def nc_attributes(param):
 	elif param == "U6":
 		units = "m/s"
 		long_name = "wind_speed_6km"
+	elif param == "Ust_left":
+		units = "m/s"
+		long_name = "non_parcel_bunkers_storm_motion_speed_left_moving_storm"
 	elif param == "Ust":
 		units = "m/s"
 		long_name = "non_parcel_bunkers_storm_motion_speed"
+	elif param == "Usr01_left":
+		units = "m/s"
+		long_name = "storm_relative_mean_wind_speed_using_Ust_left_0_1km"
+	elif param == "Usr03_left":
+		units = "m/s"
+		long_name = "storm_relative_mean_wind_speed_using_Ust_left_0_3km"
+	elif param == "Usr06_left":
+		units = "m/s"
+		long_name = "storm_relative_mean_wind_speed_using_Ust_left_0_6km"
 	elif param == "Usr01":
 		units = "m/s"
 		long_name = "storm_relative_mean_wind_speed_using_Ust_0_1km"
@@ -1739,6 +1797,57 @@ def nc_attributes(param):
 	elif param == "omega06":
 		units = "Pa/s"
 		long_name = "mean_vertical_velocity_0-6km"
+	elif param == "dmi":
+		units = ""
+		long_name = "dry_microburst_index_goes"
+	elif param == "hmi":
+		units = ""
+		long_name = "hybrid_microburst_index_goes"
+	elif param == "wmsi_mu":
+		units = ""
+		long_name = "wet_microburst_severity_index_goes_mucape"
+	elif param == "wmsi_ml":
+		units = ""
+		long_name = "wet_microburst_severity_index_goes_mlcape"
+	elif param == "mwpi_mu":
+		units = ""
+		long_name = "microburst_windspeed_potential_index_goes_mucape"
+	elif param == "mwpi_ml":
+		units = ""
+		long_name = "microburst_windspeed_potential_index_goes_mlcape"
+	elif param == "dpd850":
+		units = "degC"
+		long_name = "dewpoint_depression_850hPa"
+	elif param == "dpd700":
+		units = "degC"
+		long_name = "dewpoint_depression_700hPa"
+	elif param == "tei":
+		units = "degC"
+		long_name = "thetae_index"
+	elif param == "te_diff":
+		units = "degC"
+		long_name = "max_min_thetae_diff_3000m"
+	elif param == "ml_lfc":
+		units = "m"
+		long_name = "mixed_layer_parcel_lfc"
+	elif param == "mu_lfc":
+		units = "m"
+		long_name = "most_unstable_layer_parcel_lfc"
+	elif param == "eff_lfc":
+		units = "m"
+		long_name = "effective_layer_parcel_lfc"
+	elif param == "pbl_top":
+		units = "m"
+		long_name = "pbl_level"
+	elif param == "sb_lfc":
+		units = "m"
+		long_name = "surface_parcel_lfc"
+	elif param == "k_index":
+		units = ""
+		long_name = "k_index"
+	elif param == "esp":
+		units = ""
+		long_name = "enhanced_stretching_potential"
 	else:
 		units = ""
 		long_name = ""

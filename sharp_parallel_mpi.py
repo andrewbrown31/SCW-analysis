@@ -53,6 +53,9 @@ def sharp_parcel_mpi(p,wap,ua,va,hgt,ta,dp,ps,uas,vas,tas,ta2d,terrain):
 	# the surface pressure
 	agl_idx = (p <= ps)
 
+	#Replace masked dp values
+	dp = replace_dp(dp)
+
 	#create profile, inserting surface values at the bottom of each profile
 	#It may be the case that the surface level data does not mesh with the pressure level data, such that
 	# the surface height is higher than the bottom pressure level height, even though the surface pressure
@@ -82,7 +85,6 @@ def sharp_parcel_mpi(p,wap,ua,va,hgt,ta,dp,ps,uas,vas,tas,ta2d,terrain):
 			u = ua, \
 			v = va, \
 			strictqc=False, omeg=wap[agl_idx])
-		
 
 	#create parcels
 	sb_parcel = params.parcelx(prof, flag=1, dp=-10)
@@ -90,6 +92,31 @@ def sharp_parcel_mpi(p,wap,ua,va,hgt,ta,dp,ps,uas,vas,tas,ta2d,terrain):
 	ml_parcel = params.parcelx(prof, flag=4, dp=-10)
 	eff_parcel = params.parcelx(prof, flag=6, ecape=100, ecinh=-250, dp=-10)
 	return (prof, mu_parcel ,ml_parcel, sb_parcel, eff_parcel)
+
+def replace_dp(dp_1d):
+	
+	#Takes a one-dimensional dp array (dp on pressure levels), and replace masked values with an average 
+	# between the first layer above and below which are defined. If the masked value is the first or last layer
+	# , then just the above/below layers is used (e.g. if the top pressure level is masked, then the masked
+	# value is replaced with the second-top pressure level value)
+
+	if np.isnan(dp_1d).any():
+		dp_nan_idx = np.where(np.isnan(dp_1d))[0]
+		for i in dp_nan_idx:
+			upper_inds = np.arange(i, len(dp_1d))
+			dp_up = np.nan
+			for j in upper_inds:
+				if ~np.isnan(dp_1d[j]):
+					dp_up = dp_1d[j]
+					break
+			lower_inds = np.flip(np.arange(0, i+1))
+			dp_low = np.nan
+			for j in lower_inds:
+				if ~np.isnan(dp_1d[j]):
+					dp_low = dp_1d[j]
+					break
+			dp_1d[i] = np.nanmean([dp_low, dp_up])
+	return dp_1d
 
 def maxtevv_fn(prof):
 	
@@ -151,6 +178,7 @@ if __name__ == "__main__":
 
 		#Load data and setup base array, which is reformed from a 4d (or 3d for surface data) array to 
 		# a 2d array, with rows as spatial-temporal coordinates and columns as vertical levels
+		start = dt.datetime.now()
 		if model == "erai":
 			ta,temp1,hur,hgt,terrain,p,ps,wap,ua,va,uas,vas,tas,ta2d,cp,wg10,cape,lon,lat,date_list = \
 				read_erai(domain,time)
@@ -220,33 +248,45 @@ if __name__ == "__main__":
 		# points, and columns given by the length of "param")
 		param = np.array(["ml_cape", "mu_cape", "sb_cape", "ml_cin", "sb_cin", "mu_cin",\
 					"ml_lcl", "mu_lcl", "sb_lcl", "eff_cape", "eff_cin", "eff_lcl", "dcape", \
-					"lr01", "lr03", "lr13", "lr36", "lr_freezing",\
-					"qmean01", "qmean03", "qmean06", "qmean13", "qmean36", "qmeansubcloud", \
-					"q_melting", "q1", "q3", "q6",\
-					"rhmin01", "rhmin03", "rhmin06", "rhmin13", "rhmin36", "rhminsubcloud", \
-					"mhgt", "el", "pwat", "v_totals", "c_totals", "t_totals", "maxtevv",
+					"ml_lfc", "mu_lfc", "eff_lfc", "sb_lfc",\
+					"lr01", "lr03", "lr13", "lr36", "lr24", "lr_freezing",\
+					"qmean01", "qmean03", "qmean06", "qmean13", "qmean36",\
+					"qmeansubcloud", "q_melting", "q1", "q3", "q6",\
+					"rhmin01", "rhmin03", "rhmin06", "rhmin13", "rhmin36", \
+					"rhminsubcloud", "tei", \
+					"mhgt", "mu_el", "ml_el", "sb_el", "eff_el", \
+					"pwat", "v_totals", "c_totals", "t_totals", \
+					"maxtevv", "te_diff", "dpd850", "dpd700", "pbl_top",\
 					\
 					"cp", "cape", "dcp2", "cape*s06",\
 					\
 					"srhe", "srh01", "srh03", "srh06", \
-					"ebwd", "s06", "s03", "s01", "s13", "s36", "scld", \
+					"srhe_left", "srh01_left", "srh03_left", "srh06_left", \
+					"ebwd", "s010", "s06", "s03", "s01", "s13", "s36", "scld", \
 					"omega01", "omega03", "omega06", \
 					"U500", "U10", "U1", "U3", "U6", \
-					"Ust", "Usr01", "Usr03", "Usr06", "Usr13", "Usr36", \
-					"Uwindinf", "Umeanwindinf", "Umean800_600", "Umean06", "Umean01", "Umean03",\
-					"wg10",\
+					"Ust", "Ust_left", "Usr01", "Usr03", "Usr06", "Usr01_left",\
+					"Usr03_left", "Usr06_left", \
+					"Uwindinf", "Umeanwindinf", "Umean800_600", "Umean06", \
+					"Umean01", "Umean03", "wg10",\
 					\
-					"dcp", "stp_cin", "stp_fixed", "scp", "ship",\
+					"dcp", "stp_cin", "stp_cin_left", "stp_fixed", "stp_fixed_left",\
+					"scp", "ship",\
 					"mlcape*s06", "mucape*s06", "sbcape*s06", "effcape*s06", \
-					"mlcape*s06_2", "mucape*s06_2", "sbcape*s06_2", "effcape*s06_2",\
-					"dmgwind", \
-					"ducs6", "convgust","windex","gustex", "gustex2","gustex3",\
-					"eff_sherb", "sherb", "moshe", "mosh", "wndg","mburst","sweat"])
+					"mlcape*s06_2", "mucape*s06_2", "sbcape*s06_2", \
+					"effcape*s06_2", "dmgwind", "hmi", "wmsi_mu", "wmsi_ml",\
+					"dmi", "mwpi_mu", "mwpi_ml", "ducs6", "convgust", "windex",\
+					"gustex", "gustex2","gustex3", "eff_sherb", "sherb", \
+					"moshe", "mosh", "wndg","mburst","sweat","k_index", "esp"])
 		output_data = np.zeros((ta.shape[0], len(param)))
 	
 		#Set effective layer params, as the missing values (over land) need to be set to zeros later
-		effective_layer_params = ["srhe", "ebwd", "Uwindinf", "stp_cin", "dcp", "Umeanwindinf", "scp", \
-						"dmgwind", "scld", "eff_sherb", "moshe"]
+		#(more generally, parameters which are masked over land, incl LFC)
+		effective_layer_params = ["srhe", "srhe_left", "ebwd", "Uwindinf", "stp_cin", "dcp", \
+						"Umeanwindinf", "scp", "dmgwind", "scld", \
+						"eff_sherb", "moshe","ml_lfc","mu_lfc",\
+						"eff_lfc","sb_lfc", "eff_cape", "eff_cin",\
+						"eff_lcl", "eff_el", "stp_cin_left"]
 
 		#Check there are no double-ups in the param string vector
 		if len(param) != len(np.unique(param)):
@@ -286,6 +326,8 @@ if __name__ == "__main__":
 		displacements_output = np.insert(np.cumsum(split_sizes_output),0,0)[0:-1]
 		split_sizes_input_2d = split_sizes
 		displacements_input_2d = np.insert(np.cumsum(split_sizes_input_2d),0,0)[0:-1]
+
+		print("Time taken to load in data on processor 1: %s" %(dt.datetime.now() - start), )
 
 	else:
 		#Initialise variables on other cores (can be thought of as "remote"), including the name of the 
@@ -401,26 +443,32 @@ if __name__ == "__main__":
 		# converted during calls to interp.pres)
 		sfc = prof.pres[prof.sfc]
 		p1km = interp.pres(prof, interp.to_msl(prof, 1000.))
+		p2km = interp.pres(prof, interp.to_msl(prof, 2000.))
 		p3km = interp.pres(prof, interp.to_msl(prof, 3000.))
+		p4km = interp.pres(prof, interp.to_msl(prof, 4000.))
 		p6km = interp.pres(prof, interp.to_msl(prof, 6000.))
+		p10km = interp.pres(prof, interp.to_msl(prof, 10000.))
 		melting_hgt = ml_pcl.hght0c
 		pmelting_hgt = interp.pres(prof, interp.to_msl(prof, melting_hgt))
 		pcld = interp.pres(prof, interp.to_msl(prof, 0.5 * mu_pcl.elhght))
 		pmllcl = interp.pres(prof, interp.to_msl(prof, ml_pcl.lclhght))
 		#Effective (inflow) layer
-		ebotp, etopp = params.effective_inflow_layer(prof, mupcl=mu_pcl, ecape=100, ecinh=-250)
+		ebotp, etopp = params.effective_inflow_layer(prof, mupcl=mu_pcl, ecape=100,\
+				 ecinh=-250)
 		ebot_hgt = interp.to_agl(prof, interp.hght(prof,ebotp))
 		etop_hgt = interp.to_agl(prof, interp.hght(prof,etopp))
 		#Winds. Note that mean winds through layers are pressure-weighted
 		u01, v01 = interp.components(prof, p1km)
 		u03, v03 = interp.components(prof, p3km)
 		u06, v06 = interp.components(prof, p6km)
+		u10, v10 = interp.components(prof, p10km)
 		u500, v500 = interp.components(prof, 500)
 		umllcl, vmllcl = interp.components(prof, pmllcl)
 		ucld, vcld = interp.components(prof, pcld)
 		s01 = np.array(np.sqrt(np.square(u01-uas_chunk[i])+np.square(v01-vas_chunk[i])))
 		s03 = np.array(np.sqrt(np.square(u03-uas_chunk[i])+np.square(v03-vas_chunk[i])))
 		s06 = np.array(np.sqrt(np.square(u06-uas_chunk[i])+np.square(v06-vas_chunk[i])))
+		s010 = np.array(np.sqrt(np.square(u10-uas_chunk[i])+np.square(v10-vas_chunk[i])))
 		s13 = np.array(np.sqrt(np.square(u03-u01)+np.square(v03-v01)))
 		s36 = np.array(np.sqrt(np.square(u06-u03)+np.square(v06-v03)))
 		scld = np.array(np.sqrt(np.square(ucld-umllcl)+np.square(vcld-vmllcl)))
@@ -438,8 +486,9 @@ if __name__ == "__main__":
 		U6 = utils.mag(u06, v06)
 
 		#Storm relative winds/effective inflow layer winds
-		stu, stv, temp1, temp2 = winds.non_parcel_bunkers_motion(prof)
+		stu, stv, stu_left, stv_left = winds.non_parcel_bunkers_motion(prof)
 		Ust = utils.mag(stu,stv)
+		Ust_left = utils.mag(stu_left,stv_left)
 		uwindinf, vwindinf = interp.components(prof, etopp)
 		Uwindinf = utils.mag(uwindinf, vwindinf)
 		umeanwindinf , vmeanwindinf = winds.mean_wind(prof, pbot = ebotp, ptop = etopp)
@@ -447,18 +496,24 @@ if __name__ == "__main__":
 		usr01, vsr01 = winds.sr_wind(prof, pbot=sfc, ptop=p1km, stu=stu, stv=stv)
 		usr03, vsr03 = winds.sr_wind(prof, pbot=sfc, ptop=p3km, stu=stu, stv=stv)
 		usr06, vsr06 = winds.sr_wind(prof, pbot=sfc, ptop=p6km, stu=stu, stv=stv)
-		usr13, vsr13 = winds.sr_wind(prof, pbot=p1km, ptop=p3km, stu=stu, stv=stv)
-		usr36, vsr36 = winds.sr_wind(prof, pbot=p3km, ptop=p6km, stu=stu, stv=stv)
+		usr01_left, vsr01_left = winds.sr_wind(prof, pbot=sfc, ptop=p1km, stu=stu_left, stv=stv_left)
+		usr03_left, vsr03_left = winds.sr_wind(prof, pbot=sfc, ptop=p3km, stu=stu_left, stv=stv_left)
+		usr06_left, vsr06_left = winds.sr_wind(prof, pbot=sfc, ptop=p6km, stu=stu_left, stv=stv_left)
 		Usr01 = utils.mag(usr01, vsr01)
 		Usr03 = utils.mag(usr03, vsr03)
 		Usr06 = utils.mag(usr06, vsr06)
-		Usr13 = utils.mag(usr13, vsr13)
-		Usr36 = utils.mag(usr36, vsr36)
+		Usr01_left = utils.mag(usr01_left, vsr01_left)
+		Usr03_left = utils.mag(usr03_left, vsr03_left)
+		Usr06_left = utils.mag(usr06_left, vsr06_left)
 		#Helicity
 		srhe = abs(winds.helicity(prof, ebot_hgt, etop_hgt, stu=stu, stv=stv)[0])
 		srh01 = abs(winds.helicity(prof, 0, 1000, stu=stu, stv=stv)[0])
 		srh03 = abs(winds.helicity(prof, 0, 3000, stu=stu, stv=stv)[0])
 		srh06 = abs(winds.helicity(prof, 0, 6000, stu=stu, stv=stv)[0])
+		srhe_left = abs(winds.helicity(prof, ebot_hgt, etop_hgt, stu=stu_left, stv=stv_left)[0])
+		srh01_left = abs(winds.helicity(prof, 0, 1000, stu=stu_left, stv=stv_left)[0])
+		srh03_left = abs(winds.helicity(prof, 0, 3000, stu=stu_left, stv=stv_left)[0])
+		srh06_left = abs(winds.helicity(prof, 0, 6000, stu=stu_left, stv=stv_left)[0])
 		#Effective bulk wind shear (diff)
 		ebwd = winds.wind_shear(prof, pbot=ebotp, ptop=etopp) 
 		prof.ebwd = ebwd
@@ -485,23 +540,44 @@ if __name__ == "__main__":
 		lr01 = params.lapse_rate(prof, lower = sfc, upper = p1km)
 		lr03 = params.lapse_rate(prof, lower = sfc, upper = p3km)
 		lr13 = params.lapse_rate(prof, lower = p1km, upper = p3km)
+		lr24 = params.lapse_rate(prof, lower = p2km, upper = p4km)
 		lr36 = params.lapse_rate(prof, lower = p3km, upper = p6km)
+		lr850_670 = params.lapse_rate(prof, lower = 850, upper = 670)
+		lr700_500 = params.lapse_rate(prof, lower = 700, upper = 500)
 		maxtevv = maxtevv_fn(prof)
 		pwat = params.precip_water(prof)
 		v_totals = params.v_totals(prof)
 		c_totals = params.c_totals(prof)
 		t_totals = c_totals + v_totals
+		dpd850 = interp.temp(prof,850) - interp.dwpt(prof,850)
+		dpd670 = interp.temp(prof,670) - interp.dwpt(prof,670)
+		dpd700 = interp.temp(prof,700) - interp.dwpt(prof,700)
+		dpd500 = interp.temp(prof,500) - interp.dwpt(prof,500)
+		te_diff = params.thetae_diff(prof)
 		Rq = qmean01 / 12.
 		if Rq > 1:
 			Rq = 1
 		dcape = params.dcape(prof)[0]
 		if dcape < 0:
 			dcape = 0
+		mu_el = mu_pcl.elhght
+		ml_el = ml_pcl.elhght
+		eff_el = eff_pcl.elhght
+		sb_el = sb_pcl.elhght
+		if np.ma.is_masked(ml_el):
+			ml_el = np.nanmax(prof.hght)
+		if np.ma.is_masked(eff_el):
+			eff_el = np.nanmax(prof.hght)
+		if np.ma.is_masked(sb_el):
+			sb_el = np.nanmax(prof.hght)
+		if np.ma.is_masked(mu_el):
+			mu_el = np.nanmax(prof.hght)
 		#Composite
 		stp_fixed = params.stp_fixed(sb_pcl.bplus, sb_pcl.lclhght, srh01, s06)
+		stp_fixed_left = params.stp_fixed(sb_pcl.bplus, sb_pcl.lclhght, srh01_left, s06)
 		mosh = ((lr03 - 4.)/4.) * ((utils.KTS2MS(s01) - 8)/10.) * ((maxtevv + 10.)/9.)
-		moshe = ((lr03 - 4.)/4.) * ((utils.KTS2MS(s01) - 8)/10.) * ((utils.KTS2MS(ebwd) - 8)/10.)\
-				 * ((maxtevv + 10.)/9.)
+		moshe = ((lr03 - 4.)/4.) * ((utils.KTS2MS(s01) - 8)/10.) * \
+				((utils.KTS2MS(ebwd) - 8)/10.) * ((maxtevv + 10.)/9.)
 		if mosh < 0:
 			mosh = 0
 		if moshe < 0:
@@ -511,6 +587,27 @@ if __name__ == "__main__":
 			#WINDEX UNDEFINED FOR HIGHLY STABLE CONDITIONS
 		if np.isnan(windex):
 			windex = 0
+		mwpi_mu = (mu_pcl.bplus / 100.) + (lr850_670 + dpd850 - dpd670)
+		if mwpi_mu < 0:
+			mwpi_mu = 0
+		mwpi_ml = (ml_pcl.bplus / 100.) + (lr850_670 + dpd850 - dpd670)
+		if mwpi_ml < 0:
+			mwpi_ml = 0
+		dmi = lr700_500 + dpd700 - dpd500
+		if dmi<0:
+			dmi=0
+		wmsi_mu = (mu_pcl.bplus * te_diff) / 1000.
+		if wmsi_mu<0:
+			wmsi_mu = 0
+		wmsi_ml = (ml_pcl.bplus * te_diff) / 1000.
+		if wmsi_ml<0:
+			wmsi_ml = 0
+		hmi = lr850_670 + dpd850 - dpd670
+		if hmi < 0:
+			hmi = 0
+		k_index = params.k_index(prof)
+		if k_index < 0:
+			k_index = 0
 
 		#Fill output
 		try:
@@ -527,14 +624,22 @@ if __name__ == "__main__":
 			output[i,np.where(param=="mu_lcl")[0][0]] = mu_pcl.lclhght
 			output[i,np.where(param=="sb_lcl")[0][0]] = sb_pcl.lclhght
 			output[i,np.where(param=="eff_lcl")[0][0]] = eff_pcl.lclhght
+			output[i,np.where(param=="ml_lfc")[0][0]] = ml_pcl.lfchght
+			output[i,np.where(param=="mu_lfc")[0][0]] = mu_pcl.lfchght
+			output[i,np.where(param=="sb_lfc")[0][0]] = sb_pcl.lfchght
+			output[i,np.where(param=="eff_lfc")[0][0]] = eff_pcl.lfchght
 			output[i,np.where(param=="dcape")[0][0]] = dcape
 			output[i,np.where(param=="lr01")[0][0]] = lr01
 			output[i,np.where(param=="lr03")[0][0]] = lr03
 			output[i,np.where(param=="lr13")[0][0]] = lr13
+			output[i,np.where(param=="lr24")[0][0]] = lr24
 			output[i,np.where(param=="lr36")[0][0]] = lr36
 			output[i,np.where(param=="lr_freezing")[0][0]] = lr_freezing
 			output[i,np.where(param=="mhgt")[0][0]] = melting_hgt
-			output[i,np.where(param=="el")[0][0]] = mu_pcl.elhght
+			output[i,np.where(param=="mu_el")[0][0]] = mu_el
+			output[i,np.where(param=="ml_el")[0][0]] = ml_el
+			output[i,np.where(param=="eff_el")[0][0]] = eff_el
+			output[i,np.where(param=="sb_el")[0][0]] = sb_el
 			output[i,np.where(param=="qmean01")[0][0]] = qmean01
 			output[i,np.where(param=="qmean03")[0][0]] = qmean03
 			output[i,np.where(param=="qmean06")[0][0]] = qmean06
@@ -556,6 +661,11 @@ if __name__ == "__main__":
 			output[i,np.where(param=="t_totals")[0][0]] = t_totals
 			output[i,np.where(param=="pwat")[0][0]] = pwat
 			output[i,np.where(param=="maxtevv")[0][0]] = maxtevv
+			output[i,np.where(param=="te_diff")[0][0]] = te_diff
+			output[i,np.where(param=="tei")[0][0]] = params.tei(prof)
+			output[i,np.where(param=="dpd850")[0][0]] = dpd850
+			output[i,np.where(param=="dpd700")[0][0]] = dpd700
+			output[i,np.where(param=="pbl_top")[0][0]] = params.pbl_top(prof)
 			#From model convection scheme (available for ERA-Interim only)
 			if model == "erai":
 				output[i,np.where(param=="cp")[0][0]] = cp_chunk[i]
@@ -574,6 +684,14 @@ if __name__ == "__main__":
 				srh03 
 			output[i,np.where(param=="srh06")[0][0]] = \
 				srh06 
+			output[i,np.where(param=="srhe_left")[0][0]] = \
+				srhe_left  
+			output[i,np.where(param=="srh01_left")[0][0]] = \
+				srh01_left  
+			output[i,np.where(param=="srh03_left")[0][0]] = \
+				srh03_left 
+			output[i,np.where(param=="srh06_left")[0][0]] = \
+				srh06_left 
 			output[i,np.where(param=="ebwd")[0][0]] = \
 				utils.KTS2MS(ebwd)
 			output[i,np.where(param=="s01")[0][0]] = \
@@ -582,6 +700,8 @@ if __name__ == "__main__":
 				utils.KTS2MS(s03)
 			output[i,np.where(param=="s06")[0][0]] = \
 				utils.KTS2MS(s06)
+			output[i,np.where(param=="s010")[0][0]] = \
+				utils.KTS2MS(s010)
 			output[i,np.where(param=="s13")[0][0]] = \
 				utils.KTS2MS(s13)
 			output[i,np.where(param=="s36")[0][0]] = \
@@ -604,18 +724,22 @@ if __name__ == "__main__":
 				utils.KTS2MS(U3)  
 			output[i,np.where(param=="U6")[0][0]] = \
 				utils.KTS2MS(U6)  
+			output[i,np.where(param=="Ust_left")[0][0]] = \
+				utils.KTS2MS(Ust_left)  
 			output[i,np.where(param=="Ust")[0][0]] = \
 				utils.KTS2MS(Ust)  
+			output[i,np.where(param=="Usr01_left")[0][0]] = \
+				utils.KTS2MS(Usr01_left)  
+			output[i,np.where(param=="Usr03_left")[0][0]] = \
+				utils.KTS2MS(Usr03_left)  
+			output[i,np.where(param=="Usr06_left")[0][0]] = \
+				utils.KTS2MS(Usr06_left)  
 			output[i,np.where(param=="Usr01")[0][0]] = \
 				utils.KTS2MS(Usr01)  
 			output[i,np.where(param=="Usr03")[0][0]] = \
 				utils.KTS2MS(Usr03)  
 			output[i,np.where(param=="Usr06")[0][0]] = \
 				utils.KTS2MS(Usr06)  
-			output[i,np.where(param=="Usr13")[0][0]] = \
-				utils.KTS2MS(Usr13)  
-			output[i,np.where(param=="Usr36")[0][0]] = \
-				utils.KTS2MS(Usr36)  
 			output[i,np.where(param=="U10")[0][0]] = \
 				utils.KTS2MS(utils.mag(uas_chunk[i],vas_chunk[i]))
 			output[i,np.where(param=="Uwindinf")[0][0]] = \
@@ -649,15 +773,33 @@ if __name__ == "__main__":
 			output[i,np.where(param=="gustex3")[0][0]] = \
 				(((0.5 * windex) + (0.5 * utils.KTS2MS(Umean06))) / 30.) * \
 				((ml_pcl.bplus * np.power(utils.KTS2MS(s06), 1.67)) / 20000.)
+			output[i,np.where(param=="hmi")[0][0]] = \
+				hmi
+			output[i,np.where(param=="wmsi_mu")[0][0]] = \
+				wmsi_mu
+			output[i,np.where(param=="wmsi_ml")[0][0]] = \
+				wmsi_ml
+			output[i,np.where(param=="dmi")[0][0]] = \
+				dmi
+			output[i,np.where(param=="mwpi_mu")[0][0]] = \
+				mwpi_mu
+			output[i,np.where(param=="mwpi_ml")[0][0]] = \
+				mwpi_ml
 			#Other composite parameters
+			output[i,np.where(param=="stp_cin_left")[0][0]] = params.stp_cin( \
+				ml_pcl.bplus, srhe_left, utils.KTS2MS(ebwd), ml_pcl.lclhght, ml_pcl.bminus)
 			output[i,np.where(param=="stp_cin")[0][0]] = params.stp_cin( \
 				ml_pcl.bplus, srhe, utils.KTS2MS(ebwd), ml_pcl.lclhght, ml_pcl.bminus)
+			output[i,np.where(param=="stp_fixed_left")[0][0]] = \
+				stp_fixed_left
 			output[i,np.where(param=="stp_fixed")[0][0]] = \
 				stp_fixed
 			output[i,np.where(param=="scp")[0][0]] = params.scp( \
 				mu_pcl.bplus, srhe, utils.KTS2MS(ebwd))
 			output[i,np.where(param=="ship")[0][0]] = params.ship( \
 				prof, mupcl=mu_pcl)
+			output[i,np.where(param=="k_index")[0][0]] = \
+				k_index
 			output[i,np.where(param=="mlcape*s06")[0][0]] = \
 				ml_pcl.bplus * np.power(utils.KTS2MS(s06), 1.67)
 			output[i,np.where(param=="mucape*s06")[0][0]] = \
@@ -688,6 +830,9 @@ if __name__ == "__main__":
 				params.mburst(prof, sb_pcl, lr03, dcape, v_totals, pwat)
 			output[i,np.where(param=="sweat")[0][0]] = \
 				params.sweat(prof)
+			prof.lapserate_3km = lr03
+			output[i,np.where(param=="esp")[0][0]] = \
+				params.esp(prof, mlpcl = ml_pcl)
 				
 		except:
 			raise ValueError("\nMAKE SURE THAT OUTPUT PARAMETERS MATCH PARAMETER LIST\n")

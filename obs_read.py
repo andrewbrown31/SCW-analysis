@@ -4,18 +4,100 @@ import datetime as dt
 import math
 import os
 import pytz
-#from tzwhere import tzwhere
-from event_analysis import get_aus_stn_info
+from tzwhere import tzwhere
+#from event_analysis import get_aus_stn_info
 import netCDF4 as nc
+try:
+	import sharppy.sharptab.profile as profile
+	import sharppy.sharptab.utils as utils
+	import sharppy.sharptab.params as params
+	import sharppy.sharptab.interp as interp
+	import sharppy.sharptab.winds as winds
+except:
+	pass
 
-def calc_obs(start_date,end_date):
+def analyse_events(event_type, domain, model=None, lightning_only=False, lightning_thresh=0, wg_thresh=0,\
+			remove_tc_affected=False, add_sta=True):
+        #Read data and combine
+
+	#Load AWS, lightning and model data
+	if domain == "sa_small":
+		aws = pd.read_pickle("/short/eg3/ab4502/ExtremeWind/aws/"\
+                        +"all_daily_max_wind_gusts_sa_1979_2017.pkl")
+		lightning = load_lightning(domain="sa_small",daily=False)
+
+		if model == "erai":
+			erai = pd.read_pickle("/g/data/eg3/ab4502/ExtremeWind/points/"\
+				+"erai_points_sa_small_1979_2017.pkl")
+			erai_fc = pd.read_pickle("/g/data/eg3/ab4502/ExtremeWind/points/"\
+				+"erai_fc_points_1979_2017.pkl")
+		elif model == "barra":
+			barra = pd.read_pickle("/g/data/eg3/ab4502/ExtremeWind/points/"+\
+				"barra_points_sa_small_2003_2016_daily_max.pkl")
+			barra_r_fc = pd.read_pickle("/g/data/eg3/ab4502/ExtremeWind/points/barra_r_fc/"\
+				+"barra_r_fc_points_daily_2003_2016.pkl")
+	elif domain == "aus":
+		lightning = load_lightning(domain="aus",daily=False)
+		aws = pd.read_pickle("/short/eg3/ab4502/ExtremeWind/aws/"\
+                        	+"all_daily_max_wind_gusts_6hrly_aus_1979_2017.pkl")
+
+		if model == "erai":
+			erai = pd.read_pickle("/g/data/eg3/ab4502/ExtremeWind/points/"\
+				+"erai_points_aus1979_2017.pkl")
+
+	#If interested in the jdh dataset, read and combine with AWS, model and lightning
+	if event_type == "jdh":
+		jdh = read_non_synoptic_wind_gusts().set_index("station",append=True)
+		if model == "erai":
+			df = pd.concat([aws["wind_gust"],jdh["gust (m/s)"],erai,erai_fc["wg10"],\
+				lightning["lightning"]] ,axis=1)
+		elif model == "barra":
+			df = pd.concat([aws["wind_gust"],jdh["gust (m/s)"],barra,barra_r_fc["max_wg10"],\
+				lightning["lightning"]], axis=1)
+			df = df.dropna(subset=["ml_cape"])
+		df["jdh"] = 0
+		df.loc[((~df["gust (m/s)"].isna()) & (~df["wind_gust"].isna()) & (df["wind_gust"]>=20)),"jdh"] = 1
+		df = df.dropna(subset=["wind_gust"])
+		print("No. of JDH events = "+str(df.jdh.sum()))
+
+	#Else, combine just the AWS, model and lightning
+	elif event_type == "aws":
+		if domain == "sa_small":
+			df = pd.concat([aws["wind_gust"].set_index(["an_gust_time_utc","stn_name"]),\
+				erai.set_index(["loc_id"],append=True),\
+				erai_fc.set_index(["date","loc_id"])["wg10"],\
+				lightning.set_index(["date","loc_id"])["lightning"],\
+                		],axis=1)
+		elif domain == "aus":
+			df = pd.concat([aws.set_index(["an_gust_time_utc","stn_name"]),\
+				lightning.set_index(["date","loc_id"])["lightning"]],axis=1)
+			if add_sta:
+				df = verify_sta(df)
+
+		if model == "erai":
+			df = pd.concat([df,erai.set_index(["loc_id"],append=True)],axis=1)
+
+		df = df.dropna(subset=["wind_gust"])
+		df = df[df.wind_gust >= wg_thresh]
+
+		if lightning_only:
+			df = df.dropna(subset=["lightning"])
+			df = df[df.lightning >= lightning_thresh]
+
+		if remove_tc_affected:
+			df = df[df.tc_affected==0]
+	
+	return df
+
+def read_upperair_obs(start_date,end_date):
 
 	#Read in upper air obs for 2300 UTC soundings 2010-2015 Adelaide AP
 
 	names = ["record_id","stn_id","date_time","ta","ta_quality","dp","dp_quality",\
 		"rh","rh_quality","ws","ws_quality","wd","wd_quality","p","p_quality",
 		"z","z_quality","symbol"]
-	df = pd.read_csv("/short/eg3/ab4502/ExtremeWind/upper_air/UA01D_Data_023034_999999999624286.txt",names=names,header=0,dtype={"ta":np.float64},na_values = ["     ","      ","   ","          "," "])
+	df = pd.read_csv("/short/eg3/ab4502/ExtremeWind/upper_air/UA01D_Data_023034_999999999624286.txt",\
+		names=names,header=0,dtype={"ta":np.float64},na_values = ["     ","      ","   ","          "," "])
 	times = [dt.datetime.strptime(x,"%d/%m/%Y %H:%M") for x in df["date_time"]]
 	df["date"] = times
 	df = df[(df["date"] >= start_date) & (df["date"] <= end_date)].reset_index()
@@ -28,52 +110,47 @@ def calc_obs(start_date,end_date):
 
 	#Loop over date/times/groups and keep ones which have >12 heights for all variables
 	min_no_of_points = 12	#Set min no of points required to consider sounding
-	params = ["ml_cape","ml_cin","mu_cin","mu_cape","s06","srh01","srh03","srh06","scp",\
-		"stp","mmp","relhum850-500","crt","lr1000","lcl","cape*s06"]
-	params_df_columns = params + ["lat","lon","lon_used","lat_used","loc_id","year",\
-			"month","day","hour","minute"]
-	params_df = pd.DataFrame(columns=params_df_columns)
+	mu_cape = []
+	times = []
+	an = np.array([0,6,12,18])
+
+	df = pd.DataFrame(columns=["mu_cape","ml_cape","s06"])
+
 	for name, group in groups:
-		ta = group.ta[pd.notna(group.ta)]
-		dp = group.dp[pd.notna(group.dp)]
-		rh = group.rh[pd.notna(group.rh)]
-		ua = group.ua[pd.notna(group.ua)]
-		va = group.va[pd.notna(group.va)]
-		p = group.p[pd.notna(group.p)]
-		z = group.z[pd.notna(group.z)]
-		dates = group.date_time[pd.notna(group.date_time)]
-		var = [ta,dp,rh,ua,va,p,z]
-		ind = get_min_var(var)
-		length = len(var[ind])
-		if ((length > min_no_of_points) & (group.p.min()<200)):
-			obs_inds = (pd.notna(group.ta)) & (pd.notna(group.dp)) & \
-				(pd.notna(group.rh)) & 	(pd.notna(group.ua)) & \
-				(pd.notna(group.va)) & (pd.notna(group.p)) & \
-				(pd.notna(group.z))
-			temp_time = [dt.datetime.strptime(np.unique(dates[obs_inds])[0],\
-				"%d/%m/%Y %H:%M")]
-			temp_ta = np.swapaxes(np.array(ta[obs_inds],ndmin=3),1,2)
-			temp_dp = np.swapaxes(np.array(dp[obs_inds],ndmin=3),1,2)
-			temp_rh = np.swapaxes(np.array(rh[obs_inds],ndmin=3),1,2)
-			temp_ua = np.swapaxes(np.array(ua[obs_inds],ndmin=3),1,2)
-			temp_va = np.swapaxes(np.array(va[obs_inds],ndmin=3),1,2)
-			temp_p = np.swapaxes(np.array(p[obs_inds],ndmin=3),1,2)
-			temp_z = np.swapaxes(np.array(z[obs_inds],ndmin=3),1,2)
-			temp_df = calc_param_points(temp_time,temp_ta,temp_dp,temp_rh,temp_z,\
-					[8.2],temp_p,temp_p[:,0,:],temp_ua,temp_va,temp_ua[:,0,:],\
-					temp_va[:,0,:],[138.5196],[-34.9524],[138.5196],[-34.9524]\
-					,params,["Adelaide AP"],"points_wrf")
-			params_df = params_df.append(temp_df)
 
-	params_df = params_df.reset_index()
-	params_df["date"] = [dt.datetime(params_df["year"][t],params_df["month"][t],params_df["day"][t],\
-			params_df["hour"][t]) for t in np.arange(params_df.shape[0])]
-	params_df = params_df.set_index("date")
+		print(name)
 
-	return params_df
+		group = group.dropna(subset=["ta","dp","rh","ua","va","z"])
 
-def read_aws_daily(loc):
-	#Read daily AWS data which has been downloaded for 1979-2017
+		if ((group.shape[0] > min_no_of_points) & (group.p.min()<200)):
+			prof = profile.create_profile(pres = group.p, hght = group.z, tmpc = group.ta, \
+					dwpc = group.dp, u = group.ua, v=group.va, strictQC=False)
+			
+			sb_parcel = params.parcelx(prof, flag=1, dp=-10)
+			mu_parcel = params.parcelx(prof, flag=3, dp=-10)
+			ml_parcel = params.parcelx(prof, flag=4, dp=-10)
+			eff_parcel = params.parcelx(prof, flag=6, ecape=100, ecinh=-250, dp=-10)
+			p6km = interp.pres(prof, interp.to_msl(prof, 6000.))
+			sfc = prof.pres[prof.sfc]
+			s06_u, s06_v = winds.wind_shear(prof, sfc, p6km)
+			s06 = utils.KTS2MS( utils.mag(s06_u, s06_v) )
+
+			t = an - (group.date.iloc[0].hour + group.date.iloc[0].minute/60.)
+			t_idx = np.argmin(abs(t))
+
+			df = pd.concat([ df, \
+				pd.DataFrame({"mu_cape":mu_parcel.bplus, "ml_cape":ml_parcel.bplus, \
+						"s06":s06}, \
+						index=[group.date.iloc[0].replace(hour=int(an[t_idx]), minute=0)])],\
+					axis=0)
+
+	df.to_pickle("/g/data/eg3/ab4502/ExtremeWind/points/UA_points.pkl")
+
+	return df
+
+def read_aws_daily_sa(loc):
+
+	#Read daily S.A. AWS data which has been downloaded for 1979-2017
 
 	names = ["hm","stn_no","stn_name","lat","lon","date_str","wind_gust","quality",\
 			"#"]
@@ -140,14 +217,39 @@ def read_aws_daily(loc):
 	
 	return aws
 
-def read_aws_daily_aus():
+def read_convective_wind_gusts():
+
+	#Creates a (dataframe of) "convective wind gust" data
+
 	#Read daily AWS data which has been downloaded for 35 stations Australia wide, 1979-2017
 	#Remove suspect, wrong or inconsistent quality controlled data
+	#Converts to UTC, and adds lightning data, as well as STA reports
 
-	#Load text file
+	#AWS daily max gusts are moved to the closest analysis time (00, 06, 12, 18 UTC), based on the 
+	# "time of max gust" in UTC.
+	# If the gust is exactly halfway between analysis times, the earlier time is taken.
+	#
+	#Lightning data (2005-2015) is then assigned as the maximum stroke count at the AWS station 
+	# between the most recent and next analysis time. For example, if a maximum gust is recorded 
+	# at 2:20 UTC, then the associated lightning count is taken as the maximum between the 00 and 
+	# 06 UTC values. If the gust occurs at an analysis time, the current time and the previous time 
+	# are considered. Lightning data has also already been summed over +/- 4 grid points (lat/lon) 
+	# relative to each AWS station (around +/- 1 degree).
+
+	#STA reports are considered if the report occurs within 0.5 degrees of lat and lon of an AWS station. 
+	# Similar to the AWS data, the reports are assigned to the closest analysis time.
+
+	#In addition, for AWS daily gusts data, a TC_affected flag is raised if a TC was present on the same day
+	# within 2 degrees of latitude and longitude, from the BoM best track data 
+
+	#An INCOMPLETE_MONTH flag is raised at a station if for a given month, less than 90% of days are recorded
+
+	#Set csv column names
 	names = ["record_id","stn_no","stn_name","locality", "state","lat","lon","district","height","date_str",\
 		"wind_gust","quality","wind_dir", "wind_dir_quality", "max_gust_str_lt", \
 		"max_gust_time_quality", "eof"]
+
+	#Dict to map station names to
 	renames = {'ALICE SPRINGS AIRPORT                   ':"Alice Springs",\
 			'GILES METEOROLOGICAL OFFICE             ':"Giles",\
 			'COBAR MO                                ':"Cobar",\
@@ -183,23 +285,103 @@ def read_aws_daily_aus():
 			'TOWNSVILLE AERO                         ':"Townsville",\
 			'HOBART (ELLERSLIE ROAD)                 ':"Hobart",\
 			'PORT HEDLAND AIRPORT                    ':"Port Hedland"}
+
+	#Set csv read data types
 	data_types = dict(record_id=str, stn_no=int, stn_name=str, locality=str, state=str, lat=float, lon=float,\
 				district=str, height=float, date_str=str, wind_gust=float, quality=str, \
 				wind_dir=str, wind_dir_quality=str, max_gust_str_lt=str, max_gust_time_quality=str,\
 				eof=str)
 
+	#Load csv file
 	print("LOADING TEXT FILE")
 	f = "/short/eg3/ab4502/ExtremeWind/aws/daily_aus_full/DC02D_Data_999999999643799.txt"
 	df = pd.read_csv(f, names=names, dtype=data_types, \
 		na_values={"wind_gust":'     ', "max_gust_str_lt":"    "})
-	df.loc[df["max_gust_str_lt"].isna(),"max_gust_str_lt"] = "0000"
 	df = df.replace({"stn_name":renames})
 	df["locality"] = df["locality"].str.strip()
 	df["wind_dir"] = df["wind_dir"].str.strip()
-	df.loc[np.in1d(df.quality,np.array(["S","W","I"])),"wind_gust"] = np.nan
+
+	#Get station info
+	loc_id = list(df.stn_name.unique())
+	lon_list = []
+	lat_list = []
+	points = []
+	for loc in loc_id:
+		lon = df[df.stn_name==loc]["lon"].unique()[0]
+		lat = df[df.stn_name==loc]["lat"].unique()[0]
+		lon_list.append(lon)
+		lat_list.append(lat)
+		points.append((lon,lat))
+	stn_info = pd.DataFrame({"stn_name":loc_id, "lon":lon_list, "lat":lat_list})
+
+	#Split the date column and convert to datetime object
+	print("CONVERTING DATES TO DATETIME OBJECTS...")
 	df["year"] = df.date_str.str.slice(6,10).astype("int")
-	df = df[df.year<=2017].reset_index()
+	df["month"] = df.date_str.str.slice(3,5).astype("int")
+	df["day_lt"] = df.date_str.str.slice(0,2).astype("int")
+	df["daily_date_lt"] = [dt.datetime(df["year"][i], df["month"][i], df["day_lt"][i]) \
+				for i in np.arange(df.shape[0])]
+
+	#For each month/station, see whether greater than 90% of the month has data. Create a new column with this
+	# information
+	print("IDENTIFYING INCOMPLETE MONTHS...")
+	df["incomplete_month"] = 0
+	groups = df.groupby(["stn_name","year","month"])
+	cnt = 0
+	for name, group in groups:
+		days_in_month = group.shape[0]
+		comp_days = (~(group["wind_gust"].isna())).sum()
+		if (comp_days / float(days_in_month)) < 0.9:
+			df.loc[(df.stn_name==group.stn_name.iloc[0]) & (df.year==group.year.iloc[0]) & \
+				(df.month==group.month.iloc[0]),"incomplete_month"] = 1
+
+	#Split the time of observed gust column and convert to datetime object. If a gust hasn't been recorded,
+	# then assign the gust time the same as the date time for that day
+	print("CONVERTING THE TIME OF MAX GUST INTO A DATETIME OBJECT...")
+	df.loc[df["max_gust_str_lt"].isna(),"max_gust_str_lt"] = "0000"
+	df["hour_lt"] = df.max_gust_str_lt.str.slice(0,2).astype("int")
+	df["min_lt"] = df.max_gust_str_lt.str.slice(2,4).astype("int")
+	df["gust_time_lt"] = [dt.datetime(df["year"][i], df["month"][i], df["day_lt"][i], \
+				df["hour_lt"][i], df["min_lt"][i]) for i in np.arange(df.shape[0])]
+
+	#Remove gusts where the quality flag is "Suspect", "Inconsistent (with other known information" or 
+	# "Wrong". These represent 3, 0 and 1 gusts over 25 m/s. Out of the other flags for gusts over 25 m/s,
+	# 80 don't have a flag, 72 have "N"ot been quality controlled, 2031 have been qualit"Y" controlled.
+	df.loc[np.in1d(df.quality,np.array(["S","W","I"])),"wind_gust"] = np.nan
 	
+	#Set up TC dataframe
+	tc_df = read_bom_shtc("/short/eg3/ab4502/ird_tc_model/tropical_cyclone_prediction/shtc_2604.csv")
+	tc_df = tc_df[(tc_df.datetime >= dt.datetime(1979,1,1)) & (tc_df.datetime<dt.datetime(2018,1,1))]
+	#Loop through the TCs and assign a stn_name if it is within 2 degree (lat and lon) of a tc
+	tc_affected_date = []
+	tc_affected_stn = []
+	for i in np.arange(tc_df.shape[0]):
+		tc_affected_stns = stn_info[(abs(tc_df.iloc[i].lat - stn_info.lat) <= 2) & \
+					(abs(tc_df.iloc[i].lon - stn_info.lon) <= 2)]
+		if tc_affected_stns.shape[0] > 0:
+			for j in np.arange(tc_affected_stns.shape[0]):
+				tc_affected_date.append(dt.datetime( tc_df.iloc[i].datetime.year, \
+					tc_df.iloc[i].datetime.month, tc_df.iloc[i].datetime.day))
+				tc_affected_stn.append(tc_affected_stns.iloc[j].stn_name)
+	tc_affected_df = pd.DataFrame({"stn_name":tc_affected_stn, "date":tc_affected_date})
+	tc_affected_df = tc_affected_df.drop_duplicates(subset=["date"])
+
+	#For each gust from 2005-2015, get lightning information. As we are interested if the 
+	# gust is associated with a thunderstorm, take the number of strokes as the maximum between
+	# the previous and next 6-hourly period
+	lightning = load_lightning(domain="aus", daily=False, smoothing=True).set_index(\
+			["date","loc_id"]).reset_index("loc_id")
+	locs = np.unique(lightning["loc_id"])
+	print("RESAMPLING LIGHTNING DATA WITH A -2 AND 2 ROLLING WINDOW...")
+	lightning_resampled = pd.DataFrame()
+	for l in locs:
+		temp_df = lightning[lightning.loc_id==l]
+		temp_df["lightning_prev"] = temp_df["lightning"].sort_index().rolling("6H",\
+						closed="both").max()
+		temp_df["lightning_next"] = temp_df["lightning"].sort_index().rolling("12H",\
+						closed="right").max().shift(-1)
+		lightning_resampled = pd.concat([lightning_resampled, temp_df],axis=0)
+
 	#Get tz info
 	print("GETTING TZ INFO...")
 	tzwhere_mod = tzwhere.tzwhere()
@@ -210,53 +392,101 @@ def read_aws_daily_aus():
 			df[df.stn_name==l].lon.unique()[0]) 
 		tz_list.append(pytz.timezone(tz_str))
 
-	#Split the max gust date-time up into its components
-	print("CONVERTING DATES TO DATETIME OBJECTS...")
-	df["day"] = df.date_str.str.slice(0,2).astype("int")
-	df["month"] = df.date_str.str.slice(3,5).astype("int")
-	df["hour"] = df.max_gust_str_lt.str.slice(0,2).astype("int")
-	df["min"] = df.max_gust_str_lt.str.slice(2,4).astype("int")
-	df["daily_date"] = [dt.datetime(df["year"][i], df["month"][i], df["day"][i]) \
-				for i in np.arange(df.shape[0])]
-	#Convert to date-time object
-	df["gust_time_lt"] = [dt.datetime(df["year"][i], df["month"][i], df["day"][i], \
-				df["hour"][i], df["min"][i]) for i in np.arange(df.shape[0])]
-
 	#Convert the date-time object to UTC. Needs to be done separately for each station (different time zones)
-	df["gust_time_utc"] = 0
 	print("\nCONVERTING FROM LT TO UTC...\n")
+	temp_df2 = pd.DataFrame()
 	for l in unique_locs:
-		print(l)
-		temp_df = df.loc[df.stn_name==l, "gust_time_lt"].reset_index()
-		temp_df = [temp_df["gust_time_lt"][t] - \
-			tz_list[np.where(np.array(unique_locs)==l)[0][0]].utcoffset(temp_df["gust_time_lt"][t]) \
-				for t in np.arange(temp_df.shape[0])]
-		df.loc[df.stn_name==l, "gust_time_utc"] = temp_df
+		temp_df = df.loc[df.stn_name==l].reset_index()
+		for t in np.arange(temp_df.shape[0]):
+			try:
+				temp_df.loc[t,"gust_time_utc"] = temp_df.loc[t,"gust_time_lt"] - \
+					tz_list[np.where(np.array(unique_locs)==l)[0][0]].\
+					utcoffset(temp_df["gust_time_lt"][t]) 
+			except:
+				temp_df.loc[t,"gust_time_utc"] = temp_df.loc[t,"gust_time_lt"] - \
+					tz_list[np.where(np.array(unique_locs)==l)[0][0]].\
+					utcoffset(temp_df["gust_time_lt"][t], is_dst=False) 
 
-	#Edit to be equal to the most recent analysis time (in order to compare to reanalysis, 00, 06, 12, 18 hours)
-	print("\nCONVERTING FROM UTC TO MOST RECENT (RE)ANALYSIS TIME...")
-	an = np.array([0,6,12,18])
+		temp_df2 = pd.concat([temp_df2, temp_df], axis=0)
+
+	df = df.sort_values(["stn_name","daily_date_lt"]).reset_index()
+	df["gust_time_utc"] = temp_df2.sort_values(["stn_name","daily_date_lt"]).reset_index()["gust_time_utc"]
+
+	print("CONVERTING UTC GUST TIME BACK TO DAILY DATE")
+	df = df.reset_index()
+	df["daily_date_utc"] = [dt.datetime(df.loc[i,"gust_time_utc"].year, \
+				df.loc[i,"gust_time_utc"].month, \
+				df.loc[i,"gust_time_utc"].day) for i in np.arange(df.shape[0])]
+
+	#Get the most recent analysis time (in order to compare to reanalysis, 00, 06, 12, 18 hours),
+	# the next analysis time, and the closest analysis time
+	print("\nCONVERTING FROM UTC TO CLOSEST (RE)ANALYSIS TIME...")
+	an = np.array([0,6,12,18,24])
 	an_hour_utc = []
 	year_utc = []
 	month_utc = []
 	day_utc = []
+	prev_or_next = []
 	for i in np.arange(df.shape[0]):
-		t = an - df["gust_time_utc"][i].hour
-		an_hour_utc.append(an[np.where(t<=0)[0][-1]])
-		year_utc.append(df["gust_time_utc"][i].year)
-		month_utc.append(df["gust_time_utc"][i].month)
-		day_utc.append(df["gust_time_utc"][i].day)
-	df["an_gust_time_utc"] = [dt.datetime(year_utc[i], month_utc[i], day_utc[i], \
-				an_hour_utc[i]) for i in np.arange(df.shape[0])]
-	df["an_hour"] = an_hour_utc
+		t = an - (df["gust_time_utc"][i].hour + df["gust_time_utc"][i].minute/60.)
+		t_idx = np.argmin(abs(t))
+		if an[t_idx]<24:
+			an_hour_utc.append(an[t_idx])
+			year_utc.append(df["gust_time_utc"][i].year)
+			month_utc.append(df["gust_time_utc"][i].month)
+			day_utc.append(df["gust_time_utc"][i].day)
+		else:
+			temp_time = (df["gust_time_utc"][i] + dt.timedelta(days=1)).replace(hour=0)
+			an_hour_utc.append(0)
+			year_utc.append(temp_time.year)
+			month_utc.append(temp_time.month)
+			day_utc.append(temp_time.day)
+
+		if t[t_idx] >= 0:
+			prev_or_next.append("prev")
+		else:
+			prev_or_next.append("next")
+		
+	df["an_date"] = [dt.datetime(year_utc[i], month_utc[i], day_utc[i], an_hour_utc[i]) \
+			for i in np.arange(len(an_hour_utc))]
+	df["prev_or_next"] = prev_or_next
+
+	#df["previous_an_date"] = [dt.datetime(year_utc[i], month_utc[i], day_utc[i], \
+	#			an_hour_utc[i]) for i in np.arange(df.shape[0])]
+	#df["next_an_date"] = df["previous_an_date"] + dt.timedelta(hours=6) 
 
 	#Drop duplicates which are formed by the same gust being recorded at the end of one day (e.g. 23:50 LT)
 	# and the start of the next day (e.g. 02:00 LT), which then are given the same time when 
 	# converted to UTC and placed at the most recent analysis time (e.g. 12:00 UTC)
-	df = df.drop_duplicates(subset=["an_gust_time_utc","stn_name"])
+	#Keep the entry with the highest wind gust
+	df = df.sort_values("wind_gust", ascending=False).drop_duplicates(\
+			subset=["an_date","stn_name"]).sort_index() 
 
-	df[["stn_name","state","lat","lon","height","wind_gust","wind_dir","year","day","month","hour","min","daily_date","gust_time_lt","gust_time_utc","an_gust_time_utc","an_hour"]].to_pickle("/short/eg3/ab4502/ExtremeWind/aws/all_daily_max_wind_gusts_6hrly_aus_1979_2017.pkl")
+	#Insert TC flag from TC dataframe
+	df["tc_affected"] = 0
+	for i in np.arange(tc_affected_df.shape[0]):
+		df.loc[(df["daily_date_utc"]==tc_affected_df.iloc[i].date) & \
+			(df["stn_name"]==tc_affected_df.iloc[i].stn_name), "tc_affected"] = 1 
 
+	#Combine lightning and AWS data
+	df = pd.concat([df.set_index(["an_date","stn_name"]), \
+		lightning_resampled.set_index(["loc_id"],append=True)[["lightning_prev", "lightning_next"]]], \
+		axis=1)
+	df.loc[df["prev_or_next"]=="prev", "lightning_next"] = np.nan
+	df.loc[df["prev_or_next"]=="next", "lightning_prev"] = np.nan
+	df["lightning"] = df["lightning_prev"].combine_first(df["lightning_next"])
+	df = df.dropna(subset=["wind_gust","lightning"])
+
+	#Add STA
+	print("ADDING STA REPORTS...")
+	df = df.drop("level_0", axis=1)
+	df = verify_sta(df)
+	
+	#Save as pickle
+	df[["state","lat","lon","height","wind_gust","wind_dir","year","month",\
+		"day_lt","hour_lt","min_lt","daily_date_utc","gust_time_lt","gust_time_utc",\
+		"tc_affected","lightning","incomplete_month","sta_wind","sta_wind_id"]].\
+		to_pickle("/short/eg3/ab4502/ExtremeWind/aws/convective_wind_gust_aus_2005_2015.pkl")
 
 	return df
 
@@ -305,8 +535,6 @@ def read_aws_half_hourly_1979(loc,resample=False):
 	elif loc == "Parafield":
 		fname = "/short/eg3/ab4502/ExtremeWind/aws/half_hourly_1979_2017/HM01X_Data_023013_999999999565453.txt"
 	elif loc == "Austin Plains":
-		fname = "/short/eg3/ab4502/ExtremeWind/aws/half_hourly_1979_2017/HM01X_Data_025562_999999999565453.txt"
-	elif loc == "Roseworthy":
 		fname = "/short/eg3/ab4502/ExtremeWind/aws/half_hourly_1979_2017/HM01X_Data_023122_999999999565453.txt"
 	elif loc == "Tarcoola":
 		fname = "/short/eg3/ab4502/ExtremeWind/aws/half_hourly_1979_2017/HM01X_Data_016098_999999999565453.txt"
@@ -591,6 +819,122 @@ def read_clim_ind(ind):
 	except:
 		raise NameError("MUST BE ""sam"", ""nino34"" or ""dmi""")
 
+def read_bom_shtc(infile):
+    """
+    Read CSV file downloaded from http://www.bom.gov.au/cyclone/history/#db called shtc_<date downloaded mmdd>.csv
+    """
+
+    #print " INFO : Extracting data from site file %s" %(infile)
+
+    #Read infile. Note that lines before header contains all named TCs in the data file. Will change if downloaded again with new TCs
+    #Read only columns of Name, datetime, lat, lon, central pressure and max wind speed
+    data = pd.read_csv(infile,error_bad_lines=False,header=62,usecols=[0,1,2,7,8,16,49],low_memory = False)
+
+    #Change time axis to datetime objects. Remove data where there is no time
+    data_subset = data[data.TM != ' ']
+    #data_subset['TM'] = pd.to_datetime(map(str,data_subset['TM'].tolist()),format='%Y-%m-%d %H:%M')    
+    data_subset.TM = pd.to_datetime(data_subset.TM,format='%Y-%m-%d %H:%M')
+
+    #Rename to be consistent with read_obs.read_obs
+    data_subset = data_subset.rename(columns = {'NAME':'name','DISTURBANCE_ID':'storm_no','TM':'datetime','LAT':'lat','LON':'lon','CENTRAL_PRES':'pressure','MAX_WIND_SPD':'wind_mps'})
+
+    #Change lat, lon to numeric
+    data_subset['lat'] = pd.to_numeric(data_subset['lat'])
+    data_subset['lon'] = pd.to_numeric(data_subset['lon'])
+
+    #Create a column composed of storm number and storm year to create a unique storm_id
+    def storm_id(row):
+        return '{}_{}'.format(row['datetime'].year, row['storm_no'])
+
+    data_subset['storm_id'] = data_subset.apply(storm_id, axis=1)
+
+
+    return data_subset
+
+
+def read_sta():
+
+	#Read the "cleaned" STA wind report dataset. Cleaned means that some 
+	# comments from the original dataset have been removed such that it can actually be
+	# read in as a csv
+
+	#Possibly need to screen for non-straight line winds and/or downbursts (e.g. tornadoes
+	# but with no squall/burst, tropical cyclones). Also, there are ~6000 reports, so can afford
+	# to be strict. E.g. remove reports without comments, reports without a wind speed, etc. 
+
+	sta = pd.read_csv("/short/eg3/ab4502/ExtremeWind/sta_wind_clean.csv",usecols=np.arange(0,8),\
+			engine="python")
+
+	#an = np.array([0,6,12,18])
+	for i in np.arange(0,sta.shape[0]):
+		temp_date = dt.datetime.strptime(sta["Date/Time"].loc[i], "%d/%m/%Y %H:%M")
+
+		#CLOSEST ANALYSIS TIME
+		an = np.array([dt.datetime(temp_date.year,temp_date.month,temp_date.day,0), \
+			dt.datetime(temp_date.year,temp_date.month,temp_date.day,6),\
+			dt.datetime(temp_date.year,temp_date.month,temp_date.day,12),\
+			dt.datetime(temp_date.year,temp_date.month,temp_date.day,18)])
+		sta.loc[i,"an_date"] = an[np.argmin(abs(temp_date-an))]
+
+	sta["Wind ID"] = sta["Wind ID"].astype(str)
+	sta["Comments"] = sta["Comments"].str.lower()
+	sta["Max Gust speed"] = sta["Max Gust speed"] * 0.514444
+
+	return sta
+
+
+def verify_sta(df):
+
+	#Take a dataframe of "events", which contains a date field, and add the Severe Thunderstorm
+	# Archive (STA) from the BoM. Output a dataframe with an additional column, "sta_wind"
+
+	#Comments are available in the csv, but are not read in 
+
+	#The input dataframe must be indexed by "daily_date" and "stn_name" (as is the output from analyse_events()
+
+	sta = read_sta()
+
+	df = df.reset_index().rename({"level_0":"daily_dates","level_1":"stn_name"},axis=1)
+
+	#Get station info
+	loc_id = list(df.stn_name.unique())
+	lon_list = []
+	lat_list = []
+	points = []
+	for loc in loc_id:
+		lon = df[df.stn_name==loc]["lon"].unique()[0]
+		lat = df[df.stn_name==loc]["lat"].unique()[0]
+		lon_list.append(lon)
+		lat_list.append(lat)
+		points.append((lon,lat))
+	stn_info = pd.DataFrame({"stn_name":loc_id, "lon":lon_list, "lat":lat_list})
+	
+	#For each STA report, find station locations within one degree lat and lon (from the 
+	# passed AWS dataframe). Assign the report with that station name. If there is more than 
+	# one station, take the one with minimum distance
+	sta["stn_name"] = "NULL"
+	for i in np.arange(0,sta.shape[0]):
+		
+		lon_diff = abs(sta.Longitude[i] - stn_info.lon)
+		lat_diff = abs(sta.Latitude[i] - stn_info.lat)
+
+		if ( (lon_diff.min() <= 0.5) & (lat_diff.min() <= 0.5) ):
+			dist = np.sqrt(np.square( lon_diff) + np.square(lat_diff))
+			sta.loc[i, "stn_name"] = stn_info.iloc[dist.idxmin()]["stn_name"]
+
+	sta = sta[~(sta.stn_name=="NULL")]
+	sta = sta.drop_duplicates(subset=["stn_name","an_date"]).set_index(["an_date","stn_name"])
+
+	df = df.set_index(["daily_dates","stn_name"])
+	df = pd.concat([df,sta[["Max Gust speed","Wind ID"]]], axis=1).dropna(subset=["wind_gust"])
+	df = df.rename({"Max Gust speed":"sta_wind","Wind ID":"sta_wind_id"}, axis=1)
+
+	return df
+			
+			
+			
+
+
 if __name__ == "__main__":
 
 	#df = calc_obs()
@@ -598,5 +942,9 @@ if __name__ == "__main__":
 	#df.to_csv("/home/548/ab4502/working/ExtremeWind/data_obs_"+\
 	#	"Nov2012"+".csv",float_format="%.3f")
 	
-	df = read_lightning(False)
+	#read_convective_wind_gusts()
+
+	#df = read_lightning(False)
 	#read_aws_daily_aus()
+	read_upperair_obs(dt.datetime(2010,1,1),dt.datetime(2017,1,1))
+

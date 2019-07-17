@@ -1,6 +1,4 @@
-import seaborn as sb
 import os
-#from obs_read import 
 import matplotlib.pyplot as plt
 #from plot_param import *
 #from plot_clim import *
@@ -590,64 +588,6 @@ def get_wind_sa(model):
 
 	return df
 
-def analyse_events(event_type, domain, model):
-        #Read data and combine
-
-	if domain == "sa_small":
-		aws = pd.read_pickle("/short/eg3/ab4502/ExtremeWind/aws/"\
-                        +"all_daily_max_wind_gusts_sa_1979_2017.pkl").set_index(["date","stn_name"])
-		lightning = load_lightning(domain="sa_small",daily=True)
-		if model == "erai":
-			erai = pd.read_pickle("/g/data/eg3/ab4502/ExtremeWind/points/"\
-				+"erai_points_sa_small_1979_2017_daily_max.pkl").set_index(["date","loc_id"])
-			erai_fc = pd.read_pickle("/g/data/eg3/ab4502/ExtremeWind/points/"\
-				+"erai_fc_points_1979_2017_daily_max.pkl").set_index(["date","loc_id"])
-		elif model == "barra":
-			barra = pd.read_pickle("/g/data/eg3/ab4502/ExtremeWind/points/"+\
-				"barra_points_sa_small_2003_2016_daily_max.pkl").set_index(["date","loc_id"])
-			barra_r_fc = pd.read_pickle("/g/data/eg3/ab4502/ExtremeWind/points/barra_r_fc/"\
-				+"barra_r_fc_points_daily_2003_2016.pkl").set_index(["loc_id"],append=True)
-	elif domain == "aus":
-		assert (event_type == "aws") & (model == "erai")
-		lightning = load_lightning(domain="aus",daily=True)
-		aws = pd.read_pickle("/short/eg3/ab4502/ExtremeWind/aws/"\
-                        +"all_daily_max_wind_gusts_aus_1979_2017.pkl").set_index(["date","stn_name"])
-		erai = pd.read_pickle("/g/data/eg3/ab4502/ExtremeWind/points/"\
-			+"erai_points_aus1979_2017_daily_max.pkl").set_index(["date","loc_id"])
-
-	if event_type == "jdh":
-		jdh = read_non_synoptic_wind_gusts().set_index("station",append=True)
-		if model == "erai":
-			df = pd.concat([aws["wind_gust"],jdh["gust (m/s)"],erai,erai_fc["wg10"],lightning["lightning"]]\
-				,axis=1)
-		elif model == "barra":
-			df = pd.concat([aws["wind_gust"],jdh["gust (m/s)"],barra,barra_r_fc["max_wg10"],lightning["lightning"]],\
-				axis=1)
-			df = df.dropna(subset=["ml_cape"])
-		#Create a binary column for JDH events in the original combined dataframe
-		#Only include JDH events where the AWS data is above 20 m/s
-		df["jdh"] = 0
-		df.loc[((~df["gust (m/s)"].isna()) & (~df["wind_gust"].isna()) & (df["wind_gust"]>=20)),"jdh"] = 1
-
-		#Create dataframe which is able to be cross-validated with AWS data (i.e.
-		# where AWS data is present
-		df = df.dropna(subset=["wind_gust"])
-		print("No. of JDH events = "+str(df.jdh.sum()))
-
-	elif event_type == "aws":
-		if domain == "sa_small":
-			df = pd.concat([aws["wind_gust"],erai,erai_fc["wg10"],lightning["lightning"],\
-                	barra_r_fc["max_wg10"]],axis=1)
-		elif domain == "aus":
-			df = pd.concat([aws["wind_gust"],erai,lightning["lightning"]],axis=1)
-
-		df["strong"] = ((df["wind_gust"] >= 25) & (df["wind_gust"] < 30)) * 1
-		df["extreme"] = (df["wind_gust"] >= 30) * 1
-		df = df.dropna(subset=["wind_gust"])
-		print("No. of AWS events = "+str(df.extreme.sum()) + ", "+str(df.strong.sum()))
-	
-	return df
-
 def bootstrap_slope(x,y,n_boot):
 
 	#Return the gradient, and standard deviation for an n_boot bootstrap resamplint
@@ -874,14 +814,62 @@ def get_far66(df,event,param):
 	return (fa_ratio,fa_rate,param_thresh)
 
 def get_aus_stn_info():
-	df = pd.read_pickle("/short/eg3/ab4502/ExtremeWind/aws/all_daily_max_wind_gusts_aus_1979_2017.pkl")
-	loc_id = list(df.stn_name.unique())
-	points = []
-	for loc in loc_id:
-		lon = df[df.stn_name==loc]["lon"].unique()[0]
-		lat = df[df.stn_name==loc]["lat"].unique()[0]
-		points.append((lon,lat))
-	return [loc_id,points]
+	#df = pd.read_pickle("/short/eg3/ab4502/ExtremeWind/aws/all_daily_max_wind_gusts_aus_1979_2017.pkl")
+	#loc_id = list(df.stn_name.unique())
+	#points = []
+	#for loc in loc_id:
+	#	lon = df[df.stn_name==loc]["lon"].unique()[0]
+	#	lat = df[df.stn_name==loc]["lat"].unique()[0]
+	#	points.append((lon,lat))
+
+	names = ["id", "stn_no", "district", "stn_name", "1", "2", "lat", "lon", "3", "4", "5", "6", "7", "8", \
+			"9", "10", "11", "12", "13", "14", "15", "16"]	
+
+	df = pd.read_csv("/short/eg3/ab4502/ExtremeWind/aws/daily_aus_full/DC02D_StnDet_999999999643799.txt",\
+		names=names, header=0)
+
+	#Dict to map station names to
+	renames = {'ALICE SPRINGS AIRPORT                   ':"Alice Springs",\
+			'GILES METEOROLOGICAL OFFICE             ':"Giles",\
+			'COBAR MO                                ':"Cobar",\
+			'AMBERLEY AMO                            ':"Amberley",\
+			'SYDNEY AIRPORT AMO                      ':"Sydney",\
+			'MELBOURNE AIRPORT                       ':"Melbourne",\
+			'MACKAY M.O                              ':"Mackay",\
+			'WEIPA AERO                              ':"Weipa",\
+			'MOUNT ISA AERO                          ':"Mount Isa",\
+			'ESPERANCE                               ':"Esperance",\
+			'ADELAIDE AIRPORT                        ':"Adelaide",\
+			'CHARLEVILLE AERO                        ':"Charleville",\
+			'CEDUNA AMO                              ':"Ceduna",\
+			'OAKEY AERO                              ':"Oakey",\
+			'WOOMERA AERODROME                       ':"Woomera",\
+			'TENNANT CREEK AIRPORT                   ':"Tennant Creek",\
+			'GOVE AIRPORT                            ':"Gove",\
+			'COFFS HARBOUR MO                        ':"Coffs Harbour",\
+			'MEEKATHARRA AIRPORT                     ':"Meekatharra",\
+			'HALLS CREEK METEOROLOGICAL OFFICE       ':"Halls Creek",\
+			'ROCKHAMPTON AERO                        ':"Rockhampton",\
+			'MOUNT GAMBIER AERO                      ':"Mount Gambier",\
+			'PERTH AIRPORT                           ':"Perth",\
+			'WILLIAMTOWN RAAF                        ':"Williamtown",\
+			'CARNARVON AIRPORT                       ':"Carnarvon",\
+			'KALGOORLIE-BOULDER AIRPORT              ':"Kalgoorlie",\
+			'DARWIN AIRPORT                          ':"Darwin",\
+			'CAIRNS AERO                             ':"Cairns",\
+			'MILDURA AIRPORT                         ':"Mildura",\
+			'WAGGA WAGGA AMO                         ':"Wagga Wagga",\
+			'BROOME AIRPORT                          ':"Broome",\
+			'EAST SALE                               ':"East Sale",\
+			'TOWNSVILLE AERO                         ':"Townsville",\
+			'HOBART (ELLERSLIE ROAD)                 ':"Hobart",\
+			'PORT HEDLAND AIRPORT                    ':"Port Hedland"}
+
+	df = df.replace({"stn_name":renames})
+
+	points = [(df.lon.iloc[i], df.lat.iloc[i]) for i in np.arange(df.shape[0])]
+
+	return [df.stn_name.values,points]
 
 def cewp_spatial_extent():
 

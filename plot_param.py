@@ -11,7 +11,7 @@ import os
 from scipy.interpolate import griddata
 from scipy.stats import gaussian_kde
 from matplotlib.colors import LogNorm
-from obs_read import load_lightning
+from obs_read import load_lightning, analyse_events
 import pandas as pd
 from event_analysis import bootstrap_slope
 import seaborn as sb
@@ -33,12 +33,46 @@ def three_month_average(a):
 			rolling[i] = (a[i-1] + a[i] + a[i+1]) / 3.
 	return rolling
 
+def sta_versus_aws():
+
+	#Plot spatially smoothed maps of STA wind reports and AWS + lightning
+
+	from scipy.ndimage.filters import gaussian_filter as filter
+
+	df = pd.read_pickle("/short/eg3/ab4502/ExtremeWind/aws/convective_wind_gust_aus_2005_2015.pkl")
+
+	m = Basemap(llcrnrlon=110, llcrnrlat=-45, urcrnrlon=160, urcrnrlat=-10,projection="cyl");\
+	 
+	plt.subplot(131);\
+	plt.title("STA REPORTS NEAR AWS STATIONS\nRELATIVE FREQUENCY");\
+	d,y,x=np.histogram2d(df[~(df.sta_wind.isna()) & (df.tc_affected==0)].lat,df[~(df.sta_wind.isna()) & (df.tc_affected==0)].lon,bins=20,range=([-45,-10],[110,160]));\
+	x = np.array([(x[i-1] + x[i]) / 2. for i in np.arange(1,len(x))])
+	y = [(y[i-1] + y[i]) / 2. for i in np.arange(1,len(y))]
+	x,y=np.meshgrid(x,y);\
+	m.pcolor(x,y,filter(d,1) / filter(d,1).sum(), vmin=0, vmax=0.025);\
+	plt.colorbar()
+	m.drawcoastlines()
+	 
+	plt.subplot(132);\
+	plt.title("AWS (OVER 25 m/s) + LIGHTNING\nRELATIVE FREQUENCY");\
+	d_aws,t1,t2=np.histogram2d(df[(df.lightning>=2) & (df.wind_gust>=25) & (df.tc_affected==0)].lat,df[(df.lightning>=2) & (df.wind_gust>=25) &(df.tc_affected==0)].lon,bins=20,range=([-45,-10],[110,160]));\
+	m.pcolor(x,y,filter(d_aws,1) / filter(d_aws,1).sum(), vmin=0, vmax=0.025);\
+	plt.colorbar()
+	m.drawcoastlines();\
+	plt.subplot(133);\
+	plt.title("AWS - STA\nDIFFERENCE IN RELATIVE FREQUENCY")
+	m.pcolor(x,y,(filter(d_aws,1) / filter(d_aws,1).sum()) - (filter(d,1) / filter(d,1).sum()), vmin=-0.01, vmax=0.01, cmap=plt.get_cmap("RdBu_r"));\
+	m.drawcoastlines();
+	plt.colorbar()
+	 
+	plt.show()
+ 
 def temporal_dist_plots():
 	#New function to plot diurnal distribution of extreme convective gusts, using the "time of max gust" 
 	# daily data in combination with 6 hourly lightning data
 
 	aws = pd.read_pickle("/short/eg3/ab4502/ExtremeWind/aws/all_daily_max_wind_gusts_6hrly_aus_1979_2017.pkl")
-	lightning = load_lightning(daily=False,smoothing=False).reset_index()
+	lightning = load_lightning(daily=False,smoothing=True).reset_index()
 	lightning["lightning_hour"] = [lightning.date[i].hour for i in np.arange(lightning.shape[0])]
 
 	aws = aws.set_index(["an_gust_time_utc","stn_name"])
@@ -48,17 +82,18 @@ def temporal_dist_plots():
 	df_lightning = df.dropna(subset=["lightning"])
 
 	l = 30
+	ymax=50
 	plt.figure()
 	plt.subplot(221);df_lightning[(df_lightning.lightning>=2) & (df_lightning.wind_gust>=25) & \
-		(df_lightning.lat > -l)].month.hist();plt.ylim([0,50]);\
+		(df_lightning.lat > -l) & (df_lightning.tc_affected==0)].month.hist();plt.ylim([0,ymax]);\
 		plt.title("Convective gusts greater than 25 m/s \nfor stations north of "+str(l)+"$^{o}$S") 
 	plt.subplot(222);df_lightning[(df_lightning.lightning>=2) & (df_lightning.wind_gust>=25) & \
-		(df_lightning.lat < -l)].month.hist();plt.ylim([0,50]);\
+		(df_lightning.lat < -l) & (df_lightning.tc_affected==0)].month.hist();plt.ylim([0,ymax]);\
 		plt.title("Convective gusts greater than 25 m/s \nfor stations south of "+str(l)+"$^{o}$S") 
 	plt.subplot(223);df_lightning[(df_lightning.lightning>=2) & (df_lightning.wind_gust>=25) & \
-		(df_lightning.lat > -l)].hour.hist();plt.ylim([0,50]);\
+		(df_lightning.lat > -l) & (df_lightning.tc_affected==0)].hour.hist();plt.ylim([0,ymax]);\
 	plt.subplot(224);df_lightning[(df_lightning.lightning>=2) & (df_lightning.wind_gust>=25) & \
-		(df_lightning.lat < -l)].hour.hist();plt.ylim([0,50]);\
+		(df_lightning.lat < -l) & (df_lightning.tc_affected==0)].hour.hist();plt.ylim([0,ymax]);\
 
 def probability_plot(param1,param2):
 
@@ -95,9 +130,9 @@ def probability_plot(param1,param2):
 	#sigy = int((conv_df[param2].max() - conv_df[param2].min()) / 20.)
 	sigx = 1
 	sigy = 1
-	h_wind_smooth = gaussian_filter(h_wind, (sigy, sigx))
-	h_conv_smooth = gaussian_filter(h_conv, (sigx, sigy))
-	h_all_smooth = gaussian_filter(h_all, (sigx, sigy))
+	h_wind_smooth = gaussian_filter(h_wind.T, (sigy, sigx))
+	h_conv_smooth = gaussian_filter(h_conv.T, (sigx, sigy))
+	h_all_smooth = gaussian_filter(h_all.T, (sigx, sigy))
 
 	#Plot
 	plt.subplot(221);

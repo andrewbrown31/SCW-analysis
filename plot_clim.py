@@ -779,7 +779,7 @@ def plot_clim(f,m,lat,lon,mean,var,model,domain,year_range,season,levels=False,t
 		#	"_"+str(season[0])+"_"+str(season[-1])+"_"+str(threshold)+"_"+str(year_range[0])+"_"+\
 		#	str(year_range[-1])+".png",bbox_inches="tight")
 	else:
-		plt.savefig("/short/eg3/548/ab4502/figs/ExtremeWind/clim/"+model+"_"+var+\
+		plt.savefig("/short/eg3/ab4502/figs/ExtremeWind/clim/"+model+"_"+var+\
 			"_"+domain+"_"+str(season[0])+"_"+str(season[-1])+"_"+str(threshold)+"_"+\
 			str(year_range[0])+"_"+str(year_range[-1])+".png",bbox_inches="tight")
 		
@@ -874,11 +874,9 @@ if __name__ == "__main__":
 	#	levels=[np.linspace(0,2,11)],seasons=[[11,12,1],[2,3,4],[5,6,7],[8,9,10]],log_cscale=True)
 
 	#Ingredients
-	daily_max_clim("sa_small","erai",[1979,2017],var_list=["tos"],\
+	daily_max_clim("aus","erai",[1979,2017],var_list=["dcp2"],\
 			plot_trends=True,\
-			threshold = [False,False,False],\
-			trend_levels=[np.linspace(-1.5,1.5,11),np.linspace(-1.5,1.5,11),\
-			np.linspace(-2,2,11)]\
-			,n_boot=1000,trend_on_cond_days=True,\
-			seasons=[np.arange(1,13,1),[11,12,1],[2,3,4],[5,6,7],[8,9,10]])
+			threshold = [0.0038],\
+			n_boot=1000,\
+			seasons=[np.arange(1,13,1)])
 			#seasons=[np.arange(1,13,1)])

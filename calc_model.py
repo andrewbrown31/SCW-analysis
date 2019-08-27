@@ -1,7 +1,6 @@
 #NOTE THAT TO CALCULATE DCAPE, NUMPY HAS BEEN UPGRADED TO 1.16.0. SO, TO RUN, SWAP TO ENVIRONMENT "PYCAT"
 #source activate pycat
 
-import pp
 from SkewT import get_dcape
 try:
 	import metpy.units.units as units
@@ -24,7 +23,6 @@ from event_analysis import load_array_points
 import datetime as dt
 import itertools
 import multiprocessing
-import sharppy.sharptab.utils as utils
 import os
 #from calc_param import save_netcdf
 
@@ -74,8 +72,8 @@ def calc_model(model,out_name,method,time,param,issave,region,cape_method):
        		print(dt.datetime.now() - s)
        	elif model=="erai":
        		print("\n	INFO: READING IN ERA-Interim DATA...\n")
-       		ta,dp,hur,hgt,terrain,p,ps,ua,va,uas,vas,lon,lat,date_list = \
-       			read_erai(domain,time)
+        	ta,dp,hur,hgt,terrain,p,ps,wap,ua,va,uas,vas,tas,ta2d,cp,wg10,cape,lon,lat,date_list = \
+			read_erai(domain,time)
        		lsm = np.ones((len(lat),len(lon)))
        	elif model=="erai_fc":
        		print("\n	INFO: READING IN ERA-Interim DATA...\n")
@@ -111,11 +109,12 @@ def calc_model(model,out_name,method,time,param,issave,region,cape_method):
        		        date_inds = np.in1d(np.array(date_list_hrs),np.array([0,6,12,18]))
        		        param_out = calc_param_wrf(date_list[date_inds],ta[date_inds],dp[date_inds],hur[date_inds],\
        				hgt[date_inds],terrain,p,ps[date_inds],ua[date_inds],va[date_inds],\
+				tas[date_inds], ta2d[date_inds], \
        				uas[date_inds],vas[date_inds],lon,lat,param,model,out_name,issave,region,\
        				wg=wg[date_inds])
        		    else:
        		        param_out = calc_param_wrf(date_list,ta,dp,hur,hgt,terrain,p,ps,ua,va,\
-       				uas,vas,lon,lat,param,model,out_name,issave,region)
+       				tas, ta2d, uas,vas,lon,lat,param,model,out_name,issave,region)
        		elif cape_method == "wrf_par":
        			#USES WRF METHOD BUT PASSES DATES IN PARALLEL (USUALLY ONE MONTHS WORTH)
        			
@@ -541,67 +540,6 @@ def calc_param_sharppy(ta,dp,hur,hgt,ua,va,uas,vas,ps,lsm,terrain,p,lon,lat,time
 
 	return r
 
-def sharp_parcel_pp(y,x,t,lsm,uat,vat,p,hgtt,tat,dpt):
-
-	#Exact same as sharp parcel, but intends to use the "pp" module (parallel python)
-	
-	for i in y:
-		for j in x:
-	
-			if lsm[i,j] == 1:
-
-				#convert u and v to kts for use in profile
-				ua_p_kts = utils.MS2KTS(ua[t,:,i,j])
-				va_p_kts = utils.ms2kts(va[t,:,i,j])
-
-				#create profile
-				prof = profile.create_profile(pres=p, hght=hgt[t,:,i,j], \
-						tmpc=ta[t,:,i,j], \
-						dwpc=dp[t,:,i,j], u=ua_p_kts, v=va_p_kts,\
-						 missing=np.nan,\
-						strictqc=false)
-
-				#create most unstable parcel
-				mu_parcel = params.parcelx(prof, flag=3, dp=-10) #3 = mu
-				ml_parcel = params.parcelx(prof, flag=4, dp=-10) #4 = ml
-				return (mu_parcel.bplus,ml_parcel.bplus)
-			else:
-				return (np.nan,np.nan)
-
-def sharp_parcel(i):
-
-	#function which produces an array of parcel and/or wind objects from sharppy in parallel
-	
-			#y,x,lon,lat,temp_ta,temp_dp,temp_hur,temp_hgt,p,temp_ua,temp_va,temp_uas,temp_vas = i
-			y,x,t = i
-	
-			lsm_shared_np = np.frombuffer(var_dict["lsm_shared"]).reshape(var_dict["shape_2d"])
-
-			if lsm_shared_np[y,x] == 1:
-
-				ta_shared_np = np.frombuffer(var_dict["ta_shared"]).reshape(var_dict["shape_4d"])
-				ua_shared_np = np.frombuffer(var_dict["ua_shared"]).reshape(var_dict["shape_4d"])
-				va_shared_np = np.frombuffer(var_dict["va_shared"]).reshape(var_dict["shape_4d"])
-				hgt_shared_np = np.frombuffer(var_dict["hgt_shared"]).reshape(var_dict["shape_4d"])
-				dp_shared_np = np.frombuffer(var_dict["dp_shared"]).reshape(var_dict["shape_4d"])
-				#convert u and v to kts for use in profile
-				ua_p_kts = utils.ms2kts(ua_shared_np[t,:,y,x])
-				va_p_kts = utils.ms2kts(va_shared_np[t,:,y,x])
-
-				#create profile
-				prof = profile.create_profile(pres=var_dict["p"], hght=hgt_shared_np[t,:,y,x], \
-						tmpc=ta_shared_np[t,:,y,x], \
-						dwpc=dp_shared_np[t,:,y,x], u=ua_p_kts, v=va_p_kts,\
-						 missing=np.nan,\
-						strictqc=false)
-
-				#create most unstable parcel
-				mu_parcel = params.parcelx(prof, flag=3, dp=-10) #3 = mu
-				ml_parcel = params.parcelx(prof, flag=4, dp=-10) #4 = ml
-				return (mu_parcel.bplus,ml_parcel.bplus)
-			else:
-				return (np.nan,np.nan)
-
 def barra_ad_driver(points,loc_id):
 	#Drive calc_model() for each month available in the BARRA dataset, for the sa_small domain
 
@@ -708,16 +646,16 @@ if __name__ == "__main__":
 # 	SETTINGS
 #--------------------------------------------------------------------------------------------------
 
-	model = "barra"
-	cape_method = "wrf_par"
+	model = "erai"
+	cape_method = "wrf"
 
 	method = "domain"
-	region = "sa_small"
+	region = "aus"
 
-	experiment = "test"
+	out_name = "wrf_python"
 
 	#ADELAIDE = UTC + 10:30
-	time = [dt.datetime(2016,9,1,0,0,0),dt.datetime(2016,9,30,18,0,0)]
+	time = [dt.datetime(2016,9,28,0,0,0),dt.datetime(2016,9,28,18,0,0)]
 	issave = True
 
 	loc_id = ["Port Augusta","Marree","Munkora","Woomera","Robe","Loxton","Coonawarra",\
@@ -740,8 +678,8 @@ if __name__ == "__main__":
 
 	if (cape_method == "wrf") | (cape_method == "wrf_par"):
 		param = ["ml_cape","ml_cin","mu_cin","mu_cape","srh01","srh03","srh06","scp",\
-			"stp","ship","mmp","relhum850-500","vo10","lr1000","lcl",\
-			"relhum1000-700","s06","s0500","s01","s03",\
+			"ship","mmp","relhum850-500","vo10","lr1000","ml_lcl","ml_lfc","ml_el",\
+			"relhum1000-700","s06","s0500","s01","s03","lcl","lfc",\
 			"cape*s06","dcp","td850","td800","td950","dcape","mlm","dlm",\
 			"dcape*cs6","mlm+dcape","mlm*dcape*cs6","mf","sf","cond"]
 	elif cape_method == "SHARPpy":
@@ -763,14 +701,6 @@ if __name__ == "__main__":
 	#barra_ad_driver(points,loc_id)
 	#barra_r_fc_driver(points,loc_id)
 
-	region="sa_small"
-	model="erai";
-	out_name="test";
-	method="domain";
-	time=[dt.datetime(2016,9,28,0,0,0),dt.datetime(2016,9,28,0,0,0)]
-	param=["ml_cape","mu_cape"];\
-	issave=False;
-	cape_method="SHARPpy"
 	param,param_out,lon,lat,date_list = calc_model(model,out_name,method,\
 			time,param,issave,region,cape_method)
 

@@ -13,8 +13,45 @@ from scipy.stats import gaussian_kde
 from matplotlib.colors import LogNorm
 from obs_read import load_lightning, analyse_events
 import pandas as pd
-from event_analysis import bootstrap_slope
-import seaborn as sb
+#import seaborn as sb
+
+def compare_obs_soundings():
+
+	#Compare observed soundings (2005 - 2015) at Adelaide AP, Woomera, Darwin and Sydney to
+	# ERA-Interim (and later, ERA5 and BARRA-R)
+
+	erai = pd.read_pickle("/g/data/eg3/ab4502/ExtremeWind/points/erai_points_sharppy_aus_1979_2017.pkl").set_index("time")
+	obs = pd.read_pickle("/g/data/eg3/ab4502/ExtremeWind/points/UA_points.pkl").reset_index().rename({"index":"time"}, axis=1).set_index("time")
+	locs = ["Adelaide", "Woomera", "Sydney", "Darwin"]
+	stn_id = [23034, 16001, 66037, 14015]
+	#params = obs.drop("stn_id", axis=1).columns.values
+	params = ['k_index']
+	for p in params:
+		plt.figure()
+		for i in np.arange(len(locs)):
+			obs_p_df = obs.loc[obs["stn_id"]==stn_id[i],p].sort_index()
+			erai_p_df = erai.loc[erai["loc_id"]==locs[i], p]
+			p_df = pd.merge(obs_p_df, erai_p_df, suffixes=("","_erai"), on="time").dropna()
+			plt.subplot(2,2,i+1)
+			plt.title(locs[i])
+			plt.scatter(p_df.loc[p_df[p]>=0, p], p_df.loc[p_df[p]>=0, p+"_erai"], visible="False", \
+				label=round(np.corrcoef(p_df.loc[p_df[p]>=0, p], p_df.loc[p_df[p]>=0, p+"_erai"])[1,0], 3))
+			plt.legend()
+		plt.suptitle(p)
+
+def bootstrap_slope(x,y,n_boot):
+
+	#Return the gradient, and standard deviation for an n_boot bootstrap resamplint
+
+	samples = np.random.choice(np.arange(0,y.shape[0],1),(n_boot,y.shape[0]))
+	m,b = np.polyfit(x,y,1)
+	m_boot = []
+	for i in np.arange(0,samples.shape[0]):
+		temp_m,b = np.polyfit(x[samples][i,:],y[samples][i,:],1)
+		m_boot.append(temp_m)
+	m_boot = np.array(m_boot)
+	std = np.std(m_boot)
+	return (m,std)
 
 def three_month_average(a):
 
@@ -35,36 +72,97 @@ def three_month_average(a):
 
 def sta_versus_aws():
 
-	#Plot spatially smoothed maps of STA wind reports and AWS + lightning
+	#Plot spatially smoothed maps of STA wind reports and AWS + lightning, as well as distributions of 
+	# wind speed and direction
 
 	from scipy.ndimage.filters import gaussian_filter as filter
 
-	df = pd.read_pickle("/short/eg3/ab4502/ExtremeWind/aws/convective_wind_gust_aus_2005_2015.pkl")
+	l_thresh = 100
 
+	#df = pd.read_pickle("/short/eg3/ab4502/ExtremeWind/aws/convective_wind_gust_aus_2005_2015.pkl")
+	from event_analysis import optimise_pss, get_aus_stn_info
+	pss_df, df = optimise_pss("/g/data/eg3/ab4502/ExtremeWind/points/erai_points_sharppy_aus_1979_2017.pkl", \
+		compute=False, l_thresh=l_thresh, is_pss=False)
+
+	#SPATIAL DISTRIBUTION
 	m = Basemap(llcrnrlon=110, llcrnrlat=-45, urcrnrlon=160, urcrnrlat=-10,projection="cyl");\
-	 
-	plt.subplot(131);\
-	plt.title("STA REPORTS NEAR AWS STATIONS\nRELATIVE FREQUENCY");\
-	d,y,x=np.histogram2d(df[~(df.sta_wind.isna()) & (df.tc_affected==0)].lat,df[~(df.sta_wind.isna()) & (df.tc_affected==0)].lon,bins=20,range=([-45,-10],[110,160]));\
+	
+	loc_id, points = get_aus_stn_info()
+	lon_stns = [points[i][0] for i in np.arange(len(points))]
+	lat_stns = [points[i][1] for i in np.arange(len(points))]
+	no_stns,y,x=np.histogram2d( lat_stns, lon_stns, \
+			bins=20,range=([-45,-10],[110,160]));\
+	no_stns[no_stns==0] = 1
+
+	#STA reports
+	plt.figure()
+	plt.title("STA REPORTS NEAR AWS STATIONS");\
+	d,y,x=np.histogram2d(df[df["is_sta"]==1]["lat"].values[:,0], \
+			df[df["is_sta"]==1]["lon"].values[:,0], bins=20,range=([-45,-10],[110,160]));\
 	x = np.array([(x[i-1] + x[i]) / 2. for i in np.arange(1,len(x))])
 	y = [(y[i-1] + y[i]) / 2. for i in np.arange(1,len(y))]
 	x,y=np.meshgrid(x,y);\
-	m.pcolor(x,y,filter(d,1) / filter(d,1).sum(), vmin=0, vmax=0.025);\
+	m.pcolor(x,y,filter(d/(no_stns),1), vmin=0, cmap=plt.get_cmap("hot_r",10));\
 	plt.colorbar()
 	m.drawcoastlines()
+	m.plot(lon_stns, lat_stns, latlon=True, marker="x", color="b", linestyle="none", markersize=10, \
+		markeredgewidth=2)
 	 
-	plt.subplot(132);\
-	plt.title("AWS (OVER 25 m/s) + LIGHTNING\nRELATIVE FREQUENCY");\
-	d_aws,t1,t2=np.histogram2d(df[(df.lightning>=2) & (df.wind_gust>=25) & (df.tc_affected==0)].lat,df[(df.lightning>=2) & (df.wind_gust>=25) &(df.tc_affected==0)].lon,bins=20,range=([-45,-10],[110,160]));\
-	m.pcolor(x,y,filter(d_aws,1) / filter(d_aws,1).sum(), vmin=0, vmax=0.025);\
+	#Conv AWS
+	plt.figure()
+	plt.title("AWS (OVER 25 m/s) + LIGHTNING (OVER"+str(l_thresh)+")");\
+	d_aws, t1, t2 = np.histogram2d(df[df["is_conv_aws"]==1]["lat"].values[:,0], \
+		df[df["is_conv_aws"]==1]["lon"].values[:,0], bins=20, range=([-45,-10],[110,160]))
+	m.pcolor(x,y,filter(d_aws/(no_stns),1) , vmin=0, cmap=plt.get_cmap("hot_r",10));\
 	plt.colorbar()
 	m.drawcoastlines();\
-	plt.subplot(133);\
-	plt.title("AWS - STA\nDIFFERENCE IN RELATIVE FREQUENCY")
-	m.pcolor(x,y,(filter(d_aws,1) / filter(d_aws,1).sum()) - (filter(d,1) / filter(d,1).sum()), vmin=-0.01, vmax=0.01, cmap=plt.get_cmap("RdBu_r"));\
-	m.drawcoastlines();
-	plt.colorbar()
+	m.plot(lon_stns, lat_stns, latlon=True, marker="x", color="b", linestyle="none", markersize=10, \
+		markeredgewidth=2)
 	 
+	#COND
+	df["cond"] = (df["ml_el"]<6000) & (df["k_index"]>=20) & (df["s06"]>=12) & (df["Umean800_600"]>=16) & (df["Umean01"]>=10) |\
+		(df["ml_el"]>=6000) & (df["Umean800_600"]>=5) & (df["t_totals"]>=46) & (df["k_index"]>=30)
+	plt.figure()
+	plt.title("CONDITIONAL PARAMETER");\
+	d_cond, t1, t2 = np.histogram2d(df[df["cond"]]["lat"].values[:,0], \
+		df[df["cond"]]["lon"].values[:,0], bins=20, range=([-45,-10],[110,160]))
+	m.pcolor(x,y,filter(d_cond/(no_stns),1) , vmin=0, cmap=plt.get_cmap("hot_r",10));\
+	plt.colorbar()
+	m.drawcoastlines();\
+	m.plot(lon_stns, lat_stns, latlon=True, marker="x", color="b", linestyle="none", markersize=10, \
+		markeredgewidth=2)
+
+	#LOGIT
+	#df["logit"] = ( 1 / ( 1 + np.exp(-(df["ml_el"]*3.64413046e-05 + df["k_index"]*1.89036078e-01 + \
+	#		df["t_totals"]*1.55224631e-01 + df["Umean800_600"]*1.48836578e-01 + df["dcape"]*9.90171054e-04 + \
+	#		df["Umean01"]*1.30845911e-01 + df["s06"]*3.05869355e-02 - 16.48218016)) ) ) >= 0.8
+	df["logit"] = ( 1 / ( 1 + np.exp(-(df["k_index"]*0.19316489 + \
+			df["t_totals"]*0.15998639 + df["Umean800_600"]*0.14080648 + \
+			df["dcape"]*0.00101607 + \
+			df["Umean01"]*0.12578321 + df["s03"]*0.04713518 - 16.48541647)) ) ) >= 0.8
+	plt.figure()
+	plt.title("LOGISTIC EQUATION");\
+	d_logit, t1, t2 = np.histogram2d(df[df["logit"]]["lat"].values[:,0], \
+		df[df["logit"]]["lon"].values[:,0], bins=20, range=([-45,-10],[110,160]))
+	m.pcolor(x,y,filter(d_logit/(no_stns),1) , vmin=0, cmap=plt.get_cmap("hot_r",10));\
+	plt.colorbar()
+	m.drawcoastlines();\
+	m.plot(lon_stns, lat_stns, latlon=True, marker="x", color="b", linestyle="none", markersize=10, \
+		markeredgewidth=2)
+
+	#WIND DIRECTION DISTRIBUTION
+	wind_dir_df = pd.concat({"aws":df[df["is_conv_aws"]==1]["wind_dir"].value_counts(), \
+		"sta":df[df["is_sta"]==1]["wind_dir"].value_counts()}, \
+		axis=1, sort=False)
+	(wind_dir_df / wind_dir_df.sum()).reindex(["N", "NNE", "NE", "ENE", "E", "ESE", "SE", \
+		"SSE", "S", "SSW","SW", "WSW", "W", "WNW", "NW", "NNW"]).plot(kind="bar")
+
+	#SEASONAL DISTRIBUTION
+	month_df = pd.concat({"aws":df[df["is_conv_aws"]==1]["month"].value_counts(), \
+		"sta":df[df["is_sta"]==1]["month"].value_counts()}, \
+		axis=1, sort=False)
+	(month_df / month_df.sum()).reindex([7,8,9,10,11,12,1,2,3,4,5,6]).plot(kind="bar")
+
 	plt.show()
  
 def temporal_dist_plots():
@@ -1028,7 +1126,7 @@ def contour_properties(param):
 		cb_lab = "m/s"
 		range = [0,20]
 		log_plot = False
-	elif param in ["dcp"]:
+	elif param in ["dcp", "dcp2"]:
 		cmap = cm.Reds
 		mean_levels = np.linspace(0,0.5,11)
 		extreme_levels = np.linspace(0,4,11)
@@ -1130,7 +1228,7 @@ def contour_properties(param):
 		cb_lab = "degC"
 		range = [-20,20]
 		log_plot = False
-	elif param in ["dlm","mlm"]:
+	elif param in ["dlm","mlm","Umean06","Umean800_600"]:
 		cmap = cm.YlGnBu
 		mean_levels = np.linspace(5,15,11)
 		extreme_levels = np.linspace(0,50,11)
@@ -1261,26 +1359,28 @@ if __name__ == "__main__":
 	#probability_plot("ml_cape","mlm")
 	
 	#INTERANNUAL TIME SERIES
-	erai = pd.read_pickle("/g/data/eg3/ab4502/ExtremeWind/points/erai_points_1979_2017_daily_max.pkl").rename(columns={"loc_id":"stn_name"}).reset_index()   
-	erai_fc = pd.read_pickle("/g/data/eg3/ab4502/ExtremeWind/points/erai_fc_points_1979_2017_daily_max.pkl").rename(columns={"loc_id":"stn_name"}).reset_index()   
-	barra_r_fc = pd.read_pickle("/g/data/eg3/ab4502/ExtremeWind/points/barra_r_fc/barra_r_fc_points_daily_2003_2016.pkl").rename(columns={"loc_id":"stn_name"}).reset_index()   
-	barra_r_fc["month"] = [t.month for t in barra_r_fc.date]
-	barra_r_fc["year"] = [t.year for t in barra_r_fc.date]
-	barra_r = pd.read_pickle("/g/data/eg3/ab4502/ExtremeWind/points/barra_points_daily_2003_2016.pkl").rename(columns={"loc_id":"stn_name"}).reset_index()   
-	barra_ad = pd.read_pickle("/g/data/eg3/ab4502/ExtremeWind/points/barra_ad/barra_ad_points_daily_2006_2016.pkl").rename(columns={"loc_id":"stn_name"}).reset_index()   
-	barra_ad["month"] = [t.month for t in barra_ad.date]
-	barra_ad["year"] = [t.year for t in barra_ad.date]
-	locs = ["Adelaide AP","Woomera","Mount Gambier","Port Augusta"]
+	#erai = pd.read_pickle("/g/data/eg3/ab4502/ExtremeWind/points/erai_points_1979_2017_daily_max.pkl").rename(columns={"loc_id":"stn_name"}).reset_index()   
+	#erai_fc = pd.read_pickle("/g/data/eg3/ab4502/ExtremeWind/points/erai_fc_points_1979_2017_daily_max.pkl").rename(columns={"loc_id":"stn_name"}).reset_index()   
+	#barra_r_fc = pd.read_pickle("/g/data/eg3/ab4502/ExtremeWind/points/barra_r_fc/barra_r_fc_points_daily_2003_2016.pkl").rename(columns={"loc_id":"stn_name"}).reset_index()   
+	#barra_r_fc["month"] = [t.month for t in barra_r_fc.date]
+	#barra_r_fc["year"] = [t.year for t in barra_r_fc.date]
+	#barra_r = pd.read_pickle("/g/data/eg3/ab4502/ExtremeWind/points/barra_points_daily_2003_2016.pkl").rename(columns={"loc_id":"stn_name"}).reset_index()   
+	#barra_ad = pd.read_pickle("/g/data/eg3/ab4502/ExtremeWind/points/barra_ad/barra_ad_points_daily_2006_2016.pkl").rename(columns={"loc_id":"stn_name"}).reset_index()   
+	#barra_ad["month"] = [t.month for t in barra_ad.date]
+	#barra_ad["year"] = [t.year for t in barra_ad.date]
+	#locs = ["Adelaide AP","Woomera","Mount Gambier","Port Augusta"]
 	#locs = ["Adelaide AP"]
 	#[var_trends(aws,"wind_gust",l,"threshold","AWS",threshold=[[15,25],[25,30],[30]]) \
 	#	for l in locs]
-	[var_trends(erai_fc,"wg10",l,"threshold_only","ERA-Interim",threshold=[[15,25],[25,30],[30]]) \
-		for l in locs]
-	[var_trends(barra_r_fc,"max_wg10",l,"threshold_only","BARRA-R",threshold=[[15,25],[25,30],[30]],year_range=[2003,2016]) \
-		for l in locs]
-	[var_trends(barra_ad,"max_wg10",l,"threshold_only","BARRA-AD",threshold=[[15,25],[25,30],[30]],year_range=[2006,2016]) \
-		for l in locs]
+	#[var_trends(erai_fc,"wg10",l,"threshold_only","ERA-Interim",threshold=[[15,25],[25,30],[30]]) \
+	#	for l in locs]
+	#[var_trends(barra_r_fc,"max_wg10",l,"threshold_only","BARRA-R",threshold=[[15,25],[25,30],[30]],year_range=[2003,2016]) \
+	#	for l in locs]
+	#[var_trends(barra_ad,"max_wg10",l,"threshold_only","BARRA-AD",threshold=[[15,25],[25,30],[30]],year_range=[2006,2016]) \
+	#	for l in locs]
 
 	#erai = pd.read_pickle("/g/data/eg3/ab4502/ExtremeWind/points/erai_points_sa_small_1979_2017_daily_max.pkl")
 	#locs = ["Woomera", "Port Augusta", "Adelaide AP", "Mount Gambier"]
 	#[plot_conv_seasonal_cycle(erai, l, ["ml_cape", "s06", "cape*s06"] ) for l in locs]
+
+	sta_versus_aws()

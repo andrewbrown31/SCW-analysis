@@ -391,13 +391,13 @@ def to_points():
 	#Read in all ERA-Interim netcdf convective parameters, and extract point data.
 	#(Hopefuly) a faster version of event_analysis.load_netcdf_points_mf()
 
-	start = dt.datetime.now()
-
 	#Read netcdf data
-	f=xr.open_mfdataset("/g/data/eg3/ab4502/ExtremeWind/aus/erai/*", parallel=True)
+	from dask.diagnostics import ProgressBar
+	ProgressBar().register()
+	f=xr.open_mfdataset("/g/data/eg3/ab4502/ExtremeWind/aus/erai/erai*", parallel=True)
 
-	#Initialise total dataframe
-	#df = pd.DataFrame()
+	#JUST WANTING TO APPEND A COUPLE OF NEW VARIABLES TO THE DATAFRAME
+	f=f[["Vprime", "wbz"]]
 
 	#Setup lsm
 	lon_orig,lat_orig = get_lat_lon()
@@ -423,16 +423,19 @@ def to_points():
 		dist_lon.append(temp_lon)
 		dist_lat.append(temp_lat)
 
-		#temp_df = f.sel(lat=points[i][1], lon=points[i][0], method="nearest").to_dataframe()
 	df = f.isel(lat = xr.DataArray(dist_lat, dims="points"), \
 			lon = xr.DataArray(dist_lon, dims="points")).to_dataframe()
-	#temp_df = f.isel(lat=dist_lat, lon=dist_lon, time="2010-01-01").to_dataframe()
-	#temp_df["loc_id"] = loc_id[i]
-	#df = pd.concat([df, temp_df],axis=0)
 
-	df.to_pickle("/g/data/eg3/ab4502/ExtremeWind/points/test_erai_points_aus_1979_2017.pkl")
+	df = df.reset_index()
 
-	print(dt.datetime.now() - start)
+	for p in np.arange(len(loc_id)):
+		df.loc[df.points==p,"loc_id"] = loc_id[p]
+
+	#df.drop("points",axis=1).to_pickle("/g/data/eg3/ab4502/ExtremeWind/points/erai_points_sharppy_aus_1979_2017.pkl")
+	df = df.drop("points",axis=1)
+	df_orig = pd.read_pickle("/g/data/eg3/ab4502/ExtremeWind/points/erai_points_sharppy_aus_1979_2017.pkl")
+	df_new = pd.merge(df_orig, df[["time","loc_id","wbz","Vprime"]], on=["time","loc_id"])
+	df_new.to_pickle("/g/data/eg3/ab4502/ExtremeWind/points/erai_points_sharppy_aus_1979_2017.pkl")
 
 if __name__ == "__main__":
 

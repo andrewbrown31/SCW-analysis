@@ -3,11 +3,32 @@ import numpy as np
 import datetime as dt
 import glob
 import pandas as pd
-
-from calc_param import get_dp
+import xarray as xr
 
 from metpy.calc import vertical_velocity_pressure as omega
 from metpy.units import units
+
+def get_dp(ta,hur,dp_mask=True):
+        #Dew point approximation found at https://gist.github.com/sourceperl/45587ea99ff123745428
+        #Same as "Magnus formula" https://en.wikipedia.org/wiki/Dew_point
+        #For points where RH is zero, set the dew point temperature to -85 deg C
+        #EDIT: Leave points where RH is zero masked as NaNs. Hanlde them after creating a SHARPpy object (by 
+        # making the missing dp equal to the mean of the above and below layers)
+        #EDIT: Replace with metpy code
+
+        #a = 17.27
+        #b = 237.7
+        #alpha = ((a * ta) / (b + ta)) + np.log(hur/100.0)
+        #dp = (b*alpha) / (a - alpha)
+
+        dp = np.array(mpcalc.dewpoint_rh(ta * units.units.degC, hur * units.units.percent))
+
+        if dp_mask:
+                return dp
+        else:
+                dp = np.array(dp)
+                dp[np.isnan(dp)] = -85.
+                return dp
 
 def read_barra(domain,times):
 	#Open BARRA netcdf files and extract variables needed for a range of times and given
@@ -76,8 +97,8 @@ def read_barra(domain,times):
 	+year+"/"+month+"/uwnd10m-an-spec-PT0H-BARRA_R-v1*"+year+month+day+"T"+hour+"*.nc")[0])
 		vas_file = nc.Dataset(glob.glob("/g/data/ma05/BARRA_R/v1/analysis/spec/vwnd10m/"\
 	+year+"/"+month+"/vwnd10m-an-spec-PT0H-BARRA_R-v1*"+year+month+day+"T"+hour+"*.nc")[0])
-		ta2d_file = nc.Dataset(glob.glob("/g/data/ma05/BARRA_R/v1/analysis/spec/dewpt_scrn/"\
-	+year+"/"+month+"/dewpt_scrn-an-spec-PT0H-BARRA_R-v1*"+year+month+day+"T"+hour+"*.nc")[0])
+		ta2d_file = nc.Dataset(glob.glob("/g/data/ma05/BARRA_R/v1/analysis/slv/dewpt_scrn/"\
+	+year+"/"+month+"/dewpt_scrn-an-slv-PT0H-BARRA_R-v1*"+year+month+day+"T"+hour+"*.nc")[0])
 		tas_file = nc.Dataset(glob.glob("/g/data/ma05/BARRA_R/v1/analysis/spec/temp_scrn/"\
 	+year+"/"+month+"/temp_scrn-an-spec-PT0H-BARRA_R-v1*"+year+month+day+"T"+hour+"*.nc")[0])
 		ps_file = nc.Dataset(glob.glob("/g/data/ma05/BARRA_R/v1/analysis/spec/sfc_pres/"\
@@ -192,8 +213,10 @@ def read_barra_points(points,times):
 	+year+"/"+month+"/vwnd10m-an-spec-PT0H-BARRA_R-v1-"+year+month+day+"T"+hour+"*.nc")[0])
 		ps_file = nc.Dataset(glob.glob("/g/data/ma05/BARRA_R/v1/analysis/spec/sfc_pres/"\
 	+year+"/"+month+"/sfc_pres-an-spec-PT0H-BARRA_R-v1-"+year+month+day+"T"+hour+"*.nc")[0])
-		
 
+		#Some BARRA files have different vertical resolution
+		p_ind = np.in1d(pres,ta_file.variables["pressure"][:])
+		
 		times = ta_file["time"][:]
 		
 		for point in np.arange(0,len(points)):
@@ -245,8 +268,9 @@ def date_seq(times,delta_type,delta):
 	return date_list
 
 def get_pressure(top):
+	#NOTE THAT WE GET THE LESSER-RESULUTION PRESSURE COORDINATES (16 LEVELS BELOW 100 hPa)
 	ta_file = nc.Dataset(glob.glob("/g/data/ma05/BARRA_R/v1/analysis/prs/air_temp/"\
-	+"2012"+"/"+"12"+"/air_temp-an-prs-PT0H-BARRA_R-v1-"+"2012"+"12"+"01"+"T"+"00"+"*.nc")[0])
+	+"2016"+"/"+"09"+"/air_temp-an-prs-PT0H-BARRA_R-v1-"+"2016"+"09"+"28"+"T"+"06"+"*.nc")[0])
 	p =ta_file["pressure"][:]
 	p_ind = np.where(p>=top)[0]
 	return [len(p_ind), p, p_ind]
@@ -300,3 +324,101 @@ def remove_corrupt_dates(date_list):
 	for i in np.arange(0,len(corrupt_dates)):
 		date_list = date_list[~(date_list==corrupt_dates[i])]
 	return date_list
+
+def to_points():
+
+	#Read in all BARRA netcdf convective parameters, and extract point data.
+	#(Hopefuly) a faster version of event_analysis.load_netcdf_points_mf()
+
+	#Read netcdf data
+	from dask.diagnostics import ProgressBar
+	ProgressBar().register()
+	f=xr.open_mfdataset("/g/data/eg3/ab4502/ExtremeWind/aus/barra/barra*", parallel=True)
+
+	#JUST WANTING TO APPEND A COUPLE OF NEW VARIABLES TO THE DATAFRAME
+	#f=f[["Vprime", "wbz"]]
+
+	#Setup lsm
+	lat = f.coords.get("lat").values
+	lon = f.coords.get("lon").values
+	lsm = get_mask(lon,lat)
+	x,y = np.meshgrid(lon,lat)
+	x[lsm==0] = np.nan
+	y[lsm==0] = np.nan
+
+	#Load info for the 35 AWS stations around Australia
+	loc_id, points = get_aus_stn_info()
+
+	dist_lon = []
+	dist_lat = []
+	for i in np.arange(len(loc_id)):
+
+		dist = np.sqrt(np.square(x-points[i][0]) + \
+			np.square(y-points[i][1]))
+		temp_lat,temp_lon = np.unravel_index(np.nanargmin(dist),dist.shape)
+		dist_lon.append(temp_lon)
+		dist_lat.append(temp_lat)
+
+	df = f.isel(lat = xr.DataArray(dist_lat, dims="points"), \
+			lon = xr.DataArray(dist_lon, dims="points")).to_dataframe()
+
+	df = df.reset_index()
+
+	for p in np.arange(len(loc_id)):
+		df.loc[df.points==p,"loc_id"] = loc_id[p]
+
+	df.drop("points",axis=1).to_pickle("/g/data/eg3/ab4502/ExtremeWind/points/barra_points_wrfpython_aus_1979_2017.pkl")
+	#df = df.drop("points",axis=1)
+	#df_orig = pd.read_pickle("/g/data/eg3/ab4502/ExtremeWind/points/erai_points_sharppy_aus_1979_2017.pkl")
+	#df_new = pd.merge(df_orig, df[["time","loc_id","wbz","Vprime"]], on=["time","loc_id"])
+	#df_new.to_pickle("/g/data/eg3/ab4502/ExtremeWind/points/erai_points_sharppy_aus_1979_2017.pkl")
+
+def get_aus_stn_info():
+	names = ["id", "stn_no", "district", "stn_name", "1", "2", "lat", "lon", "3", "4", "5", "6", "7", "8", \
+			"9", "10", "11", "12", "13", "14", "15", "16"]	
+	df = pd.read_csv("/short/eg3/ab4502/ExtremeWind/aws/daily_aus_full/DC02D_StnDet_999999999643799.txt",\
+		names=names, header=0)
+	renames = {'ALICE SPRINGS AIRPORT                   ':"Alice Springs",\
+			'GILES METEOROLOGICAL OFFICE             ':"Giles",\
+			'COBAR MO                                ':"Cobar",\
+			'AMBERLEY AMO                            ':"Amberley",\
+			'SYDNEY AIRPORT AMO                      ':"Sydney",\
+			'MELBOURNE AIRPORT                       ':"Melbourne",\
+			'MACKAY M.O                              ':"Mackay",\
+			'WEIPA AERO                              ':"Weipa",\
+			'MOUNT ISA AERO                          ':"Mount Isa",\
+			'ESPERANCE                               ':"Esperance",\
+			'ADELAIDE AIRPORT                        ':"Adelaide",\
+			'CHARLEVILLE AERO                        ':"Charleville",\
+			'CEDUNA AMO                              ':"Ceduna",\
+			'OAKEY AERO                              ':"Oakey",\
+			'WOOMERA AERODROME                       ':"Woomera",\
+			'TENNANT CREEK AIRPORT                   ':"Tennant Creek",\
+			'GOVE AIRPORT                            ':"Gove",\
+			'COFFS HARBOUR MO                        ':"Coffs Harbour",\
+			'MEEKATHARRA AIRPORT                     ':"Meekatharra",\
+			'HALLS CREEK METEOROLOGICAL OFFICE       ':"Halls Creek",\
+			'ROCKHAMPTON AERO                        ':"Rockhampton",\
+			'MOUNT GAMBIER AERO                      ':"Mount Gambier",\
+			'PERTH AIRPORT                           ':"Perth",\
+			'WILLIAMTOWN RAAF                        ':"Williamtown",\
+			'CARNARVON AIRPORT                       ':"Carnarvon",\
+			'KALGOORLIE-BOULDER AIRPORT              ':"Kalgoorlie",\
+			'DARWIN AIRPORT                          ':"Darwin",\
+			'CAIRNS AERO                             ':"Cairns",\
+			'MILDURA AIRPORT                         ':"Mildura",\
+			'WAGGA WAGGA AMO                         ':"Wagga Wagga",\
+			'BROOME AIRPORT                          ':"Broome",\
+			'EAST SALE                               ':"East Sale",\
+			'TOWNSVILLE AERO                         ':"Townsville",\
+			'HOBART (ELLERSLIE ROAD)                 ':"Hobart",\
+			'PORT HEDLAND AIRPORT                    ':"Port Hedland"}
+	df = df.replace({"stn_name":renames})
+	points = [(df.lon.iloc[i], df.lat.iloc[i]) for i in np.arange(df.shape[0])]
+	return [df.stn_name.values,points]
+
+
+
+if __name__ == "__main__":
+
+	to_points()

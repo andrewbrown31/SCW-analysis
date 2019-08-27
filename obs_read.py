@@ -96,8 +96,15 @@ def read_upperair_obs(start_date,end_date):
 	names = ["record_id","stn_id","date_time","ta","ta_quality","dp","dp_quality",\
 		"rh","rh_quality","ws","ws_quality","wd","wd_quality","p","p_quality",
 		"z","z_quality","symbol"]
-	df = pd.read_csv("/short/eg3/ab4502/ExtremeWind/upper_air/UA01D_Data_023034_999999999624286.txt",\
-		names=names,header=0,dtype={"ta":np.float64},na_values = ["     ","      ","   ","          "," "])
+	path = "/short/eg3/ab4502/ExtremeWind/upper_air/"
+	fnames = [path + "UA01D_Data_023034_999999999664589.txt", \
+		path + "UA01D_Data_014015_999999999664589.txt", \
+		path + "UA01D_Data_016001_999999999664589.txt", \
+		path + "UA01D_Data_066037_999999999664589.txt" ]
+	df = pd.DataFrame()
+	for f in fnames:
+		df = pd.concat([df, pd.read_csv(f ,\
+			names=names,dtype={"ta":np.float64},na_values = ["     ","      ","   ","          "," "])] )
 	times = [dt.datetime.strptime(x,"%d/%m/%Y %H:%M") for x in df["date_time"]]
 	df["date"] = times
 	df = df[(df["date"] >= start_date) & (df["date"] <= end_date)].reset_index()
@@ -106,7 +113,7 @@ def read_upperair_obs(start_date,end_date):
 	df = uv(df)
 
 	#Group by time/date of observation
-	groups = df.groupby("date")
+	groups = df.groupby(["date", "stn_id"])
 
 	#Loop over date/times/groups and keep ones which have >12 heights for all variables
 	min_no_of_points = 12	#Set min no of points required to consider sounding
@@ -114,15 +121,18 @@ def read_upperair_obs(start_date,end_date):
 	times = []
 	an = np.array([0,6,12,18])
 
-	df = pd.DataFrame(columns=["mu_cape","ml_cape","s06"])
+	df = pd.DataFrame(columns=["stn_id","mu_cape","ml_cape","k_index","s06","Umean800_600",\
+			"Umean01","dcape","t_totals"])
 
 	for name, group in groups:
 
 		print(name)
 
+		group.loc[group.dp < -100, "dp"] = np.nan
+
 		group = group.dropna(subset=["ta","dp","rh","ua","va","z"])
 
-		if ((group.shape[0] > min_no_of_points) & (group.p.min()<200)):
+		if ((group.shape[0] > min_no_of_points) & (group.p.min()<200) & (group.p.max()>850) ):
 			prof = profile.create_profile(pres = group.p, hght = group.z, tmpc = group.ta, \
 					dwpc = group.dp, u = group.ua, v=group.va, strictQC=False)
 			
@@ -130,17 +140,37 @@ def read_upperair_obs(start_date,end_date):
 			mu_parcel = params.parcelx(prof, flag=3, dp=-10)
 			ml_parcel = params.parcelx(prof, flag=4, dp=-10)
 			eff_parcel = params.parcelx(prof, flag=6, ecape=100, ecinh=-250, dp=-10)
+			p1km = interp.pres(prof, interp.to_msl(prof, 1000.))
 			p6km = interp.pres(prof, interp.to_msl(prof, 6000.))
 			sfc = prof.pres[prof.sfc]
 			s06_u, s06_v = winds.wind_shear(prof, sfc, p6km)
+			u01, v01  = winds.mean_wind(prof, sfc, p1km)
+			u800_600, v800_600  = winds.mean_wind(prof, 800, 600)
 			s06 = utils.KTS2MS( utils.mag(s06_u, s06_v) )
+			Umean800_600 = utils.KTS2MS( utils.mag(u800_600, v800_600) )
+			Umean01 = utils.KTS2MS( utils.mag(u01, v01) )
+			v_totals = params.v_totals(prof)
+			c_totals = params.c_totals(prof)
+			t_totals = c_totals + v_totals
+			dcape = params.dcape(prof)[0]
+			if dcape < 0:
+				dcape = 0
+			ml_el = ml_parcel.elhght
+			if np.ma.is_masked(ml_el):
+				ml_el = np.nanmax(prof.hght)
 
 			t = an - (group.date.iloc[0].hour + group.date.iloc[0].minute/60.)
 			t_idx = np.argmin(abs(t))
 
+			print(ml_parcel.bplus)
+
 			df = pd.concat([ df, \
-				pd.DataFrame({"mu_cape":mu_parcel.bplus, "ml_cape":ml_parcel.bplus, \
-						"s06":s06}, \
+				pd.DataFrame({"stn_id":group.stn_id.iloc[0],"mu_cape":mu_parcel.bplus, \
+						"ml_cape":ml_parcel.bplus, "mu_cin":abs(mu_parcel.bminus),\
+						"ml_cin":abs(ml_parcel.bminus),"s06":s06,\
+						"Umean800_600":Umean800_600, "k_index":params.k_index(prof) ,\
+						"Umean01":Umean01,"t_totals":t_totals, "ml_el":ml_el,\
+						"dcape":dcape}, \
 						index=[group.date.iloc[0].replace(hour=int(an[t_idx]), minute=0)])],\
 					axis=0)
 
@@ -288,18 +318,20 @@ def read_convective_wind_gusts():
 
 	#Set csv read data types
 	data_types = dict(record_id=str, stn_no=int, stn_name=str, locality=str, state=str, lat=float, lon=float,\
-				district=str, height=float, date_str=str, wind_gust=float, quality=str, \
+				district=str, height=str, date_str=str, wind_gust=float, quality=str, \
 				wind_dir=str, wind_dir_quality=str, max_gust_str_lt=str, max_gust_time_quality=str,\
 				eof=str)
 
 	#Load csv file
 	print("LOADING TEXT FILE")
-	f = "/short/eg3/ab4502/ExtremeWind/aws/daily_aus_full/DC02D_Data_999999999643799.txt"
+	#f = "/short/eg3/ab4502/ExtremeWind/aws/daily_aus_full/DC02D_Data_999999999643799.txt"
+	f = "/short/eg3/ab4502/ExtremeWind/aws/daily_aus_full_2005_2015/DC02D_Data_999999999662395.txt"
 	df = pd.read_csv(f, names=names, dtype=data_types, \
 		na_values={"wind_gust":'     ', "max_gust_str_lt":"    "})
 	df = df.replace({"stn_name":renames})
 	df["locality"] = df["locality"].str.strip()
 	df["wind_dir"] = df["wind_dir"].str.strip()
+	df["stn_name"] = df["stn_name"].str.strip()
 
 	#Get station info
 	loc_id = list(df.stn_name.unique())
@@ -369,7 +401,9 @@ def read_convective_wind_gusts():
 	#For each gust from 2005-2015, get lightning information. As we are interested if the 
 	# gust is associated with a thunderstorm, take the number of strokes as the maximum between
 	# the previous and next 6-hourly period
-	lightning = load_lightning(domain="aus", daily=False, smoothing=True).set_index(\
+	#lightning = load_lightning(domain="aus", daily=False, smoothing=True).set_index(\
+	#		["date","loc_id"]).reset_index("loc_id")
+	lightning = load_lightning(domain="aus_large", daily=False, smoothing=True).set_index(\
 			["date","loc_id"]).reset_index("loc_id")
 	locs = np.unique(lightning["loc_id"])
 	print("RESAMPLING LIGHTNING DATA WITH A -2 AND 2 ROLLING WINDOW...")
@@ -486,7 +520,7 @@ def read_convective_wind_gusts():
 	df[["state","lat","lon","height","wind_gust","wind_dir","year","month",\
 		"day_lt","hour_lt","min_lt","daily_date_utc","gust_time_lt","gust_time_utc",\
 		"tc_affected","lightning","incomplete_month","sta_wind","sta_wind_id"]].\
-		to_pickle("/short/eg3/ab4502/ExtremeWind/aws/convective_wind_gust_aus_2005_2015.pkl")
+		to_pickle("/short/eg3/ab4502/ExtremeWind/aws/convective_wind_gust_aus_large_2005_2015.pkl")
 
 	return df
 
@@ -667,10 +701,11 @@ def read_non_synoptic_wind_gusts():
 
 	return df_full
 
-def read_lightning(smoothing=True):
+def read_lightning(fname, dmax = False, smoothing=True, loc_id=None, points=None):
 	#Read Andrew Dowdy's lightning dataset for a list of points. Either nearest point (smoothing = False) or 
 	# sum over +/- 1 degree in lat/lon
-	loc_id,points = get_aus_stn_info()
+	if (loc_id is None) | (points is None):
+		loc_id,points = get_aus_stn_info()
 	
 	path = "/g/data/eg3/ab4502/ExtremeWind/ad_data/lightning/"
 	years = np.arange(2005,2016)
@@ -702,24 +737,26 @@ def read_lightning(smoothing=True):
 				"lat_used":f.variables["lat"][lat_ind]})
 			df = df.append(temp_df)
 	if smoothing:
-		df.to_pickle("/g/data/eg3/ab4502/ExtremeWind/ad_data/lightning_aus_smoothed.pkl")
+		df.to_pickle("/g/data/eg3/ab4502/ExtremeWind/ad_data/"+fname+"_smoothed.pkl")
 	else:
-		df.to_pickle("/g/data/eg3/ab4502/ExtremeWind/ad_data/lightning_aus.pkl")
+		df.to_pickle("/g/data/eg3/ab4502/ExtremeWind/ad_data/"+fname+".pkl")
 
-	print("\n\n RESAMPLING TO DMAX...")
-	df = df.set_index("date")
-	df_daily = pd.DataFrame()
-	for loc in np.unique(df.loc_id):
-		print(loc)
-		temp_df = pd.DataFrame(df[df.loc_id==loc][["lightning"]].resample("1D").max())
-		temp_df["loc_id"] = loc
-		df_daily = pd.concat([df_daily,temp_df])
-	df_daily = df_daily.set_index("loc_id",append=True)
+	if dmax:
 
-	if smoothing:
-		df_daily.to_pickle("/g/data/eg3/ab4502/ExtremeWind/ad_data/lightning_aus_smoothed_daily.pkl")
-	else:
-		df_daily.to_pickle("/g/data/eg3/ab4502/ExtremeWind/ad_data/lightning_aus_daily.pkl")
+		print("\n\n RESAMPLING TO DMAX...")
+		df = df.set_index("date")
+		df_daily = pd.DataFrame()
+		for loc in np.unique(df.loc_id):
+			print(loc)
+			temp_df = pd.DataFrame(df[df.loc_id==loc][["lightning"]].resample("1D").max())
+			temp_df["loc_id"] = loc
+			df_daily = pd.concat([df_daily,temp_df])
+		df_daily = df_daily.set_index("loc_id",append=True)
+
+		if smoothing:
+			df_daily.to_pickle("/g/data/eg3/ab4502/ExtremeWind/ad_data/lightning_aus_smoothed_daily.pkl")
+		else:
+			df_daily.to_pickle("/g/data/eg3/ab4502/ExtremeWind/ad_data/lightning_aus_daily.pkl")
 
 	return df
 
@@ -737,6 +774,8 @@ def load_lightning(domain="aus",daily=True,smoothing=True):
 				df = pd.read_pickle("/g/data/eg3/ab4502/ExtremeWind/ad_data/lightning_aus_daily.pkl")
 			else:
 				df = pd.read_pickle("/g/data/eg3/ab4502/ExtremeWind/ad_data/lightning_aus.pkl")
+	if domain == "aus_large":
+		df = pd.read_pickle("/g/data/eg3/ab4502/ExtremeWind/ad_data/lightning_572_stns_smoothed.pkl")
 	elif domain == "sa_small":
 		if smoothing:
 			if daily:
@@ -946,5 +985,5 @@ if __name__ == "__main__":
 
 	#df = read_lightning(False)
 	#read_aws_daily_aus()
-	read_upperair_obs(dt.datetime(2010,1,1),dt.datetime(2017,1,1))
+	read_upperair_obs(dt.datetime(2005,1,1),dt.datetime(2016,1,1))
 

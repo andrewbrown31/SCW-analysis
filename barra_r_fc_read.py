@@ -12,9 +12,8 @@ def read_barra_r_fc(domain,times,wg_only):
 	#Open BARRA_R forecast netcdf files and extract wing gusts for a range of times and given
 	# spatial domain
 
-	date_list = date_seq(times,"hours",6)
 	if len(times) > 1:
-		date_list = date_seq(times,"hours",6)
+		date_list = date_seq(times,"hours",1)
 	else:
 		date_list = times
 
@@ -41,33 +40,22 @@ def read_barra_r_fc(domain,times,wg_only):
 	wg = np.empty((0,len(lat_ind),len(lon_ind)))
 	date_times = np.empty((0))
 
-	for t in np.arange(0,len(date_list)):
-		year = dt.datetime.strftime(date_list[t],"%Y")
-		month =	dt.datetime.strftime(date_list[t],"%m")
-		day = dt.datetime.strftime(date_list[t],"%d")
-		hour = dt.datetime.strftime(date_list[t],"%H")
-
-		#Load BARRA forecast files
-		wg_file = nc.Dataset(glob.glob("/g/data/ma05/BARRA_R/v1/forecast/spec/"\
-	+"max_wndgust10m/"+year+"/"+month+"/max_wndgust10m-fc-spec-PT1H-BARRA_R-*-"\
-	+year+month+day+"T"+hour+"*.nc")[0])
-		if not wg_only:
-			ta_file = nc.Dataset(glob.glob("/g/data/ma05/BARRA_R/v1/forecast/prs/air_temp/"\
-                        	+year+"/"+month+"/air_temp-fc-prs-PT1H-BARRA_R*-"+year+month+day+"T"+hour+"*.nc")[0])
-			z_file = nc.Dataset(glob.glob("/g/data/ma05/BARRA_R/v1/forecast/prs/geop_ht/"\
-                       		+year+"/"+month+"/geop_ht-fc-prs-PT1H-BARRA_R*-"+year+month+day+"T"+hour+"*.nc")[0])
-			ua_file = nc.Dataset(glob.glob("/g/data/ma05/BARRA_R/v1/forecast/prs/wnd_ucmp/"\
-                        	+year+"/"+month+"/wnd_ucmp-fc-prs-PT1H-BARRA_R*-"+year+month+day+"T"+hour+"*.nc")[0])
-			va_file = nc.Dataset(glob.glob("/g/data/ma05/BARRA_R/v1/forecast/prs/wnd_vcmp/"\
-                        	+year+"/"+month+"/wnd_vcmp-fc-prs-PT1H-BARRA_R*-"+year+month+day+"T"+hour+"*.nc")[0])
-			hur_file = nc.Dataset(glob.glob("/g/data/ma05/BARRA_R/v1/forecast/prs/relhum/"\
-                        	+year+"/"+month+"/relhum-fc-prs-PT1H-BARRA_R*-"+year+month+day+"T"+hour+"*.nc")[0])
-			uas_file = nc.Dataset(glob.glob("/g/data/ma05/BARRA_R/v1/forecast/spec/uwnd10m/"\
- 				+year+"/"+month+"/uwnd10m-fc-spec-PT1H-BARRA_R*-"+year+month+day+"T"+hour+"*.nc")[0])
-			vas_file = nc.Dataset(glob.glob("/g/data/ma05/BARRA_R/v1/forecast/spec/vwnd10m/"\
-                        	+year+"/"+month+"/vwnd10m-fc-spec-PT1H-BARRA_R*-"+year+month+day+"T"+hour+"*.nc")[0])
-			ps_file = nc.Dataset(glob.glob("/g/data/ma05/BARRA_R/v1/forecast/spec/sfc_pres/"\
-                       		+year+"/"+month+"/sfc_pres-fc-spec-PT1H-BARRA_R*-"+year+month+day+"T"+hour+"*.nc")[0])
+	ta_file = nc.MFDataset(glob.glob("/g/data/ma05/BARRA_R/v1/forecast/prs/air_temp/"\
+		+year+"/"+month+"/air_temp-fc-prs-PT1H-BARRA_R*-"+year+month+"*.nc"))
+	z_file = nc.Dataset(glob.glob("/g/data/ma05/BARRA_R/v1/forecast/prs/geop_ht/"\
+		+year+"/"+month+"/geop_ht-fc-prs-PT1H-BARRA_R*-"+year+month+day+"T"+hour+"*.nc")[0])
+	ua_file = nc.Dataset(glob.glob("/g/data/ma05/BARRA_R/v1/forecast/prs/wnd_ucmp/"\
+		+year+"/"+month+"/wnd_ucmp-fc-prs-PT1H-BARRA_R*-"+year+month+day+"T"+hour+"*.nc")[0])
+	va_file = nc.Dataset(glob.glob("/g/data/ma05/BARRA_R/v1/forecast/prs/wnd_vcmp/"\
+		+year+"/"+month+"/wnd_vcmp-fc-prs-PT1H-BARRA_R*-"+year+month+day+"T"+hour+"*.nc")[0])
+	hur_file = nc.Dataset(glob.glob("/g/data/ma05/BARRA_R/v1/forecast/prs/relhum/"\
+		+year+"/"+month+"/relhum-fc-prs-PT1H-BARRA_R*-"+year+month+day+"T"+hour+"*.nc")[0])
+	uas_file = nc.Dataset(glob.glob("/g/data/ma05/BARRA_R/v1/forecast/spec/uwnd10m/"\
+		+year+"/"+month+"/uwnd10m-fc-spec-PT1H-BARRA_R*-"+year+month+day+"T"+hour+"*.nc")[0])
+	vas_file = nc.Dataset(glob.glob("/g/data/ma05/BARRA_R/v1/forecast/spec/vwnd10m/"\
+		+year+"/"+month+"/vwnd10m-fc-spec-PT1H-BARRA_R*-"+year+month+day+"T"+hour+"*.nc")[0])
+	ps_file = nc.Dataset(glob.glob("/g/data/ma05/BARRA_R/v1/forecast/spec/sfc_pres/"\
+		+year+"/"+month+"/sfc_pres-fc-spec-PT1H-BARRA_R*-"+year+month+day+"T"+hour+"*.nc")[0])
 
 
 
@@ -134,7 +122,7 @@ def date_seq(times,delta_type,delta):
 	return date_list
 
 def get_pressure(top):
-	ta_file = nc.Dataset("/g/data/ma05/BARRA_R/v1/forecast/prs/air_temp/2012/12/air_temp-fc-prs-PT1H-BARRA_R-v1-20121201T0000Z.sub.nc")
+	ta_file = nc.Dataset("/g/data/ma05/BARRA_R/v1/forecast/prs/air_temp/2016/09/air_temp-fc-prs-PT1H-BARRA_R-v1-20160928T0000Z.sub.nc")
 	p =ta_file["pressure"][:]
 	p_ind = np.where(p>=top)[0]
 	return [len(p_ind), p, p_ind]

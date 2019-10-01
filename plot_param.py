@@ -97,8 +97,8 @@ def sta_versus_aws():
 	#STA reports
 	plt.figure()
 	plt.title("STA REPORTS NEAR AWS STATIONS");\
-	d,y,x=np.histogram2d(df[df["is_sta"]==1]["lat"].values[:,0], \
-			df[df["is_sta"]==1]["lon"].values[:,0], bins=20,range=([-45,-10],[110,160]));\
+	d,y,x=np.histogram2d(df[df["is_sta"]==1]["lat"].values, \
+			df[df["is_sta"]==1]["lon"].values, bins=20,range=([-45,-10],[110,160]));\
 	x = np.array([(x[i-1] + x[i]) / 2. for i in np.arange(1,len(x))])
 	y = [(y[i-1] + y[i]) / 2. for i in np.arange(1,len(y))]
 	x,y=np.meshgrid(x,y);\
@@ -111,8 +111,8 @@ def sta_versus_aws():
 	#Conv AWS
 	plt.figure()
 	plt.title("AWS (OVER 25 m/s) + LIGHTNING (OVER"+str(l_thresh)+")");\
-	d_aws, t1, t2 = np.histogram2d(df[df["is_conv_aws"]==1]["lat"].values[:,0], \
-		df[df["is_conv_aws"]==1]["lon"].values[:,0], bins=20, range=([-45,-10],[110,160]))
+	d_aws, t1, t2 = np.histogram2d(df[df["is_conv_aws"]==1]["lat"].values, \
+		df[df["is_conv_aws"]==1]["lon"].values, bins=20, range=([-45,-10],[110,160]))
 	m.pcolor(x,y,filter(d_aws/(no_stns),1) , vmin=0, cmap=plt.get_cmap("hot_r",10));\
 	plt.colorbar()
 	m.drawcoastlines();\

@@ -1,5 +1,4 @@
 import xarray as xr
-from event_analysis import get_aus_stn_info
 import netCDF4 as nc
 import numpy as np
 import datetime as dt
@@ -298,7 +297,7 @@ ta_6hrs_ERAI_historical_an-pl_"+"201201"+"*.nc")[0])
 
 def get_lsm():
 	#Load the ERA-Interim land-sea mask (land = 1)
-	lsm_file = nc.Dataset("/short/eg3/ab4502/erai_lsm.nc")
+	lsm_file = nc.Dataset("/g/data/eg3/ab4502/erai_lsm.nc")
 	lsm = np.squeeze(lsm_file.variables["lsm"][:])
 	lsm_lon = np.squeeze(lsm_file.variables["longitude"][:])
 	lsm_lat = np.squeeze(lsm_file.variables["latitude"][:])
@@ -318,7 +317,7 @@ def reform_lsm(lon,lat):
 
 def get_terrain():
 	#Load the ERA-Interim surface geopetential height as terrain height
-	terrain_file = nc.Dataset("/short/eg3/ab4502/erai_sfc_geopt.nc")
+	terrain_file = nc.Dataset("/g/data/eg3/ab4502/erai_sfc_geopt.nc")
 	terrain = np.squeeze(terrain_file.variables["z"][:])/9.8
 	terrain_lon = np.squeeze(terrain_file.variables["longitude"][:])
 	terrain_lat = np.squeeze(terrain_file.variables["latitude"][:])
@@ -436,6 +435,56 @@ def to_points():
 	df_orig = pd.read_pickle("/g/data/eg3/ab4502/ExtremeWind/points/erai_points_sharppy_aus_1979_2017.pkl")
 	df_new = pd.merge(df_orig, df[["time","loc_id","wbz","Vprime"]], on=["time","loc_id"])
 	df_new.to_pickle("/g/data/eg3/ab4502/ExtremeWind/points/erai_points_sharppy_aus_1979_2017.pkl")
+
+def get_aus_stn_info():
+	names = ["id", "stn_no", "district", "stn_name", "1", "2", "lat", "lon", "3", "4", "5", "6", "7", "8", \
+			"9", "10", "11", "12", "13", "14", "15", "16"]	
+
+	df = pd.read_csv("/short/eg3/ab4502/ExtremeWind/aws/daily_aus_full/DC02D_StnDet_999999999643799.txt",\
+		names=names, header=0)
+
+	#Dict to map station names to
+	renames = {'ALICE SPRINGS AIRPORT                   ':"Alice Springs",\
+			'GILES METEOROLOGICAL OFFICE             ':"Giles",\
+			'COBAR MO                                ':"Cobar",\
+			'AMBERLEY AMO                            ':"Amberley",\
+			'SYDNEY AIRPORT AMO                      ':"Sydney",\
+			'MELBOURNE AIRPORT                       ':"Melbourne",\
+			'MACKAY M.O                              ':"Mackay",\
+			'WEIPA AERO                              ':"Weipa",\
+			'MOUNT ISA AERO                          ':"Mount Isa",\
+			'ESPERANCE                               ':"Esperance",\
+			'ADELAIDE AIRPORT                        ':"Adelaide",\
+			'CHARLEVILLE AERO                        ':"Charleville",\
+			'CEDUNA AMO                              ':"Ceduna",\
+			'OAKEY AERO                              ':"Oakey",\
+			'WOOMERA AERODROME                       ':"Woomera",\
+			'TENNANT CREEK AIRPORT                   ':"Tennant Creek",\
+			'GOVE AIRPORT                            ':"Gove",\
+			'COFFS HARBOUR MO                        ':"Coffs Harbour",\
+			'MEEKATHARRA AIRPORT                     ':"Meekatharra",\
+			'HALLS CREEK METEOROLOGICAL OFFICE       ':"Halls Creek",\
+			'ROCKHAMPTON AERO                        ':"Rockhampton",\
+			'MOUNT GAMBIER AERO                      ':"Mount Gambier",\
+			'PERTH AIRPORT                           ':"Perth",\
+			'WILLIAMTOWN RAAF                        ':"Williamtown",\
+			'CARNARVON AIRPORT                       ':"Carnarvon",\
+			'KALGOORLIE-BOULDER AIRPORT              ':"Kalgoorlie",\
+			'DARWIN AIRPORT                          ':"Darwin",\
+			'CAIRNS AERO                             ':"Cairns",\
+			'MILDURA AIRPORT                         ':"Mildura",\
+			'WAGGA WAGGA AMO                         ':"Wagga Wagga",\
+			'BROOME AIRPORT                          ':"Broome",\
+			'EAST SALE                               ':"East Sale",\
+			'TOWNSVILLE AERO                         ':"Townsville",\
+			'HOBART (ELLERSLIE ROAD)                 ':"Hobart",\
+			'PORT HEDLAND AIRPORT                    ':"Port Hedland"}
+
+	df = df.replace({"stn_name":renames})
+
+	points = [(df.lon.iloc[i], df.lat.iloc[i]) for i in np.arange(df.shape[0])]
+
+	return [df.stn_name.values,points]
 
 if __name__ == "__main__":
 

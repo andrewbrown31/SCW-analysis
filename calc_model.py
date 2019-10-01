@@ -438,108 +438,6 @@ def calc_param_wrf_par(it):
 	
 	return param_out
 
-def calc_param_sharppy(ta,dp,hur,hgt,ua,va,uas,vas,ps,lsm,terrain,p,lon,lat,times,param,save,out_name,region,model):
-	#Calculate parameters based on the SHARPpy package for creating profiles
-
-	#For each time in "times", loop over lat/lon points in domain and calculate:
-	# 1) profile 2) parcel (if create_parcel is set) 3) parameter
-	#NOTE the choice of parameter may affect both steps 2) and 3)
-	#Input vars are of shape [time, levels, lat, lon]
-	#Output is a list of numpy arrays of length=len(params) with dimensions [time,lat,lon]
-	#Option to save as a netcdf file
-
-	param = np.array(param)
-	param_out = [0] * (len(param))
-	for i in np.arange(0,len(param)):
-		param_out[i] = np.empty((len(times),len(lat),len(lon)))
-
-	np.warnings.filterwarnings('ignore')
-
-########################################################################################################
-	#This is a block of code intended for use with the multiprocessing module. However, it's become
-	#apparant that this module does not have multi-node support for use on raijin.
-
-	#Try making a 4d variable (e.g. ta[t]) a shared multiprocessing array before 
-	# starting process
-	# https://research.wmz.ninja/articles/2018/03/on-sharing-large-arrays-when-using-pythons-multiprocessing.html
-########################################################################################################
-#	#CREATE SHARED VAR
-#	shape_4d = (ta.shape[0], ta.shape[1], ta.shape[2], ta.shape[3])
-#	shape_2d = (lsm.shape[0], lsm.shape[1])
-#	#TA
-#	ta_shared = multiprocessing.RawArray("d",ta.shape[0]*ta.shape[1]*ta.shape[2]*ta.shape[3])
-#	ta_shared_np = np.frombuffer(ta_shared,dtype=np.float64).reshape(shape_4d)
-#	np.copyto(ta_shared_np,ta)
-#	#UA
-#	ua_shared = multiprocessing.RawArray("d",ua.shape[0]*ua.shape[1]*ua.shape[2]*ua.shape[3])
-#	ua_shared_np = np.frombuffer(ua_shared,dtype=np.float64).reshape(shape_4d)
-#	np.copyto(ua_shared_np,ua)
-#	#VA
-#	va_shared = multiprocessing.RawArray("d",va.shape[0]*va.shape[1]*va.shape[2]*va.shape[3])
-#	va_shared_np = np.frombuffer(va_shared,dtype=np.float64).reshape(shape_4d)
-#	np.copyto(va_shared_np,va)
-#	#HGT
-#	hgt_shared = multiprocessing.RawArray("d",hgt.shape[0]*hgt.shape[1]*hgt.shape[2]*hgt.shape[3])
-#	hgt_shared_np = np.frombuffer(hgt_shared,dtype=np.float64).reshape(shape_4d)
-#	np.copyto(hgt_shared_np,hgt)
-#	#DP
-#	dp_shared = multiprocessing.RawArray("d",dp.shape[0]*dp.shape[1]*dp.shape[2]*dp.shape[3])
-#	dp_shared_np = np.frombuffer(dp_shared,dtype=np.float64).reshape(shape_4d)
-#	np.copyto(dp_shared_np,dp)
-#	#LSM
-#	lsm_shared = multiprocessing.RawArray("d",lsm.shape[0]*lsm.shape[1])
-#	lsm_shared_np = np.frombuffer(lsm_shared,dtype=np.float64).reshape(shape_2d)
-#	np.copyto(lsm_shared_np,lsm)
-#	#CREATE "INITIALISER"
-#	def init_worker(ta_shared, ua_shared, va_shared, hgt_shared, dp_shared, lsm_shared, p, shape_4d, shape_2d):
-#		var_dict['ta_shared'] = ta_shared
-#		var_dict['ua_shared'] = ua_shared
-#		var_dict['va_shared'] = va_shared
-#		var_dict['hgt_shared'] = hgt_shared
-#		var_dict['dp_shared'] = dp_shared
-#		var_dict['lsm_shared'] = lsm_shared
-#		var_dict['p'] = p
-#		var_dict['shape_4d'] = shape_4d
-#		var_dict['shape_2d'] = shape_2d
-########################################################################################################
-
-	job_server = pp.Server()
-
-	for t in np.arange(0,len(times)):
-		print(times[t])
-
-########################################################################################################
-	#This is a block of code intended for use with the multiprocessing module. However, it's become
-	#apparant that this module does not have multi-node support for use on raijin.
-########################################################################################################
-	#	xyt = itertools.product(np.arange(0,len(lat)),np.arange(0,len(lon)),[t])
-	#	#ncpu = multiprocessing.cpu_count()
-	#	ncpu = int(os.environ["PBS_NCPUS"])
-	#	ncpu = 64
-	#	print("Using "+str(ncpu)+" cpus")
-	#	pool=multiprocessing.Pool(processes=ncpu, \
-	#		initializer=init_worker,initargs=(ta_shared, ua_shared, va_shared, hgt_shared, dp_shared, lsm_shared, p, shape_4d, shape_2d))
-	#	result = list(pool.imap(sharp_parcel,xyt,chunksize=ncpu))
-
-	#	param_out[np.where(param=="mu_cape")[0][0]][t] = np.array([pcl[0] for pcl in result]).\
-	#		reshape((len(lat),len(lon)))
-	#	param_out[np.where(param=="ml_cape")[0][0]][t] = np.array([pcl[1] for pcl in result]).\
-	#		reshape((len(lat),len(lon)))
-	#	pool.close()
-	#	pool.join()
-########################################################################################################
-		args = ( np.arange(0,len(lat)), np.arange(0,len(lon)), [t], lsm, [ua[t]], [va[t]], \
-				[p], [hgt[t]], [ta[t]], [dp[t]] )
-		modules = ("utils","profile","params")
-		depfuncs = (utils.MS2KTS,)
-		r = job_server.submit(sharp_parcel_pp, args, depfuncs=depfuncs, modules=modules, globals=globals())
-		r()
-
-	if save:
-		save_netcdf(region,model,out_name,times,lat,lon,param,param_out)
-
-	return r
-
 def barra_ad_driver(points,loc_id):
 	#Drive calc_model() for each month available in the BARRA dataset, for the sa_small domain
 
@@ -655,7 +553,7 @@ if __name__ == "__main__":
 	out_name = "wrf_python"
 
 	#ADELAIDE = UTC + 10:30
-	time = [dt.datetime(2016,9,28,0,0,0),dt.datetime(2016,9,28,18,0,0)]
+	time = [dt.datetime(2016,9,28,0,0,0),dt.datetime(2016,10,1,18,0,0)]
 	issave = True
 
 	loc_id = ["Port Augusta","Marree","Munkora","Woomera","Robe","Loxton","Coonawarra",\
@@ -691,15 +589,6 @@ if __name__ == "__main__":
 			"cape*s06","cape*ssfc6"]
 	elif cape_method == "points_SHARPpy":
 		param = ["mu_cape","s06","cape*s06"]	
-
-	#for time in times:
-	#[param,param_out,lon,lat,date_list] = calc_model(model,experiment,method,time,\
-	#		param,issave,region,cape_method)	
-	#print(param_out[0][0])
-	#erai_driver(param)
-	#barra_driver(param)
-	#barra_ad_driver(points,loc_id)
-	#barra_r_fc_driver(points,loc_id)
 
 	param,param_out,lon,lat,date_list = calc_model(model,out_name,method,\
 			time,param,issave,region,cape_method)

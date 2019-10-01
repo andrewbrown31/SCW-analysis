@@ -7,6 +7,139 @@ import numpy as np
 from mpl_toolkits.basemap import Basemap
 import matplotlib.pyplot as plt
 
+def plot_hail_envs():
+
+	df = pd.read_pickle("/g/data/eg3/ab4502/ExtremeWind/points/hail_radar_barra_2005_2018.pkl")
+	df.loc[:,"hour"] = df.set_index("time").index.hour
+	df.loc[:,"month"] = df.set_index("time").index.month
+	diurnal_mean = df.groupby(["loc_id","hour"]).agg({"ml_cape":"mean"})
+
+	wwlln = pd.read_csv("/g/data/eg3/ab4502/ExtremeWind/obs/hail_ad/WWLLN_for_hailpaper_100.csv")
+	wwlln.loc[:,"datetime"] = pd.to_datetime({"year":wwlln["year"], "month":wwlln["month"], \
+		"day":wwlln["day"]})
+
+	path = "/g/data/eg3/ab4502/ExtremeWind/obs/hail_ad/"
+	mesh_path = {"Melbourne":path+"MESH_for_hailpaper_02.csv",\
+		"Wollongong":path+"MESH_for_hailpaper_03.csv",\
+		"Gympie":path+"MESH_for_hailpaper_08.csv",\
+		"Grafton":path+"MESH_for_hailpaper_28.csv",\
+		"Canberra":path+"MESH_for_hailpaper_40.csv",\
+		"Marburg":path+"MESH_for_hailpaper_50.csv",\
+		"Adelaide":path+"MESH_for_hailpaper_64.csv",\
+		"Namoi":path+"MESH_for_hailpaper_69.csv",\
+		"Perth":path+"MESH_for_hailpaper_70.csv",\
+		"Hobart":path+"MESH_for_hailpaper_76.csv"}
+
+	for v in ["ml_cape","s06","mlcape*s06","ship"]:
+		plt.figure(figsize=[12,10])
+		cnt=1
+	
+		mesh_out = pd.DataFrame(index=np.arange(0,24), columns=list(mesh_path.keys()))
+		wwlln_out = pd.DataFrame(index=np.arange(0,24), columns=list(mesh_path.keys()))
+
+		for loc in np.unique(df.loc_id):
+			plt.subplot(5,2,cnt)
+			ax1 = plt.gca()
+
+			print(loc)
+
+			temp_df = df[df.loc_id==loc][[v, "time", "loc_id", "hour", "month"]]
+			temp_df = temp_df.set_index(pd.DatetimeIndex(temp_df.time, freq="1H"))
+			dates = pd.to_datetime({"year":temp_df.index.year, "month":temp_df.index.month, \
+				"day":temp_df.index.day})
+
+
+			hail = pd.read_csv(mesh_path[loc])
+			hail.loc[:,"datetime"] = pd.to_datetime({"year":hail["year"], "month":hail["month"], \
+				"day":hail["day"]})
+			hail_dates = hail[(hail[loc]==1) & (hail["year"]>=2005) & (hail["year"] < 2019)].datetime
+			hail_inds = np.in1d(dates, hail_dates)
+
+			wwlln_dates = wwlln[(wwlln[loc]==1)].datetime
+			wwlln_inds = np.in1d(dates, wwlln_dates)
+
+			daily_temp_df = temp_df.resample("1D").max()
+
+			hourly_hail = temp_df.loc[hail_inds,:].groupby(["hour"]).\
+				agg({v:"mean"})
+			hourly_wwlln = temp_df.loc[wwlln_inds,:].groupby(["hour"]).\
+				agg({v:"mean"})
+
+			hourly_hail.loc[:,v].plot(ax=ax1, color=plt.get_cmap("Paired")(0))
+			hourly_wwlln.loc[:,v].plot(ax=ax1, color=plt.get_cmap("Paired")(1))
+			ax1.tick_params(labelcolor=plt.get_cmap("Paired")(1),axis="y")
+
+			plt.title(loc)
+
+			cnt = cnt+1
+
+			mesh_out.loc[:,loc] = hourly_hail.values[:,0]
+			wwlln_out.loc[:,loc] = hourly_wwlln.values[:,0]
+		mesh_out.to_csv(path+"hail_barra/diurnal_mesh_"+v+".csv")
+		wwlln_out.to_csv(path+"hail_barra/diurnal_wwlln100_"+v+".csv")
+	
+	#months = np.array([7,8,9,10,11,12,1,2,3,4,5,6])
+	months = np.array([1,2,3,4,5,6,7,8,9,10,11,12])
+	month_plot = np.array([1,2,3,4,5,6,7,8,9,10,11,12])
+	month_labs = np.array(["J","A","S","O","N","D","J","F","M","A","M","J"])
+	for v in ["ml_cape","s06","mlcape*s06","ship"]:
+		plt.figure(figsize=[12,10])
+		cnt=1
+
+		mesh_out = pd.DataFrame(index=np.arange(1,13), columns=list(mesh_path.keys()))
+		wwlln_out = pd.DataFrame(index=np.arange(1,13), columns=list(mesh_path.keys()))
+
+		for loc in np.unique(df.loc_id):
+			plt.subplot(5,2,cnt)
+			ax1 = plt.gca()
+
+			print(loc)
+
+			temp_df = df[df.loc_id==loc][[v, "time", "loc_id", "hour", "month"]]
+			temp_df = temp_df.set_index(pd.DatetimeIndex(temp_df.time, freq="1H"))
+			dates = pd.to_datetime({"year":temp_df.index.year, "month":temp_df.index.month, \
+				"day":temp_df.index.day})
+
+			hail = pd.read_csv(mesh_path[loc])
+			hail.loc[:,"datetime"] = pd.to_datetime({"year":hail["year"], "month":hail["month"], \
+				"day":hail["day"]})
+			hail_dates = hail[(hail[loc]==1) & (hail["year"]>=2005) & (hail["year"] < 2019)].datetime
+
+			wwlln_dates = wwlln[(wwlln[loc]==1)].datetime
+
+			daily_temp_df = temp_df.resample("1D").max()
+
+			monthly_hail = []
+			monthly_wwlln = []
+			for m in months:
+				monthly_hail.append(temp_df.loc[(np.in1d(temp_df.time,hail_dates)) & \
+					(temp_df.month==m),:].mean()[v])
+				monthly_wwlln.append(temp_df.loc[(np.in1d(temp_df.time,wwlln_dates)) & \
+					(temp_df.month==m),:].mean()[v])
+			monthly_hail = np.array(monthly_hail)
+			monthly_wwlln = np.array(monthly_wwlln)
+			monthly_hail[monthly_hail==np.nan] = 0
+			monthly_wwlln[monthly_wwlln==np.nan] = 0
+
+			ax1.plot(month_plot, monthly_hail, color=plt.get_cmap("Paired")(0))
+			ax1.plot(month_plot, monthly_wwlln, color=plt.get_cmap("Paired")(1))
+			ax1.tick_params(labelcolor=plt.get_cmap("Paired")(1),axis="y")
+			plt.title(loc)
+
+			if cnt < 9:
+				ax1.set_xticklabels("")
+				ax1.set_xlabel("")
+			else:
+				ax1.set_xticklabels(month_labs)
+
+			cnt = cnt+1
+
+			mesh_out.loc[:,loc] = monthly_hail
+			wwlln_out.loc[:,loc] = monthly_wwlln
+		mesh_out.to_csv(path+"hail_barra/monthly_mesh_"+v+".csv", na_rep="-999")
+		wwlln_out.to_csv(path+"hail_barra/monthly_wwlln100_"+v+".csv", na_rep="-999")
+	
+
 def plot_multivariate_density(df, event, param1, param2, param3, param4, param5=None, special_cond=None, log=False,\
 		param12_cond=None):
 
@@ -444,13 +577,24 @@ def optimise_pss(model_fname,T=1000, compute=True, plot=False, l_thresh=2, is_ps
 	#For erai: /g/data/eg3/ab4502/ExtremeWind/points/erai_points_sharppy_aus_1979_2017.pkl
 	#For barra: /g/data/eg3/ab4502/ExtremeWind/points/barra_points_wrfpython_aus_1979_2017.pkl
 
-	model = pd.read_pickle(model_fname).set_index(["time", "loc_id"])
-	obs = pd.read_pickle("/short/eg3/ab4502/ExtremeWind/aws/convective_wind_gust_aus_2005_2015.pkl")
+	model = pd.read_pickle(model_fname).set_index(["time"])
+	obs = pd.read_pickle("/g/data/eg3/ab4502/ExtremeWind/obs/aws/convective_wind_gust_aus_2005_2015.pkl").\
+			reset_index().rename(columns={"level_1":"loc_id","gust_time_utc":"time"}).\
+			set_index("time")
+	obs.index = obs.index.round("1H")
+	obs = obs.set_index(["loc_id"], append=True)
 	#There is one missing entry for parameters needing mhgt
-	if model_name == "erai":
-		df = pd.concat([obs, model], axis=1).dropna(subset=["lightning","mhgt"])
-	else:
-		df = pd.concat([obs, model], axis=1).dropna(subset=["lightning","ml_cape"])
+	df = pd.merge(obs, model, how="inner",on=["loc_id","time"])
+
+	dmax=True
+	if dmax:
+		groups = model.groupby("loc_id")
+		dmax_df = pd.DataFrame()
+		for name, group in groups:
+			group.index = pd.DatetimeIndex(group.index, freq="1H")
+			dmax_df = pd.concat([dmax_df, group.resample("1D").max()])
+		dmax_df = pd.merge(obs, dmax_df, how="inner", left_on=["daily_date_utc","loc_id"],\
+			right_on = ["time","loc_id"])
 
 	df = df[df.tc_affected==0]
 
@@ -1081,7 +1225,7 @@ def get_aus_stn_info():
 	names = ["id", "stn_no", "district", "stn_name", "1", "2", "lat", "lon", "3", "4", "5", "6", "7", "8", \
 			"9", "10", "11", "12", "13", "14", "15", "16"]	
 
-	df = pd.read_csv("/short/eg3/ab4502/ExtremeWind/aws/daily_aus_full/DC02D_StnDet_999999999643799.txt",\
+	df = pd.read_csv("/g/data/eg3/ab4502/ExtremeWind/obs/aws/daily_aus_full/DC02D_StnDet_999999999643799.txt",\
 		names=names, header=0)
 
 	#Dict to map station names to

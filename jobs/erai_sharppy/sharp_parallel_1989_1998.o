@@ -1,0 +1,733 @@
+INFO: RUNNING SHARPPY ON DATA FROM 1989010100 to 1989013118
+Time taken to load in data on processor 1: 0:01:42.602819
+TOTAL (LAND) POINTS: 152892
+CHUNKSIZE: (152, 27)
+Time taken for SHARPPy on processor 1: 0:02:01.334270
+Time taken for each element on processor 1: 0:00:00.798252
+INFO: RUNNING SHARPPY ON DATA FROM 1989020100 to 1989022818
+Time taken to load in data on processor 1: 0:01:01.926968
+TOTAL (LAND) POINTS: 138096
+CHUNKSIZE: (137, 27)
+Time taken for SHARPPy on processor 1: 0:01:54.747632
+Time taken for each element on processor 1: 0:00:00.837574
+INFO: RUNNING SHARPPY ON DATA FROM 1989030100 to 1989033118
+Time taken to load in data on processor 1: 0:01:13.772991
+TOTAL (LAND) POINTS: 152892
+CHUNKSIZE: (152, 27)
+Time taken for SHARPPy on processor 1: 0:02:10.149411
+Time taken for each element on processor 1: 0:00:00.856246
+INFO: RUNNING SHARPPY ON DATA FROM 1989040100 to 1989043018
+Time taken to load in data on processor 1: 0:01:29.849960
+TOTAL (LAND) POINTS: 147960
+CHUNKSIZE: (147, 27)
+Time taken for SHARPPy on processor 1: 0:01:40.377602
+Time taken for each element on processor 1: 0:00:00.682841
+INFO: RUNNING SHARPPY ON DATA FROM 1989050100 to 1989053118
+Time taken to load in data on processor 1: 0:01:13.118321
+TOTAL (LAND) POINTS: 152892
+CHUNKSIZE: (152, 27)
+Time taken for SHARPPy on processor 1: 0:01:49.941151
+Time taken for each element on processor 1: 0:00:00.723297
+INFO: RUNNING SHARPPY ON DATA FROM 1989060100 to 1989063018
+Time taken to load in data on processor 1: 0:01:05.583759
+TOTAL (LAND) POINTS: 147960
+CHUNKSIZE: (147, 27)
+Time taken for SHARPPy on processor 1: 0:01:28.248861
+Time taken for each element on processor 1: 0:00:00.600333
+INFO: RUNNING SHARPPY ON DATA FROM 1989070100 to 1989073118
+Time taken to load in data on processor 1: 0:01:08.742096
+TOTAL (LAND) POINTS: 152892
+CHUNKSIZE: (152, 27)
+Time taken for SHARPPy on processor 1: 0:01:22.233489
+Time taken for each element on processor 1: 0:00:00.541010
+INFO: RUNNING SHARPPY ON DATA FROM 1989080100 to 1989083118
+Time taken to load in data on processor 1: 0:01:52.175525
+TOTAL (LAND) POINTS: 152892
+CHUNKSIZE: (152, 27)
+Time taken for SHARPPy on processor 1: 0:01:22.823191
+Time taken for each element on processor 1: 0:00:00.544890
+INFO: RUNNING SHARPPY ON DATA FROM 1989090100 to 1989093018
+Time taken to load in data on processor 1: 0:01:08.940364
+TOTAL (LAND) POINTS: 147960
+CHUNKSIZE: (147, 27)
+Time taken for SHARPPy on processor 1: 0:01:38.926981
+Time taken for each element on processor 1: 0:00:00.672973
+INFO: RUNNING SHARPPY ON DATA FROM 1989100100 to 1989103118
+Time taken to load in data on processor 1: 0:01:07.236458
+TOTAL (LAND) POINTS: 152892
+CHUNKSIZE: (152, 27)
+Time taken for SHARPPy on processor 1: 0:01:39.287612
+Time taken for each element on processor 1: 0:00:00.653208
+INFO: RUNNING SHARPPY ON DATA FROM 1989110100 to 1989113018
+Time taken to load in data on processor 1: 0:01:07.597870
+TOTAL (LAND) POINTS: 147960
+CHUNKSIZE: (147, 27)
+Time taken for SHARPPy on processor 1: 0:01:48.859805
+Time taken for each element on processor 1: 0:00:00.740543
+INFO: RUNNING SHARPPY ON DATA FROM 1989120100 to 1989123118
+Time taken to load in data on processor 1: 0:01:13.721276
+TOTAL (LAND) POINTS: 152892
+CHUNKSIZE: (152, 27)
+Time taken for SHARPPy on processor 1: 0:02:09.455332
+Time taken for each element on processor 1: 0:00:00.851680
+INFO: RUNNING SHARPPY ON DATA FROM 1990010100 to 1990013118
+Time taken to load in data on processor 1: 0:01:07.675467
+TOTAL (LAND) POINTS: 152892
+CHUNKSIZE: (152, 27)
+Time taken for SHARPPy on processor 1: 0:02:04.800204
+Time taken for each element on processor 1: 0:00:00.821054
+INFO: RUNNING SHARPPY ON DATA FROM 1990020100 to 1990022818
+Time taken to load in data on processor 1: 0:01:00.411453
+TOTAL (LAND) POINTS: 138096
+CHUNKSIZE: (137, 27)
+Time taken for SHARPPy on processor 1: 0:01:52.196326
+Time taken for each element on processor 1: 0:00:00.818952
+INFO: RUNNING SHARPPY ON DATA FROM 1990030100 to 1990033118
+Time taken to load in data on processor 1: 0:01:10.262113
+TOTAL (LAND) POINTS: 152892
+CHUNKSIZE: (152, 27)
+Time taken for SHARPPy on processor 1: 0:02:14.767735
+Time taken for each element on processor 1: 0:00:00.886630
+INFO: RUNNING SHARPPY ON DATA FROM 1990040100 to 1990043018
+Time taken to load in data on processor 1: 0:01:04.201788
+TOTAL (LAND) POINTS: 147960
+CHUNKSIZE: (147, 27)
+Time taken for SHARPPy on processor 1: 0:01:55.965531
+Time taken for each element on processor 1: 0:00:00.788881
+INFO: RUNNING SHARPPY ON DATA FROM 1990050100 to 1990053118
+Time taken to load in data on processor 1: 0:01:39.521590
+TOTAL (LAND) POINTS: 152892
+CHUNKSIZE: (152, 27)
+Time taken for SHARPPy on processor 1: 0:01:22.380845
+Time taken for each element on processor 1: 0:00:00.541980
+INFO: RUNNING SHARPPY ON DATA FROM 1990060100 to 1990063018
+Time taken to load in data on processor 1: 0:01:12.968409
+TOTAL (LAND) POINTS: 147960
+CHUNKSIZE: (147, 27)
+Time taken for SHARPPy on processor 1: 0:01:23.488938
+Time taken for each element on processor 1: 0:00:00.567952
+INFO: RUNNING SHARPPY ON DATA FROM 1990070100 to 1990073118
+Time taken to load in data on processor 1: 0:01:41.563976
+TOTAL (LAND) POINTS: 152892
+CHUNKSIZE: (152, 27)
+Time taken for SHARPPy on processor 1: 0:01:23.723554
+Time taken for each element on processor 1: 0:00:00.550813
+INFO: RUNNING SHARPPY ON DATA FROM 1990080100 to 1990083118
+Time taken to load in data on processor 1: 0:01:12.007582
+TOTAL (LAND) POINTS: 152892
+CHUNKSIZE: (152, 27)
+Time taken for SHARPPy on processor 1: 0:01:21.288549
+Time taken for each element on processor 1: 0:00:00.534793
+INFO: RUNNING SHARPPY ON DATA FROM 1990090100 to 1990093018
+Time taken to load in data on processor 1: 0:01:09.976748
+TOTAL (LAND) POINTS: 147960
+CHUNKSIZE: (147, 27)
+Time taken for SHARPPy on processor 1: 0:01:41.990686
+Time taken for each element on processor 1: 0:00:00.693814
+INFO: RUNNING SHARPPY ON DATA FROM 1990100100 to 1990103118
+Time taken to load in data on processor 1: 0:01:13.836003
+TOTAL (LAND) POINTS: 152892
+CHUNKSIZE: (152, 27)
+Time taken for SHARPPy on processor 1: 0:01:36.110211
+Time taken for each element on processor 1: 0:00:00.632304
+INFO: RUNNING SHARPPY ON DATA FROM 1990110100 to 1990113018
+Time taken to load in data on processor 1: 0:01:13.241358
+TOTAL (LAND) POINTS: 147960
+CHUNKSIZE: (147, 27)
+Time taken for SHARPPy on processor 1: 0:01:40.385764
+Time taken for each element on processor 1: 0:00:00.682897
+INFO: RUNNING SHARPPY ON DATA FROM 1990120100 to 1990123118
+Time taken to load in data on processor 1: 0:01:07.239041
+TOTAL (LAND) POINTS: 152892
+CHUNKSIZE: (152, 27)
+Time taken for SHARPPy on processor 1: 0:02:07.673173
+Time taken for each element on processor 1: 0:00:00.839955
+INFO: RUNNING SHARPPY ON DATA FROM 1991010100 to 1991013118
+Time taken to load in data on processor 1: 0:01:39.634348
+TOTAL (LAND) POINTS: 152892
+CHUNKSIZE: (152, 27)
+Time taken for SHARPPy on processor 1: 0:02:17.889221
+Time taken for each element on processor 1: 0:00:00.907166
+INFO: RUNNING SHARPPY ON DATA FROM 1991020100 to 1991022818
+Time taken to load in data on processor 1: 0:01:35.999036
+TOTAL (LAND) POINTS: 138096
+CHUNKSIZE: (137, 27)
+Time taken for SHARPPy on processor 1: 0:02:04.228688
+Time taken for each element on processor 1: 0:00:00.906779
+INFO: RUNNING SHARPPY ON DATA FROM 1991030100 to 1991033118
+Time taken to load in data on processor 1: 0:01:09.997418
+TOTAL (LAND) POINTS: 152892
+CHUNKSIZE: (152, 27)
+Time taken for SHARPPy on processor 1: 0:02:01.721344
+Time taken for each element on processor 1: 0:00:00.800799
+INFO: RUNNING SHARPPY ON DATA FROM 1991040100 to 1991043018
+Time taken to load in data on processor 1: 0:01:04.989834
+TOTAL (LAND) POINTS: 147960
+CHUNKSIZE: (147, 27)
+Time taken for SHARPPy on processor 1: 0:02:03.385571
+Time taken for each element on processor 1: 0:00:00.839358
+INFO: RUNNING SHARPPY ON DATA FROM 1991050100 to 1991053118
+Time taken to load in data on processor 1: 0:01:10.131185
+TOTAL (LAND) POINTS: 152892
+CHUNKSIZE: (152, 27)
+Time taken for SHARPPy on processor 1: 0:01:29.156990
+Time taken for each element on processor 1: 0:00:00.586559
+INFO: RUNNING SHARPPY ON DATA FROM 1991060100 to 1991063018
+Time taken to load in data on processor 1: 0:01:42.982492
+TOTAL (LAND) POINTS: 147960
+CHUNKSIZE: (147, 27)
+Time taken for SHARPPy on processor 1: 0:01:24.006852
+Time taken for each element on processor 1: 0:00:00.571475
+INFO: RUNNING SHARPPY ON DATA FROM 1991070100 to 1991073118
+Time taken to load in data on processor 1: 0:01:15.283946
+TOTAL (LAND) POINTS: 152892
+CHUNKSIZE: (152, 27)
+Time taken for SHARPPy on processor 1: 0:01:21.830895
+Time taken for each element on processor 1: 0:00:00.538361
+INFO: RUNNING SHARPPY ON DATA FROM 1991080100 to 1991083118
+Time taken to load in data on processor 1: 0:01:06.228066
+TOTAL (LAND) POINTS: 152892
+CHUNKSIZE: (152, 27)
+Time taken for SHARPPy on processor 1: 0:01:23.384798
+Time taken for each element on processor 1: 0:00:00.548584
+INFO: RUNNING SHARPPY ON DATA FROM 1991090100 to 1991093018
+Time taken to load in data on processor 1: 0:01:06.370997
+TOTAL (LAND) POINTS: 147960
+CHUNKSIZE: (147, 27)
+Time taken for SHARPPy on processor 1: 0:01:28.028447
+Time taken for each element on processor 1: 0:00:00.598833
+INFO: RUNNING SHARPPY ON DATA FROM 1991100100 to 1991103118
+Time taken to load in data on processor 1: 0:01:40.834223
+TOTAL (LAND) POINTS: 152892
+CHUNKSIZE: (152, 27)
+Time taken for SHARPPy on processor 1: 0:01:30.528360
+Time taken for each element on processor 1: 0:00:00.595582
+INFO: RUNNING SHARPPY ON DATA FROM 1991110100 to 1991113018
+Time taken to load in data on processor 1: 0:01:06.290013
+TOTAL (LAND) POINTS: 147960
+CHUNKSIZE: (147, 27)
+Time taken for SHARPPy on processor 1: 0:01:57.000900
+Time taken for each element on processor 1: 0:00:00.795925
+INFO: RUNNING SHARPPY ON DATA FROM 1991120100 to 1991123118
+Time taken to load in data on processor 1: 0:01:41.544635
+TOTAL (LAND) POINTS: 152892
+CHUNKSIZE: (152, 27)
+Time taken for SHARPPy on processor 1: 0:02:03.361998
+Time taken for each element on processor 1: 0:00:00.811592
+INFO: RUNNING SHARPPY ON DATA FROM 1992010100 to 1992013118
+Time taken to load in data on processor 1: 0:01:05.572405
+TOTAL (LAND) POINTS: 152892
+CHUNKSIZE: (152, 27)
+Time taken for SHARPPy on processor 1: 0:02:11.769839
+Time taken for each element on processor 1: 0:00:00.866907
+INFO: RUNNING SHARPPY ON DATA FROM 1992020100 to 1992022918
+Time taken to load in data on processor 1: 0:01:04.321243
+TOTAL (LAND) POINTS: 143028
+CHUNKSIZE: (142, 27)
+Time taken for SHARPPy on processor 1: 0:02:01.991052
+Time taken for each element on processor 1: 0:00:00.859092
+INFO: RUNNING SHARPPY ON DATA FROM 1992030100 to 1992033118
+Time taken to load in data on processor 1: 0:01:40.603464
+TOTAL (LAND) POINTS: 152892
+CHUNKSIZE: (152, 27)
+Time taken for SHARPPy on processor 1: 0:02:03.604677
+Time taken for each element on processor 1: 0:00:00.813189
+INFO: RUNNING SHARPPY ON DATA FROM 1992040100 to 1992043018
+Time taken to load in data on processor 1: 0:01:08.279472
+TOTAL (LAND) POINTS: 147960
+CHUNKSIZE: (147, 27)
+Time taken for SHARPPy on processor 1: 0:01:54.076682
+Time taken for each element on processor 1: 0:00:00.776032
+INFO: RUNNING SHARPPY ON DATA FROM 1992050100 to 1992053118
+Time taken to load in data on processor 1: 0:01:14.080556
+TOTAL (LAND) POINTS: 152892
+CHUNKSIZE: (152, 27)
+Time taken for SHARPPy on processor 1: 0:01:38.552194
+Time taken for each element on processor 1: 0:00:00.648370
+INFO: RUNNING SHARPPY ON DATA FROM 1992060100 to 1992063018
+Time taken to load in data on processor 1: 0:01:07.100591
+TOTAL (LAND) POINTS: 147960
+CHUNKSIZE: (147, 27)
+Time taken for SHARPPy on processor 1: 0:01:20.751726
+Time taken for each element on processor 1: 0:00:00.549332
+INFO: RUNNING SHARPPY ON DATA FROM 1992070100 to 1992073118
+Time taken to load in data on processor 1: 0:01:11.680099
+TOTAL (LAND) POINTS: 152892
+CHUNKSIZE: (152, 27)
+Time taken for SHARPPy on processor 1: 0:01:23.826586
+Time taken for each element on processor 1: 0:00:00.551491
+INFO: RUNNING SHARPPY ON DATA FROM 1992080100 to 1992083118
+Time taken to load in data on processor 1: 0:01:21.848714
+TOTAL (LAND) POINTS: 152892
+CHUNKSIZE: (152, 27)
+Time taken for SHARPPy on processor 1: 0:01:23.639163
+Time taken for each element on processor 1: 0:00:00.550258
+INFO: RUNNING SHARPPY ON DATA FROM 1992090100 to 1992093018
+Time taken to load in data on processor 1: 0:01:50.345107
+TOTAL (LAND) POINTS: 147960
+CHUNKSIZE: (147, 27)
+Time taken for SHARPPy on processor 1: 0:01:40.161400
+Time taken for each element on processor 1: 0:00:00.681370
+INFO: RUNNING SHARPPY ON DATA FROM 1992100100 to 1992103118
+Time taken to load in data on processor 1: 0:02:17.919927
+TOTAL (LAND) POINTS: 152892
+CHUNKSIZE: (152, 27)
+Time taken for SHARPPy on processor 1: 0:01:53.260067
+Time taken for each element on processor 1: 0:00:00.745132
+INFO: RUNNING SHARPPY ON DATA FROM 1992110100 to 1992113018
+Time taken to load in data on processor 1: 0:01:05.227684
+TOTAL (LAND) POINTS: 147960
+CHUNKSIZE: (147, 27)
+Time taken for SHARPPy on processor 1: 0:01:45.355087
+Time taken for each element on processor 1: 0:00:00.716702
+INFO: RUNNING SHARPPY ON DATA FROM 1992120100 to 1992123118
+Time taken to load in data on processor 1: 0:01:02.683133
+TOTAL (LAND) POINTS: 152892
+CHUNKSIZE: (152, 27)
+Time taken for SHARPPy on processor 1: 0:02:16.368885
+Time taken for each element on processor 1: 0:00:00.897164
+INFO: RUNNING SHARPPY ON DATA FROM 1993010100 to 1993013118
+Time taken to load in data on processor 1: 0:01:43.500524
+TOTAL (LAND) POINTS: 152892
+CHUNKSIZE: (152, 27)
+Time taken for SHARPPy on processor 1: 0:02:01.879979
+Time taken for each element on processor 1: 0:00:00.801842
+INFO: RUNNING SHARPPY ON DATA FROM 1993020100 to 1993022818
+Time taken to load in data on processor 1: 0:01:04.966405
+TOTAL (LAND) POINTS: 138096
+CHUNKSIZE: (137, 27)
+Time taken for SHARPPy on processor 1: 0:01:45.989198
+Time taken for each element on processor 1: 0:00:00.773644
+INFO: RUNNING SHARPPY ON DATA FROM 1993030100 to 1993033118
+Time taken to load in data on processor 1: 0:01:11.111553
+TOTAL (LAND) POINTS: 152892
+CHUNKSIZE: (152, 27)
+Time taken for SHARPPy on processor 1: 0:02:06.615410
+Time taken for each element on processor 1: 0:00:00.832996
+INFO: RUNNING SHARPPY ON DATA FROM 1993040100 to 1993043018
+Time taken to load in data on processor 1: 0:01:08.853103
+TOTAL (LAND) POINTS: 147960
+CHUNKSIZE: (147, 27)
+Time taken for SHARPPy on processor 1: 0:01:40.737284
+Time taken for each element on processor 1: 0:00:00.685288
+INFO: RUNNING SHARPPY ON DATA FROM 1993050100 to 1993053118
+Time taken to load in data on processor 1: 0:01:14.365701
+TOTAL (LAND) POINTS: 152892
+CHUNKSIZE: (152, 27)
+Time taken for SHARPPy on processor 1: 0:01:36.214049
+Time taken for each element on processor 1: 0:00:00.632987
+INFO: RUNNING SHARPPY ON DATA FROM 1993060100 to 1993063018
+Time taken to load in data on processor 1: 0:01:07.006904
+TOTAL (LAND) POINTS: 147960
+CHUNKSIZE: (147, 27)
+Time taken for SHARPPy on processor 1: 0:01:29.745617
+Time taken for each element on processor 1: 0:00:00.610515
+INFO: RUNNING SHARPPY ON DATA FROM 1993070100 to 1993073118
+Time taken to load in data on processor 1: 0:01:14.218601
+TOTAL (LAND) POINTS: 152892
+CHUNKSIZE: (152, 27)
+Time taken for SHARPPy on processor 1: 0:01:23.383183
+Time taken for each element on processor 1: 0:00:00.548574
+INFO: RUNNING SHARPPY ON DATA FROM 1993080100 to 1993083118
+Time taken to load in data on processor 1: 0:01:20.646732
+TOTAL (LAND) POINTS: 152892
+CHUNKSIZE: (152, 27)
+Time taken for SHARPPy on processor 1: 0:01:27.738975
+Time taken for each element on processor 1: 0:00:00.577230
+INFO: RUNNING SHARPPY ON DATA FROM 1993090100 to 1993093018
+Time taken to load in data on processor 1: 0:01:16.534730
+TOTAL (LAND) POINTS: 147960
+CHUNKSIZE: (147, 27)
+Time taken for SHARPPy on processor 1: 0:01:32.957499
+Time taken for each element on processor 1: 0:00:00.632364
+INFO: RUNNING SHARPPY ON DATA FROM 1993100100 to 1993103118
+Time taken to load in data on processor 1: 0:01:15.734590
+TOTAL (LAND) POINTS: 152892
+CHUNKSIZE: (152, 27)
+Time taken for SHARPPy on processor 1: 0:01:44.442908
+Time taken for each element on processor 1: 0:00:00.687125
+INFO: RUNNING SHARPPY ON DATA FROM 1993110100 to 1993113018
+Time taken to load in data on processor 1: 0:01:34.554911
+TOTAL (LAND) POINTS: 147960
+CHUNKSIZE: (147, 27)
+Time taken for SHARPPy on processor 1: 0:01:53.987421
+Time taken for each element on processor 1: 0:00:00.775425
+INFO: RUNNING SHARPPY ON DATA FROM 1993120100 to 1993123118
+Time taken to load in data on processor 1: 0:01:56.020986
+TOTAL (LAND) POINTS: 152892
+CHUNKSIZE: (152, 27)
+Time taken for SHARPPy on processor 1: 0:01:46.212552
+Time taken for each element on processor 1: 0:00:00.698767
+INFO: RUNNING SHARPPY ON DATA FROM 1994010100 to 1994013118
+Time taken to load in data on processor 1: 0:01:12.222820
+TOTAL (LAND) POINTS: 152892
+CHUNKSIZE: (152, 27)
+Time taken for SHARPPy on processor 1: 0:01:56.795691
+Time taken for each element on processor 1: 0:00:00.768393
+INFO: RUNNING SHARPPY ON DATA FROM 1994020100 to 1994022818
+Time taken to load in data on processor 1: 0:01:08.159722
+TOTAL (LAND) POINTS: 138096
+CHUNKSIZE: (137, 27)
+Time taken for SHARPPy on processor 1: 0:01:50.182838
+Time taken for each element on processor 1: 0:00:00.804255
+INFO: RUNNING SHARPPY ON DATA FROM 1994030100 to 1994033118
+Time taken to load in data on processor 1: 0:02:57.599789
+TOTAL (LAND) POINTS: 152892
+CHUNKSIZE: (152, 27)
+Time taken for SHARPPy on processor 1: 0:02:07.363684
+Time taken for each element on processor 1: 0:00:00.837919
+INFO: RUNNING SHARPPY ON DATA FROM 1994040100 to 1994043018
+Time taken to load in data on processor 1: 0:01:12.707947
+TOTAL (LAND) POINTS: 147960
+CHUNKSIZE: (147, 27)
+Time taken for SHARPPy on processor 1: 0:01:43.833400
+Time taken for each element on processor 1: 0:00:00.706350
+INFO: RUNNING SHARPPY ON DATA FROM 1994050100 to 1994053118
+Time taken to load in data on processor 1: 0:01:11.198139
+TOTAL (LAND) POINTS: 152892
+CHUNKSIZE: (152, 27)
+Time taken for SHARPPy on processor 1: 0:01:43.274128
+Time taken for each element on processor 1: 0:00:00.679435
+INFO: RUNNING SHARPPY ON DATA FROM 1994060100 to 1994063018
+Time taken to load in data on processor 1: 0:01:49.475637
+TOTAL (LAND) POINTS: 147960
+CHUNKSIZE: (147, 27)
+Time taken for SHARPPy on processor 1: 0:01:21.129278
+Time taken for each element on processor 1: 0:00:00.551900
+INFO: RUNNING SHARPPY ON DATA FROM 1994070100 to 1994073118
+Time taken to load in data on processor 1: 0:01:07.518862
+TOTAL (LAND) POINTS: 152892
+CHUNKSIZE: (152, 27)
+Time taken for SHARPPy on processor 1: 0:01:21.504626
+Time taken for each element on processor 1: 0:00:00.536215
+INFO: RUNNING SHARPPY ON DATA FROM 1994080100 to 1994083118
+Time taken to load in data on processor 1: 0:01:18.381572
+TOTAL (LAND) POINTS: 152892
+CHUNKSIZE: (152, 27)
+Time taken for SHARPPy on processor 1: 0:01:22.389149
+Time taken for each element on processor 1: 0:00:00.542034
+INFO: RUNNING SHARPPY ON DATA FROM 1994090100 to 1994093018
+Time taken to load in data on processor 1: 0:01:09.835650
+TOTAL (LAND) POINTS: 147960
+CHUNKSIZE: (147, 27)
+Time taken for SHARPPy on processor 1: 0:01:29.670171
+Time taken for each element on processor 1: 0:00:00.610001
+INFO: RUNNING SHARPPY ON DATA FROM 1994100100 to 1994103118
+Time taken to load in data on processor 1: 0:01:08.722474
+TOTAL (LAND) POINTS: 152892
+CHUNKSIZE: (152, 27)
+Time taken for SHARPPy on processor 1: 0:01:50.766082
+Time taken for each element on processor 1: 0:00:00.728724
+INFO: RUNNING SHARPPY ON DATA FROM 1994110100 to 1994113018
+Time taken to load in data on processor 1: 0:01:12.117916
+TOTAL (LAND) POINTS: 147960
+CHUNKSIZE: (147, 27)
+Time taken for SHARPPy on processor 1: 0:02:15.943901
+Time taken for each element on processor 1: 0:00:00.924789
+INFO: RUNNING SHARPPY ON DATA FROM 1994120100 to 1994123118
+Time taken to load in data on processor 1: 0:01:11.436654
+TOTAL (LAND) POINTS: 152892
+CHUNKSIZE: (152, 27)
+Time taken for SHARPPy on processor 1: 0:02:04.104964
+Time taken for each element on processor 1: 0:00:00.816480
+INFO: RUNNING SHARPPY ON DATA FROM 1995010100 to 1995013118
+Time taken to load in data on processor 1: 0:01:14.471133
+TOTAL (LAND) POINTS: 152892
+CHUNKSIZE: (152, 27)
+Time taken for SHARPPy on processor 1: 0:02:02.419479
+Time taken for each element on processor 1: 0:00:00.805393
+INFO: RUNNING SHARPPY ON DATA FROM 1995020100 to 1995022818
+Time taken to load in data on processor 1: 0:01:33.728591
+TOTAL (LAND) POINTS: 138096
+CHUNKSIZE: (137, 27)
+Time taken for SHARPPy on processor 1: 0:02:00.868029
+Time taken for each element on processor 1: 0:00:00.882249
+INFO: RUNNING SHARPPY ON DATA FROM 1995030100 to 1995033118
+Time taken to load in data on processor 1: 0:01:08.122979
+TOTAL (LAND) POINTS: 152892
+CHUNKSIZE: (152, 27)
+Time taken for SHARPPy on processor 1: 0:02:03.609972
+Time taken for each element on processor 1: 0:00:00.813224
+INFO: RUNNING SHARPPY ON DATA FROM 1995040100 to 1995043018
+Time taken to load in data on processor 1: 0:01:11.096465
+TOTAL (LAND) POINTS: 147960
+CHUNKSIZE: (147, 27)
+Time taken for SHARPPy on processor 1: 0:01:34.538109
+Time taken for each element on processor 1: 0:00:00.643117
+INFO: RUNNING SHARPPY ON DATA FROM 1995050100 to 1995053118
+Time taken to load in data on processor 1: 0:01:08.160741
+TOTAL (LAND) POINTS: 152892
+CHUNKSIZE: (152, 27)
+Time taken for SHARPPy on processor 1: 0:01:51.361418
+Time taken for each element on processor 1: 0:00:00.732641
+INFO: RUNNING SHARPPY ON DATA FROM 1995060100 to 1995063018
+Time taken to load in data on processor 1: 0:01:06.552159
+TOTAL (LAND) POINTS: 147960
+CHUNKSIZE: (147, 27)
+Time taken for SHARPPy on processor 1: 0:01:23.863514
+Time taken for each element on processor 1: 0:00:00.570500
+INFO: RUNNING SHARPPY ON DATA FROM 1995070100 to 1995073118
+Time taken to load in data on processor 1: 0:01:29.247580
+TOTAL (LAND) POINTS: 152892
+CHUNKSIZE: (152, 27)
+Time taken for SHARPPy on processor 1: 0:01:22.604022
+Time taken for each element on processor 1: 0:00:00.543448
+INFO: RUNNING SHARPPY ON DATA FROM 1995080100 to 1995083118
+Time taken to load in data on processor 1: 0:01:42.530840
+TOTAL (LAND) POINTS: 152892
+CHUNKSIZE: (152, 27)
+Time taken for SHARPPy on processor 1: 0:01:26.555314
+Time taken for each element on processor 1: 0:00:00.569443
+INFO: RUNNING SHARPPY ON DATA FROM 1995090100 to 1995093018
+Time taken to load in data on processor 1: 0:01:13.913116
+TOTAL (LAND) POINTS: 147960
+CHUNKSIZE: (147, 27)
+Time taken for SHARPPy on processor 1: 0:01:36.171502
+Time taken for each element on processor 1: 0:00:00.654228
+INFO: RUNNING SHARPPY ON DATA FROM 1995100100 to 1995103118
+Time taken to load in data on processor 1: 0:01:09.384454
+TOTAL (LAND) POINTS: 152892
+CHUNKSIZE: (152, 27)
+Time taken for SHARPPy on processor 1: 0:01:44.807637
+Time taken for each element on processor 1: 0:00:00.689524
+INFO: RUNNING SHARPPY ON DATA FROM 1995110100 to 1995113018
+Time taken to load in data on processor 1: 0:01:08.860081
+TOTAL (LAND) POINTS: 147960
+CHUNKSIZE: (147, 27)
+Time taken for SHARPPy on processor 1: 0:01:45.689847
+Time taken for each element on processor 1: 0:00:00.718979
+INFO: RUNNING SHARPPY ON DATA FROM 1995120100 to 1995123118
+Time taken to load in data on processor 1: 0:01:42.653276
+TOTAL (LAND) POINTS: 152892
+CHUNKSIZE: (152, 27)
+Time taken for SHARPPy on processor 1: 0:02:08.595001
+Time taken for each element on processor 1: 0:00:00.846020
+INFO: RUNNING SHARPPY ON DATA FROM 1996010100 to 1996013118
+Time taken to load in data on processor 1: 0:02:21.058956
+TOTAL (LAND) POINTS: 152892
+CHUNKSIZE: (152, 27)
+Time taken for SHARPPy on processor 1: 0:02:07.723551
+Time taken for each element on processor 1: 0:00:00.840287
+INFO: RUNNING SHARPPY ON DATA FROM 1996020100 to 1996022918
+Time taken to load in data on processor 1: 0:01:06.773703
+TOTAL (LAND) POINTS: 143028
+CHUNKSIZE: (142, 27)
+Time taken for SHARPPy on processor 1: 0:01:55.745440
+Time taken for each element on processor 1: 0:00:00.815109
+INFO: RUNNING SHARPPY ON DATA FROM 1996030100 to 1996033118
+Time taken to load in data on processor 1: 0:01:12.736505
+TOTAL (LAND) POINTS: 152892
+CHUNKSIZE: (152, 27)
+Time taken for SHARPPy on processor 1: 0:01:57.676432
+Time taken for each element on processor 1: 0:00:00.774187
+INFO: RUNNING SHARPPY ON DATA FROM 1996040100 to 1996043018
+Time taken to load in data on processor 1: 0:01:10.869931
+TOTAL (LAND) POINTS: 147960
+CHUNKSIZE: (147, 27)
+Time taken for SHARPPy on processor 1: 0:01:48.276887
+Time taken for each element on processor 1: 0:00:00.736578
+INFO: RUNNING SHARPPY ON DATA FROM 1996050100 to 1996053118
+Time taken to load in data on processor 1: 0:01:06.158121
+TOTAL (LAND) POINTS: 152892
+CHUNKSIZE: (152, 27)
+Time taken for SHARPPy on processor 1: 0:01:28.068467
+Time taken for each element on processor 1: 0:00:00.579398
+INFO: RUNNING SHARPPY ON DATA FROM 1996060100 to 1996063018
+Time taken to load in data on processor 1: 0:01:08.136331
+TOTAL (LAND) POINTS: 147960
+CHUNKSIZE: (147, 27)
+Time taken for SHARPPy on processor 1: 0:01:26.126567
+Time taken for each element on processor 1: 0:00:00.585895
+INFO: RUNNING SHARPPY ON DATA FROM 1996070100 to 1996073118
+Time taken to load in data on processor 1: 0:01:17.736762
+TOTAL (LAND) POINTS: 152892
+CHUNKSIZE: (152, 27)
+Time taken for SHARPPy on processor 1: 0:01:25.802459
+Time taken for each element on processor 1: 0:00:00.564490
+INFO: RUNNING SHARPPY ON DATA FROM 1996080100 to 1996083118
+Time taken to load in data on processor 1: 0:01:43.382293
+TOTAL (LAND) POINTS: 152892
+CHUNKSIZE: (152, 27)
+Time taken for SHARPPy on processor 1: 0:01:23.884259
+Time taken for each element on processor 1: 0:00:00.551870
+INFO: RUNNING SHARPPY ON DATA FROM 1996090100 to 1996093018
+Time taken to load in data on processor 1: 0:01:10.249364
+TOTAL (LAND) POINTS: 147960
+CHUNKSIZE: (147, 27)
+Time taken for SHARPPy on processor 1: 0:01:23.237063
+Time taken for each element on processor 1: 0:00:00.566239
+INFO: RUNNING SHARPPY ON DATA FROM 1996100100 to 1996103118
+Time taken to load in data on processor 1: 0:01:10.959235
+TOTAL (LAND) POINTS: 152892
+CHUNKSIZE: (152, 27)
+Time taken for SHARPPy on processor 1: 0:01:40.343695
+Time taken for each element on processor 1: 0:00:00.660156
+INFO: RUNNING SHARPPY ON DATA FROM 1996110100 to 1996113018
+Time taken to load in data on processor 1: 0:01:07.250066
+TOTAL (LAND) POINTS: 147960
+CHUNKSIZE: (147, 27)
+Time taken for SHARPPy on processor 1: 0:01:53.390196
+Time taken for each element on processor 1: 0:00:00.771362
+INFO: RUNNING SHARPPY ON DATA FROM 1996120100 to 1996123118
+Time taken to load in data on processor 1: 0:01:39.728650
+TOTAL (LAND) POINTS: 152892
+CHUNKSIZE: (152, 27)
+Time taken for SHARPPy on processor 1: 0:02:03.395273
+Time taken for each element on processor 1: 0:00:00.811811
+INFO: RUNNING SHARPPY ON DATA FROM 1997010100 to 1997013118
+Time taken to load in data on processor 1: 0:01:41.741864
+TOTAL (LAND) POINTS: 152892
+CHUNKSIZE: (152, 27)
+Time taken for SHARPPy on processor 1: 0:02:06.886552
+Time taken for each element on processor 1: 0:00:00.834780
+INFO: RUNNING SHARPPY ON DATA FROM 1997020100 to 1997022818
+Time taken to load in data on processor 1: 0:01:12.997444
+TOTAL (LAND) POINTS: 138096
+CHUNKSIZE: (137, 27)
+Time taken for SHARPPy on processor 1: 0:01:55.392690
+Time taken for each element on processor 1: 0:00:00.842283
+INFO: RUNNING SHARPPY ON DATA FROM 1997030100 to 1997033118
+Time taken to load in data on processor 1: 0:01:10.463453
+TOTAL (LAND) POINTS: 152892
+CHUNKSIZE: (152, 27)
+Time taken for SHARPPy on processor 1: 0:02:09.533967
+Time taken for each element on processor 1: 0:00:00.852197
+INFO: RUNNING SHARPPY ON DATA FROM 1997040100 to 1997043018
+Time taken to load in data on processor 1: 0:01:13.817510
+TOTAL (LAND) POINTS: 147960
+CHUNKSIZE: (147, 27)
+Time taken for SHARPPy on processor 1: 0:01:39.169084
+Time taken for each element on processor 1: 0:00:00.674620
+INFO: RUNNING SHARPPY ON DATA FROM 1997050100 to 1997053118
+Time taken to load in data on processor 1: 0:01:11.439822
+TOTAL (LAND) POINTS: 152892
+CHUNKSIZE: (152, 27)
+Time taken for SHARPPy on processor 1: 0:01:34.171935
+Time taken for each element on processor 1: 0:00:00.619552
+INFO: RUNNING SHARPPY ON DATA FROM 1997060100 to 1997063018
+Time taken to load in data on processor 1: 0:01:41.629716
+TOTAL (LAND) POINTS: 147960
+CHUNKSIZE: (147, 27)
+Time taken for SHARPPy on processor 1: 0:01:25.824969
+Time taken for each element on processor 1: 0:00:00.583844
+INFO: RUNNING SHARPPY ON DATA FROM 1997070100 to 1997073118
+Time taken to load in data on processor 1: 0:01:09.858148
+TOTAL (LAND) POINTS: 152892
+CHUNKSIZE: (152, 27)
+Time taken for SHARPPy on processor 1: 0:01:21.594744
+Time taken for each element on processor 1: 0:00:00.536808
+INFO: RUNNING SHARPPY ON DATA FROM 1997080100 to 1997083118
+Time taken to load in data on processor 1: 0:01:14.011304
+TOTAL (LAND) POINTS: 152892
+CHUNKSIZE: (152, 27)
+Time taken for SHARPPy on processor 1: 0:01:23.887798
+Time taken for each element on processor 1: 0:00:00.551894
+INFO: RUNNING SHARPPY ON DATA FROM 1997090100 to 1997093018
+Time taken to load in data on processor 1: 0:01:11.322587
+TOTAL (LAND) POINTS: 147960
+CHUNKSIZE: (147, 27)
+Time taken for SHARPPy on processor 1: 0:01:33.827009
+Time taken for each element on processor 1: 0:00:00.638279
+INFO: RUNNING SHARPPY ON DATA FROM 1997100100 to 1997103118
+Time taken to load in data on processor 1: 0:01:12.042510
+TOTAL (LAND) POINTS: 152892
+CHUNKSIZE: (152, 27)
+Time taken for SHARPPy on processor 1: 0:02:00.706211
+Time taken for each element on processor 1: 0:00:00.794120
+INFO: RUNNING SHARPPY ON DATA FROM 1997110100 to 1997113018
+Time taken to load in data on processor 1: 0:01:36.745661
+TOTAL (LAND) POINTS: 147960
+CHUNKSIZE: (147, 27)
+Time taken for SHARPPy on processor 1: 0:01:51.987437
+Time taken for each element on processor 1: 0:00:00.761820
+INFO: RUNNING SHARPPY ON DATA FROM 1997120100 to 1997123118
+Time taken to load in data on processor 1: 0:01:42.372078
+TOTAL (LAND) POINTS: 152892
+CHUNKSIZE: (152, 27)
+Time taken for SHARPPy on processor 1: 0:02:16.166042
+Time taken for each element on processor 1: 0:00:00.895829
+INFO: RUNNING SHARPPY ON DATA FROM 1998010100 to 1998013118
+Time taken to load in data on processor 1: 0:02:12.604283
+TOTAL (LAND) POINTS: 152892
+CHUNKSIZE: (152, 27)
+Time taken for SHARPPy on processor 1: 0:02:09.044962
+Time taken for each element on processor 1: 0:00:00.848980
+INFO: RUNNING SHARPPY ON DATA FROM 1998020100 to 1998022818
+Time taken to load in data on processor 1: 0:01:30.995316
+TOTAL (LAND) POINTS: 138096
+CHUNKSIZE: (137, 27)
+Time taken for SHARPPy on processor 1: 0:01:52.404938
+Time taken for each element on processor 1: 0:00:00.820474
+INFO: RUNNING SHARPPY ON DATA FROM 1998030100 to 1998033118
+Time taken to load in data on processor 1: 0:01:11.436268
+TOTAL (LAND) POINTS: 152892
+CHUNKSIZE: (152, 27)
+Time taken for SHARPPy on processor 1: 0:01:55.368951
+Time taken for each element on processor 1: 0:00:00.759007
+INFO: RUNNING SHARPPY ON DATA FROM 1998040100 to 1998043018
+Time taken to load in data on processor 1: 0:01:31.301808
+TOTAL (LAND) POINTS: 147960
+CHUNKSIZE: (147, 27)
+Time taken for SHARPPy on processor 1: 0:01:34.884016
+Time taken for each element on processor 1: 0:00:00.645470
+INFO: RUNNING SHARPPY ON DATA FROM 1998050100 to 1998053118
+Time taken to load in data on processor 1: 0:01:14.232604
+TOTAL (LAND) POINTS: 152892
+CHUNKSIZE: (152, 27)
+Time taken for SHARPPy on processor 1: 0:01:39.572506
+Time taken for each element on processor 1: 0:00:00.655083
+INFO: RUNNING SHARPPY ON DATA FROM 1998060100 to 1998063018
+Time taken to load in data on processor 1: 0:01:06.606914
+TOTAL (LAND) POINTS: 147960
+CHUNKSIZE: (147, 27)
+Time taken for SHARPPy on processor 1: 0:01:32.950322
+Time taken for each element on processor 1: 0:00:00.632315
+INFO: RUNNING SHARPPY ON DATA FROM 1998070100 to 1998073118
+Time taken to load in data on processor 1: 0:01:17.283835
+TOTAL (LAND) POINTS: 152892
+CHUNKSIZE: (152, 27)
+Time taken for SHARPPy on processor 1: 0:01:22.594094
+Time taken for each element on processor 1: 0:00:00.543382
+INFO: RUNNING SHARPPY ON DATA FROM 1998080100 to 1998083118
+Time taken to load in data on processor 1: 0:01:43.834962
+TOTAL (LAND) POINTS: 152892
+CHUNKSIZE: (152, 27)
+Time taken for SHARPPy on processor 1: 0:01:23.266037
+Time taken for each element on processor 1: 0:00:00.547803
+INFO: RUNNING SHARPPY ON DATA FROM 1998090100 to 1998093018
+Time taken to load in data on processor 1: 0:01:48.806854
+TOTAL (LAND) POINTS: 147960
+CHUNKSIZE: (147, 27)
+Time taken for SHARPPy on processor 1: 0:01:26.900938
+Time taken for each element on processor 1: 0:00:00.591163
+INFO: RUNNING SHARPPY ON DATA FROM 1998100100 to 1998103118
+Time taken to load in data on processor 1: 0:01:12.569601
+TOTAL (LAND) POINTS: 152892
+CHUNKSIZE: (152, 27)
+Time taken for SHARPPy on processor 1: 0:01:44.528062
+Time taken for each element on processor 1: 0:00:00.687685
+INFO: RUNNING SHARPPY ON DATA FROM 1998110100 to 1998113018
+Time taken to load in data on processor 1: 0:01:09.870119
+TOTAL (LAND) POINTS: 147960
+CHUNKSIZE: (147, 27)
+Time taken for SHARPPy on processor 1: 0:01:57.388833
+Time taken for each element on processor 1: 0:00:00.798564
+INFO: RUNNING SHARPPY ON DATA FROM 1998120100 to 1998123118
+Time taken to load in data on processor 1: 0:01:42.275790
+TOTAL (LAND) POINTS: 152892
+CHUNKSIZE: (152, 27)
+Time taken for SHARPPy on processor 1: 0:02:07.507233
+Time taken for each element on processor 1: 0:00:00.838864
+
+======================================================================================
+                  Resource Usage on 2019-07-18 04:09:24:
+   Job Id:             387729.r-man2
+   Project:            eg3
+   Exit Status:        0
+   Service Units:      8656.20
+   NCPUs Requested:    1008                   NCPUs Used: 1008            
+                                           CPU Time Used: 7447:21:36                                 
+   Memory Requested:   1024.0GB              Memory Used: 403.29GB        
+   Walltime requested: 10:00:00            Walltime Used: 08:35:15        
+   JobFS requested:    6.15GB                 JobFS used: 504.96MB        
+======================================================================================

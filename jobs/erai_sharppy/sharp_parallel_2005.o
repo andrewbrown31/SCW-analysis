@@ -1,0 +1,42 @@
+INFO: RUNNING SHARPPY ON DATA FROM 2005010100 to 2005013118
+--------------------------------------------------------------------------
+mpiexec noticed that process rank 0 with PID 0 on node r884 exited on signal 9 (Killed).
+--------------------------------------------------------------------------
+INFO: RUNNING SHARPPY ON DATA FROM 2005020100 to 2005022818
+--------------------------------------------------------------------------
+mpiexec noticed that process rank 0 with PID 0 on node r884 exited on signal 9 (Killed).
+--------------------------------------------------------------------------
+INFO: RUNNING SHARPPY ON DATA FROM 2005030100 to 2005033118
+--------------------------------------------------------------------------
+mpiexec noticed that process rank 0 with PID 0 on node r884 exited on signal 9 (Killed).
+--------------------------------------------------------------------------
+INFO: RUNNING SHARPPY ON DATA FROM 2005040100 to 2005043018
+--------------------------------------------------------------------------
+mpiexec noticed that process rank 0 with PID 0 on node r884 exited on signal 9 (Killed).
+--------------------------------------------------------------------------
+INFO: RUNNING SHARPPY ON DATA FROM 2005050100 to 2005053118
+--------------------------------------------------------------------------
+mpiexec noticed that process rank 0 with PID 0 on node r884 exited on signal 9 (Killed).
+--------------------------------------------------------------------------
+INFO: RUNNING SHARPPY ON DATA FROM 2005060100 to 2005063018
+--------------------------------------------------------------------------
+mpiexec noticed that process rank 0 with PID 0 on node r884 exited on signal 9 (Killed).
+--------------------------------------------------------------------------
+INFO: RUNNING SHARPPY ON DATA FROM 2005070100 to 2005073118
+--------------------------------------------------------------------------
+mpiexec noticed that process rank 0 with PID 0 on node r884 exited on signal 9 (Killed).
+--------------------------------------------------------------------------
+INFO: RUNNING SHARPPY ON DATA FROM 2005080100 to 2005083118
+
+======================================================================================
+                  Resource Usage on 2019-08-15 17:39:55:
+   Job Id:             1242488.r-man2
+   Project:            eg3
+   Exit Status:        271 (Linux Signal 15 SIGTERM Termination)
+   Service Units:      1094.00
+   NCPUs Requested:    800                    NCPUs Used: 800             
+                                           CPU Time Used: 652:02:01                                  
+   Memory Requested:   1024.0GB              Memory Used: 140.38GB        
+   Walltime requested: 10:00:00            Walltime Used: 01:22:03        
+   JobFS requested:    4.88GB                 JobFS used: 400.82MB        
+======================================================================================

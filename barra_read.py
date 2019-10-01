@@ -1,34 +1,14 @@
+import sys
 import netCDF4 as nc
 import numpy as np
 import datetime as dt
 import glob
 import pandas as pd
 import xarray as xr
+from calc_param import get_dp
 
 from metpy.calc import vertical_velocity_pressure as omega
 from metpy.units import units
-
-def get_dp(ta,hur,dp_mask=True):
-        #Dew point approximation found at https://gist.github.com/sourceperl/45587ea99ff123745428
-        #Same as "Magnus formula" https://en.wikipedia.org/wiki/Dew_point
-        #For points where RH is zero, set the dew point temperature to -85 deg C
-        #EDIT: Leave points where RH is zero masked as NaNs. Hanlde them after creating a SHARPpy object (by 
-        # making the missing dp equal to the mean of the above and below layers)
-        #EDIT: Replace with metpy code
-
-        #a = 17.27
-        #b = 237.7
-        #alpha = ((a * ta) / (b + ta)) + np.log(hur/100.0)
-        #dp = (b*alpha) / (a - alpha)
-
-        dp = np.array(mpcalc.dewpoint_rh(ta * units.units.degC, hur * units.units.percent))
-
-        if dp_mask:
-                return dp
-        else:
-                dp = np.array(dp)
-                dp[np.isnan(dp)] = -85.
-                return dp
 
 def read_barra(domain,times):
 	#Open BARRA netcdf files and extract variables needed for a range of times and given
@@ -48,7 +28,7 @@ def read_barra(domain,times):
 		time_hours[t] = (date_list[t] - ref).total_seconds() / (3600)
 
 	#Get time-invariant pressure and spatial info
-	no_p, pres, p_ind = get_pressure(100)
+	no_p, pres, p_ind = get_pressure(100, times[0])
 	pres = pres[p_ind]
 	lon,lat = get_lat_lon()
 	lon_ind = np.where((lon >= domain[2]) & (lon <= domain[3]))[0]
@@ -160,6 +140,219 @@ def read_barra(domain,times):
 	
 #IF WANTING TO LOOP OVER TIME, CHANGE READ_BARRA TO READ ALL TIMES IN A RANGE, THEN LOOP OVER TIME DIMENSION WITHIN CALC_PARAM
 
+def read_barra_fc(domain,times):
+	#Open BARRA netcdf files and extract variables needed for a range of times and given
+	# spatial domain
+	#NOTE, currently this uses analysis files, with no time dimension length=1. For
+	# use with forecast files (with time dimension length >1), will need to be changed.
+
+	ref = dt.datetime(1970,1,1,0,0,0)
+	if len(times) > 1:
+		date_list = date_seq(times,"hours",1)
+	else:
+		date_list = times
+
+	#Get time-invariant pressure and spatial info for first time in "times"
+	no_p, pres_full, p_ind = get_pressure(100, times[0])
+	pres = pres_full[p_ind]
+	lon,lat = get_lat_lon()
+	lon_ind = np.where((lon >= domain[2]) & (lon <= domain[3]))[0]
+	lat_ind = np.where((lat >= domain[0]) & (lat <= domain[1]))[0]
+	lon = lon[lon_ind]
+	lat = lat[lat_ind]
+	terrain = get_terrain(lat_ind,lon_ind)
+
+	#Initialise arrays
+	ta = np.empty((len(date_list),no_p,len(lat_ind),len(lon_ind)))
+	dp = np.empty((len(date_list),no_p,len(lat_ind),len(lon_ind)))
+	hur = np.empty((len(date_list),no_p,len(lat_ind),len(lon_ind)))
+	hgt = np.empty((len(date_list),no_p,len(lat_ind),len(lon_ind)))
+	wap = np.empty((len(date_list),no_p,len(lat_ind),len(lon_ind)))
+	ua = np.empty((len(date_list),no_p,len(lat_ind),len(lon_ind)))
+	va = np.empty((len(date_list),no_p,len(lat_ind),len(lon_ind)))
+	uas = np.empty((len(date_list),len(lat_ind),len(lon_ind)))
+	vas = np.empty((len(date_list),len(lat_ind),len(lon_ind)))
+	tas = np.empty((len(date_list),len(lat_ind),len(lon_ind)))
+	ta2d = np.empty((len(date_list),len(lat_ind),len(lon_ind)))
+	ps = np.empty((len(date_list),len(lat_ind),len(lon_ind)))
+	p_3d = np.moveaxis(np.tile(pres,[ta.shape[2],ta.shape[3],1]),2,0)
+	wg10 = np.zeros(ps.shape)
+
+	spec_fnames = []
+	slv_fnames = []
+	prs_fnames = []
+	an_times = np.array([0,6,12,18])
+	for t in np.arange(len(date_list)):
+
+		temp_year = date_list[t].year
+		temp_month = date_list[t].month
+		temp_day = date_list[t].day
+
+		diff = date_list[t].hour - an_times
+		diff[diff<0] = 24
+		temp_hour = an_times[np.argmin(diff)]
+
+		temp_time = dt.datetime(temp_year, temp_month, temp_day, temp_hour)
+
+		if np.min(diff) == 0:
+			temp_time = temp_time + dt.timedelta(hours=-6)
+
+		if temp_time.year >= 1990:
+
+			temp_fname_prs = glob.glob("/g/data/ma05/BARRA_R/v1/forecast/prs/air_temp/"+\
+				temp_time.strftime("%Y")+"/"+temp_time.strftime("%m")+\
+				"/air_temp-fc-prs-PT1H-BARRA_R-v1*"+temp_time.strftime("%Y")+\
+				temp_time.strftime("%m")+temp_time.strftime("%d")+"T"+\
+				temp_time.strftime("%H")+"*.nc")[0]
+			temp_fname_slv = glob.glob("/g/data/ma05/BARRA_R/v1/forecast/slv/dewpt_scrn/"+\
+				temp_time.strftime("%Y")+"/"+temp_time.strftime("%m")+\
+				"/dewpt_scrn-fc-slv-PT1H-BARRA_R-v1*"+temp_time.strftime("%Y")+\
+				temp_time.strftime("%m")+temp_time.strftime("%d")+"T"+\
+				temp_time.strftime("%H")+"*.nc")[0]
+			temp_fname_spec = glob.glob("/g/data/ma05/BARRA_R/v1/forecast/spec/uwnd10m/"+\
+				temp_time.strftime("%Y")+"/"+temp_time.strftime("%m")+\
+				"/uwnd10m-fc-spec-PT1H-BARRA_R-v1*"+temp_time.strftime("%Y")+\
+				temp_time.strftime("%m")+temp_time.strftime("%d")+"T"+\
+				temp_time.strftime("%H")+"*.nc")[0]
+			if temp_fname_prs not in prs_fnames:
+				prs_fnames.append(temp_fname_prs)
+				slv_fnames.append(temp_fname_slv)
+				spec_fnames.append(temp_fname_spec)
+
+	for t in np.arange(0,len(prs_fnames)):
+		#Load BARRA analysis files
+		ta_file = nc.Dataset(prs_fnames[t])
+		z_file = nc.Dataset(glob.glob(prs_fnames[t].replace("air_temp","geop_ht").replace("v1.1","*").replace("v1","*"))[0])
+		ua_file = nc.Dataset(glob.glob(prs_fnames[t].replace("air_temp","wnd_ucmp").replace("v1.1","*").replace("v1","*"))[0])
+		va_file = nc.Dataset(glob.glob(prs_fnames[t].replace("air_temp","wnd_vcmp").replace("v1.1","*").replace("v1","*"))[0])
+		w_file = nc.Dataset(glob.glob(prs_fnames[t].replace("air_temp","vertical_wnd").replace("v1.1","*").replace("v1","*"))[0])
+		hur_file = nc.Dataset(glob.glob(prs_fnames[t].replace("air_temp","relhum").replace("v1.1","*").replace("v1","*"))[0])
+	
+		uas_file = nc.Dataset(spec_fnames[t])
+		vas_file = nc.Dataset(spec_fnames[t].replace("uwnd10m","vwnd10m"))
+		tas_file = nc.Dataset(spec_fnames[t].replace("uwnd10m","temp_scrn"))
+		ps_file = nc.Dataset(spec_fnames[t].replace("uwnd10m","sfc_pres"))
+		wg_file = nc.Dataset(spec_fnames[t].replace("uwnd10m","max_wndgust10m"))
+
+		ta2d_file = nc.Dataset(slv_fnames[t])
+
+		#Get times to load in from file
+		times = nc.num2date(ta_file["time"][:], ta_file["time"].units)
+
+		#Check the vertical coordinates for the time step. In some cases they will be different
+		# (e.g. for 2010-01-01 00:00, which exists in the 2009-12-31 18:00 file, there will be
+		# 16 levels below 100 hPa, whereas 22 are expected)
+		if pres_full.shape[0] == ta_file["air_temp"].shape[1]:
+
+			#Load data
+			temp_ta = ta_file["air_temp"][np.in1d(times, date_list), p_ind,lat_ind,lon_ind] - 273.15
+			temp_ua = ua_file["wnd_ucmp"][np.in1d(times, date_list),p_ind,lat_ind,lon_ind]
+			temp_va = va_file["wnd_vcmp"][np.in1d(times, date_list),p_ind,lat_ind,lon_ind]
+			temp_hgt = z_file["geop_ht"][np.in1d(times, date_list),p_ind,lat_ind,lon_ind]
+			temp_hur = hur_file["relhum"][np.in1d(times, date_list),p_ind,lat_ind,lon_ind]
+			temp_hur[temp_hur<0] = 0
+			temp_hur[temp_hur>100] = 100
+			temp_dp = get_dp(temp_ta,temp_hur)
+			temp_wap = omega( w_file["vertical_wnd"][np.in1d(times, date_list),p_ind,lat_ind,lon_ind] * (units.metre / units.second),\
+				p_3d * (units.hPa), \
+				temp_ta * units.degC )
+
+			#Flip pressure axes for compatibility with SHARPpy
+			ta[np.in1d(date_list, times),:,:,:] = np.flip(temp_ta, axis=1)
+			dp[np.in1d(date_list, times),:,:,:] = np.flip(temp_dp, axis=1)
+			hur[np.in1d(date_list, times),:,:,:] = np.flip(temp_hur, axis=1)
+			hgt[np.in1d(date_list, times),:,:,:] = np.flip(temp_hgt, axis=1)
+			wap[np.in1d(date_list, times),:,:,:] = np.flip(temp_wap, axis=1)
+			ua[np.in1d(date_list, times),:,:,:] = np.flip(temp_ua, axis=1)
+			va[np.in1d(date_list, times),:,:,:] = np.flip(temp_va, axis=1)
+
+			ta_file.close();z_file.close();ua_file.close();va_file.close();hur_file.close();w_file.close()
+
+		else:
+			ta[np.in1d(date_list, times),:,:,:] = np.nan
+			dp[np.in1d(date_list, times),:,:,:] = np.nan
+			hur[np.in1d(date_list, times),:,:,:] = np.nan
+			hgt[np.in1d(date_list, times),:,:,:] = np.nan
+			wap[np.in1d(date_list, times),:,:,:] = np.nan
+			ua[np.in1d(date_list, times),:,:,:] = np.nan
+			va[np.in1d(date_list, times),:,:,:] = np.nan
+
+		
+		uas[np.in1d(date_list, times),:,:] = uas_file["uwnd10m"][np.in1d(times, date_list),lat_ind,lon_ind]
+		vas[np.in1d(date_list, times),:,:] = vas_file["vwnd10m"][np.in1d(times, date_list),lat_ind,lon_ind]
+		tas[np.in1d(date_list, times),:,:] = tas_file["temp_scrn"][np.in1d(times, date_list),lat_ind,lon_ind] - 273.15
+		ta2d[np.in1d(date_list, times),:,:] = ta2d_file["dewpt_scrn"][np.in1d(times, date_list),lat_ind,lon_ind] - 273.15
+		ps[np.in1d(date_list, times),:,:] = ps_file["sfc_pres"][np.in1d(times, date_list),lat_ind,lon_ind]/100 
+		wg10[np.in1d(date_list, times),:,:] = wg_file["max_wndgust10m"][np.in1d(times, date_list),lat_ind,lon_ind]
+
+		uas_file.close();vas_file.close();ps_file.close();tas_file.close();ta2d_file.close()
+		
+	p = np.flipud(pres)
+
+	return [ta,dp,hur,hgt,terrain,p,ps,wap,ua,va,uas,vas,tas,ta2d,wg10,lon,lat,date_list]
+	
+def read_barra_xarray():
+
+	start_lat = -44.525; end_lat = -9.975; start_lon = 111.975; end_lon = 156.275
+
+	#Load temperature data and combine
+	ta = xr.open_mfdataset("/g/data/ma05/BARRA_R/v1/forecast/prs/air_temp/1990/01/*.nc", concat_dim="time").\
+		sel(latitude=slice(start_lat, end_lat), longitude=slice(start_lon, end_lon))
+	ta = ta.sel(pressure=(ta.pressure>=100))
+	p = ta.pressure
+	tas = xr.open_mfdataset("/g/data/ma05/BARRA_R/v1/forecast/spec/temp_scrn/1990/01/*.nc", concat_dim="time").\
+		rename({"temp_scrn":"air_temp"}).sel(latitude=slice(start_lat, end_lat), \
+		longitude=slice(start_lon, end_lon))
+	ta = ta.reset_index("pressure").assign_coords(pressure=(np.arange(1,len(ta["pressure"])+1)))
+	sfc_ta = xr.auto_combine([tas.expand_dims({"pressure":[0]}).drop("height"), ta.drop("pressure_")], "pressure")
+
+	#Create 4d pressure array from surface pressure and pressure level coordinates
+	p4d = np.tile(np.moveaxis(np.tile(p,[len(ta.latitude),len(ta.longitude),1]),[0,1,2],[1,2,0])[np.newaxis],\
+		(len(ta.time),1,1,1) )
+	pds = xr.Dataset({"p3d": (["time", "pressure", "latitude", "longitude"], p4d)},\
+		coords={"time":ta.time, "pressure":ta.pressure, "latitude":ta.latitude, "longitude":ta.longitude})
+	ps = xr.open_mfdataset("/g/data/ma05/BARRA_R/v1/forecast/spec/sfc_pres/1990/01/*.nc", concat_dim="time").\
+		rename({"sfc_pres":"p3d"}).sel(latitude=slice(start_lat, end_lat), \
+		longitude=slice(start_lon, end_lon))
+	sfc_p_3d = xr.auto_combine([ps.expand_dims({"pressure":[0]}), pds], "pressure")
+
+	#Load relative humidity on pressure levels. Load dewpoint on the surface. Convert both to mixing ratio and 
+	# combine
+	#Get mixing ratio on pressure levels...
+	hur = xr.open_mfdataset("/g/data/ma05/BARRA_R/v1/forecast/prs/relhum/1990/01/*.nc", concat_dim="time").\
+		sel(latitude=slice(start_lat, end_lat), longitude=slice(start_lon, end_lon))
+	hur = hur.sel(pressure=(hur.pressure>=100))
+	hur = hur.reset_index("pressure").assign_coords(pressure=(np.arange(1,len(hur["pressure"])+1)))
+	sat_vap_pres = 6.112 * np.exp( 17.67 * (ta.air_temp - 273.15) / (ta.air_temp - 29.65) ) 
+	q = (hur.relhum / 100 ) * (0.62198 * sat_vap_pres / (pds.p3d - sat_vap_pres))
+	#Get mixing ratio on sfc
+	sdp = xr.open_mfdataset("/g/data/ma05/BARRA_R/v1/forecast/slv/dewpt_scrn/1990/01/*.nc", concat_dim="time").\
+		sel(latitude=slice(start_lat, end_lat), \
+		longitude=slice(start_lon, end_lon))
+	sat_vap_pres_dp = 6.112 * np.exp( 17.67 * (sdp.dewpt_scrn - 273.15) / (sdp.dewpt_scrn - 29.65) ) 
+	sat_vap_pres_ta = 6.112 * np.exp( 17.67 * (tas.air_temp - 273.15) / (tas.air_temp - 29.65) ) 
+	temp_sfc_hur = sat_vap_pres_dp / sat_vap_pres_ta
+	q_sfc = (temp_sfc_hur) * (0.62198 * sat_vap_pres_ta / (ps.p3d - sat_vap_pres_ta))
+	sfc_q = xr.concat([q_sfc.expand_dims({"pressure":[0]}).drop("height"), q.drop("pressure_")], dim="pressure") 
+
+	hgt = xr.open_mfdataset("/g/data/ma05/BARRA_R/v1/forecast/prs/geop_ht/1990/01/*.nc", concat_dim="time").\
+		sel(latitude=slice(start_lat, end_lat), longitude=slice(start_lon, end_lon))
+	hgt = hgt.sel(pressure=(hgt.pressure>=100))
+	ter = xr.open_mfdataset("/g/data/ma05/BARRA_R/v1/static/topog-an-slv-PT0H-BARRA_R-v1.nc").\
+		rename({"topog":"geop_ht"}).sel(latitude=slice(start_lat, end_lat), \
+		longitude=slice(start_lon, end_lon))
+	
+	hgt = hgt.reset_index("pressure").reset_index("time").assign_coords(pressure=(np.arange(1,len(hgt["pressure"])+1)))
+	sfc_hgt = xr.concat([ter.expand_dims({"time":len(hgt.time)}).assign_coords(time=hgt.time).expand_dims({"pressure":[0]}), hgt.drop("pressure_")], "pressure")
+
+	ds = xr.Dataset({"p3d": (["time", "pressure", "latitude", "longitude"], sfc_p_3d.p3d),\
+		"ta": (["time", "pressure", "latitude", "longitude"], sfc_ta.air_temp),\
+		"hgt": (["time", "pressure", "latitude", "longitude"], sfc_hgt.geop_ht),\
+		"q": (["time", "pressure", "latitude", "longitude"], sfc_q),\
+		"hgt": (["time", "pressure", "latitude", "longitude"], sfc_hgt.geop_ht)})
+	#Now have to work out how to sort by descending pressure...
+
+
 def read_barra_points(points,times):
 
 	#NOTE might have to change to read forecast (hourly) data instead of analysis
@@ -267,10 +460,17 @@ def date_seq(times,delta_type,delta):
 		date_list.append(current_time)
 	return date_list
 
-def get_pressure(top):
-	#NOTE THAT WE GET THE LESSER-RESULUTION PRESSURE COORDINATES (16 LEVELS BELOW 100 hPa)
+def get_pressure(top, date):
+	#NOTE THAT WE GET THE PRESSURE COORDINATES OF THE FIRST DATE
+	year = dt.datetime.strftime(date,"%Y")
+	month =	dt.datetime.strftime(date,"%m")
+	day = dt.datetime.strftime(date,"%d")
+	hour = dt.datetime.strftime(date,"%H")
+
+	#Load BARRA analysis files
 	ta_file = nc.Dataset(glob.glob("/g/data/ma05/BARRA_R/v1/analysis/prs/air_temp/"\
-	+"2016"+"/"+"09"+"/air_temp-an-prs-PT0H-BARRA_R-v1-"+"2016"+"09"+"28"+"T"+"06"+"*.nc")[0])
++year+"/"+month+"/air_temp-an-prs-PT0H-BARRA_R-v1*"+year+month+day+"T"+hour+"*.nc")[0])
+
 	p =ta_file["pressure"][:]
 	p_ind = np.where(p>=top)[0]
 	return [len(p_ind), p, p_ind]
@@ -333,7 +533,9 @@ def to_points():
 	#Read netcdf data
 	from dask.diagnostics import ProgressBar
 	ProgressBar().register()
-	f=xr.open_mfdataset("/g/data/eg3/ab4502/ExtremeWind/aus/barra/barra*", parallel=True)
+	#f=xr.open_mfdataset("/g/data/eg3/ab4502/ExtremeWind/aus/barra_fc/barra_fc*.nc", parallel=True)
+	f=xr.open_dataset("/g/data/eg3/ab4502/ExtremeWind/aus/barra_fc/barra_fc_20150101_20150131.nc",\
+		chunks={"lat":100, "lon":100, "time":100})
 
 	#JUST WANTING TO APPEND A COUPLE OF NEW VARIABLES TO THE DATAFRAME
 	#f=f[["Vprime", "wbz"]]
@@ -360,7 +562,7 @@ def to_points():
 		dist_lat.append(temp_lat)
 
 	df = f.isel(lat = xr.DataArray(dist_lat, dims="points"), \
-			lon = xr.DataArray(dist_lon, dims="points")).to_dataframe()
+			lon = xr.DataArray(dist_lon, dims="points")).persist().to_dataframe()
 
 	df = df.reset_index()
 
@@ -373,10 +575,69 @@ def to_points():
 	#df_new = pd.merge(df_orig, df[["time","loc_id","wbz","Vprime"]], on=["time","loc_id"])
 	#df_new.to_pickle("/g/data/eg3/ab4502/ExtremeWind/points/erai_points_sharppy_aus_1979_2017.pkl")
 
+def to_points_loop(loc_id,points,fname,start_year,end_year,variables=False):
+
+	#As in to_points(), but by looping over monthly data
+	from dask.diagnostics import ProgressBar
+	import gc
+	#ProgressBar().register()
+
+	dates = []
+	for y in np.arange(start_year,end_year+1):
+		for m in np.arange(1,13):
+			dates.append(dt.datetime(y,m,1,0,0,0))
+
+	df = pd.DataFrame()
+
+	#Read netcdf data
+	for t in np.arange(len(dates)):
+		print(dates[t])
+		f=xr.open_dataset(glob.glob("/g/data/eg3/ab4502/ExtremeWind/aus/"+\
+			"barra_fc/barra_fc_"+dates[t].strftime("%Y%m")+"*.nc")[0],\
+			chunks={"lat":100, "lon":100, "time":100}, engine="h5netcdf")
+
+		#Setup lsm
+		lat = f.coords.get("lat").values
+		lon = f.coords.get("lon").values
+		lsm = get_mask(lon,lat)
+		x,y = np.meshgrid(lon,lat)
+		x[lsm==0] = np.nan
+		y[lsm==0] = np.nan
+
+		dist_lon = []
+		dist_lat = []
+		for i in np.arange(len(loc_id)):
+
+			dist = np.sqrt(np.square(x-points[i][0]) + \
+				np.square(y-points[i][1]))
+			temp_lat,temp_lon = np.unravel_index(np.nanargmin(dist),dist.shape)
+			dist_lon.append(temp_lon)
+			dist_lat.append(temp_lat)
+
+		try:
+			f=f[variables]
+		except:
+			pass
+
+		temp_df = f.isel(lat = xr.DataArray(dist_lat, dims="points"), \
+				lon = xr.DataArray(dist_lon, dims="points")).persist().to_dataframe()
+
+		temp_df = temp_df.reset_index()
+
+		for p in np.arange(len(loc_id)):
+			temp_df.loc[temp_df.points==p,"loc_id"] = loc_id[p]
+
+		temp_df = temp_df.drop("points",axis=1)
+		df = pd.concat([df, temp_df])
+		f.close()
+		gc.collect()
+
+	df.sort_values(["loc_id","time"]).to_pickle("/g/data/eg3/ab4502/ExtremeWind/points/"+fname+".pkl")
+
 def get_aus_stn_info():
 	names = ["id", "stn_no", "district", "stn_name", "1", "2", "lat", "lon", "3", "4", "5", "6", "7", "8", \
 			"9", "10", "11", "12", "13", "14", "15", "16"]	
-	df = pd.read_csv("/short/eg3/ab4502/ExtremeWind/aws/daily_aus_full/DC02D_StnDet_999999999643799.txt",\
+	df = pd.read_csv("/g/data/eg3/ab4502/ExtremeWind/obs/aws/daily_aus_full/DC02D_StnDet_999999999643799.txt",\
 		names=names, header=0)
 	renames = {'ALICE SPRINGS AIRPORT                   ':"Alice Springs",\
 			'GILES METEOROLOGICAL OFFICE             ':"Giles",\
@@ -421,4 +682,17 @@ def get_aus_stn_info():
 
 if __name__ == "__main__":
 
-	to_points()
+	if len(sys.argv) > 1:
+		start_time = int(sys.argv[1])
+		end_time = int(sys.argv[2])
+	
+	#loc_id = ['Melbourne', 'Wollongong', 'Gympie', 'Grafton', 'Canberra', 'Marburg', \
+	#	'Adelaide', 'Namoi', 'Perth', 'Hobart']
+	#radar_latitude = [-37.8553, -34.2625, -25.9574, -29.622, -35.6614, -27.608, -34.6169, -31.0236, -32.3917, -43.1122]
+	#radar_longitude = [144.7554, 150.8752, 152.577, 152.951, 149.5122, 152.539, 138.4689, 150.1917, 115.867, 147.8057]
+	#points = [(radar_longitude[i], radar_latitude[i]) for i in np.arange(len(radar_latitude))]
+
+	loc_id, points = get_aus_stn_info()
+
+	to_points_loop(loc_id, points, "barra_allvars_"+str(start_time)+"_"+str(end_time), \
+			start_time, end_time)

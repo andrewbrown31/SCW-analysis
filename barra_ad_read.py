@@ -7,6 +7,8 @@ from mpl_toolkits.basemap import Basemap
 import pandas as pd
 
 from calc_param import *
+from metpy.calc import vertical_velocity_pressure as omega
+from metpy.units import units
 
 def read_barra_ad(domain,times,wg_only):
 	#Open BARRA_AD netcdf files and extract variables needed for a range of times and given
@@ -36,12 +38,16 @@ def read_barra_ad(domain,times,wg_only):
 	hgt = np.empty((0,no_p,len(lat_ind),len(lon_ind)))
 	ua = np.empty((0,no_p,len(lat_ind),len(lon_ind)))
 	va = np.empty((0,no_p,len(lat_ind),len(lon_ind)))
+	wap = np.empty((0,no_p,len(lat_ind),len(lon_ind)))
 	uas = np.empty((0,len(lat_ind),len(lon_ind)))
 	vas = np.empty((0,len(lat_ind),len(lon_ind)))
+	tas = np.empty((0,len(lat_ind),len(lon_ind)))
+	ta2d = np.empty((0,len(lat_ind),len(lon_ind)))
 	ps = np.empty((0,len(lat_ind),len(lon_ind)))
 	max_max_wg = np.empty((0,len(lat_ind),len(lon_ind)))
 	max_wg = np.empty((0,len(lat_ind),len(lon_ind)))
 	date_times = np.empty((0))
+	p_3d = np.moveaxis(np.tile(pres,[ta.shape[2],ta.shape[3],1]),2,0)
 
 	for t in np.arange(0,len(date_list)):
 		year = dt.datetime.strftime(date_list[t],"%Y")
@@ -57,28 +63,33 @@ def read_barra_ad(domain,times,wg_only):
 			+"max_wndgust10m/"+year+"/"+month+"/max_wndgust10m-fc-spec-PT1H-BARRA_AD-v*-"\
 			+year+month+day+"T"+hour+"*.nc")[0])
 		if not wg_only:
-		    ta_file = nc.Dataset(glob.glob("/g/data/ma05/BARRA_AD/v1/forecast/prs/air_temp/"\
-			+year+"/"+month+"/air_temp-fc-prs-PT1H-BARRA_AD-v*-"+year+month+day+"T"+hour+"*.nc")[0])
-		    z_file = nc.Dataset(glob.glob("/g/data/ma05/BARRA_AD/v1/forecast/prs/geop_ht/"\
-			+year+"/"+month+"/geop_ht-fc-prs-PT1H-BARRA_AD-v*-"+year+month+day+"T"+hour+"*.nc")[0])
-		    ua_file = nc.Dataset(glob.glob("/g/data/ma05/BARRA_AD/v1/forecast/prs/wnd_ucmp/"\
-			+year+"/"+month+"/wnd_ucmp-fc-prs-PT1H-BARRA_AD-v*-"+year+month+day+"T"+hour+"*.nc")[0])
-		    va_file = nc.Dataset(glob.glob("/g/data/ma05/BARRA_AD/v1/forecast/prs/wnd_vcmp/"\
-			+year+"/"+month+"/wnd_vcmp-fc-prs-PT1H-BARRA_AD-v*-"+year+month+day+"T"+hour+"*.nc")[0])
-		    hur_file = nc.Dataset(glob.glob("/g/data/ma05/BARRA_AD/v1/forecast/prs/relhum/"\
-			+year+"/"+month+"/relhum-fc-prs-PT1H-BARRA_AD-v*-"+year+month+day+"T"+hour+"*.nc")[0])
-		    uas_file = nc.Dataset(glob.glob("/g/data/ma05/BARRA_AD/v1/forecast/spec/uwnd10m/"\
-			+year+"/"+month+"/uwnd10m-fc-spec-PT1H-BARRA_AD-v*-"+year+month+day+"T"+hour+"*.nc")[0])
-		    vas_file = nc.Dataset(glob.glob("/g/data/ma05/BARRA_AD/v1/forecast/spec/vwnd10m/"\
-			+year+"/"+month+"/vwnd10m-fc-spec-PT1H-BARRA_AD-v*-"+year+month+day+"T"+hour+"*.nc")[0])
-		    ps_file = nc.Dataset(glob.glob("/g/data/ma05/BARRA_AD/v1/forecast/spec/sfc_pres/"\
-			+year+"/"+month+"/sfc_pres-fc-spec-PT1H-BARRA_AD-v*-"+year+month+day+"T"+hour+"*.nc")[0])
+			ta_file = nc.Dataset(glob.glob("/g/data/ma05/BARRA_AD/v1/forecast/prs/air_temp/"\
+				+year+"/"+month+"/air_temp-fc-prs-PT1H-BARRA_AD-v*-"+year+month+day+"T"+hour+"*.nc")[0])
+			z_file = nc.Dataset(glob.glob("/g/data/ma05/BARRA_AD/v1/forecast/prs/geop_ht/"\
+				+year+"/"+month+"/geop_ht-fc-prs-PT1H-BARRA_AD-v*-"+year+month+day+"T"+hour+"*.nc")[0])
+			ua_file = nc.Dataset(glob.glob("/g/data/ma05/BARRA_AD/v1/forecast/prs/wnd_ucmp/"\
+				+year+"/"+month+"/wnd_ucmp-fc-prs-PT1H-BARRA_AD-v*-"+year+month+day+"T"+hour+"*.nc")[0])
+			va_file = nc.Dataset(glob.glob("/g/data/ma05/BARRA_AD/v1/forecast/prs/wnd_vcmp/"\
+				+year+"/"+month+"/wnd_vcmp-fc-prs-PT1H-BARRA_AD-v*-"+year+month+day+"T"+hour+"*.nc")[0])
+			hur_file = nc.Dataset(glob.glob("/g/data/ma05/BARRA_AD/v1/forecast/prs/relhum/"\
+				+year+"/"+month+"/relhum-fc-prs-PT1H-BARRA_AD-v*-"+year+month+day+"T"+hour+"*.nc")[0])
+			w_file = nc.Dataset(glob.glob("/g/data/ma05/BARRA_AD/v1/forecast/prs/vertical_wnd/"\
+				+year+"/"+month+"/vertical_wnd-fc-prs-PT1H-BARRA_AD-v*-"+year+month+day+"T"+hour+"*.nc")[0])
+			uas_file = nc.Dataset(glob.glob("/g/data/ma05/BARRA_AD/v1/forecast/spec/uwnd10m/"\
+				+year+"/"+month+"/uwnd10m-fc-spec-PT1H-BARRA_AD-v*-"+year+month+day+"T"+hour+"*.nc")[0])
+			vas_file = nc.Dataset(glob.glob("/g/data/ma05/BARRA_AD/v1/forecast/spec/vwnd10m/"\
+				+year+"/"+month+"/vwnd10m-fc-spec-PT1H-BARRA_AD-v*-"+year+month+day+"T"+hour+"*.nc")[0])
+			ta2d_file = nc.Dataset(glob.glob("/g/data/ma05/BARRA_AD/v1/forecast/slv/dewpt_scrn/"\
+				+year+"/"+month+"/dewpt_scrn-fc-slv-PT1H-BARRA_AD-v1*"+year+month+day+"T"+hour+"*.nc")[0])
+			tas_file = nc.Dataset(glob.glob("/g/data/ma05/BARRA_AD/v1/forecast/spec/temp_scrn/"\
+				+year+"/"+month+"/temp_scrn-fc-spec-PT1H-BARRA_AD-v1*"+year+month+day+"T"+hour+"*.nc")[0])
+			ps_file = nc.Dataset(glob.glob("/g/data/ma05/BARRA_AD/v1/forecast/spec/sfc_pres/"\
+				+year+"/"+month+"/sfc_pres-fc-spec-PT1H-BARRA_AD-v*-"+year+month+day+"T"+hour+"*.nc")[0])
 
 		#Get times to load in from file
 		date_times = np.append(date_times,\
 			nc.num2date(np.round(max_max_wg_file["time"][:]),\
 				max_max_wg_file["time"].units))
-		print(date_list[t])
 
 		temp_max_max_wg = max_max_wg_file["max_max_wndgust10m"][:,lat_ind,lon_ind]
 		temp_max_wg = max_wg_file["max_wndgust10m"][:,lat_ind,lon_ind]
@@ -96,17 +107,23 @@ def read_barra_ad(domain,times,wg_only):
 			temp_hur = hur_file["relhum"][:,p_ind,lat_ind,lon_ind]
 			temp_hur[temp_hur<0] = 0
 			temp_dp = get_dp(temp_ta,temp_hur)
+			temp_wap = omega( w_file["vertical_wnd"][:,p_ind,lat_ind,lon_ind] * (units.metre / units.second),\
+				p_3d * (units.hPa), \
+				temp_ta * units.degC )
 			temp_uas = uas_file["uwnd10m"][:,lat_ind,lon_ind]
 			temp_vas = vas_file["vwnd10m"][:,lat_ind,lon_ind]
 			temp_ps = ps_file["sfc_pres"][:,lat_ind,lon_ind]/100 
+			temp_tas = tas_file["temp_scrn"][:,lat_ind,lon_ind]/100 
+			temp_ta2d = ta2d_file["dewpt_scrn"][:,lat_ind,lon_ind]/100 
 
 			#Flip pressure axes for compatibility with SHARPpy
-			temp_ta = np.fliplr(temp_ta)
-			temp_dp = np.fliplr(temp_dp)
-			temp_hur = np.fliplr(temp_hur)
-			temp_hgt = np.fliplr(temp_hgt)
-			temp_ua = np.fliplr(temp_ua)
-			temp_va = np.fliplr(temp_va)
+			temp_ta = np.flipud(temp_ta)
+			temp_dp = np.flipud(temp_dp)
+			temp_hur = np.flipud(temp_hur)
+			temp_hgt = np.flipud(temp_hgt)
+			temp_ua = np.flipud(temp_ua)
+			temp_va = np.flipud(temp_va)
+			temp_wap = np.flipud(temp_wap)
 	
 			#Fill arrays with current time steps
 			ta = np.append(ta,temp_ta,axis=0)
@@ -115,8 +132,11 @@ def read_barra_ad(domain,times,wg_only):
 			hgt = np.append(hgt,temp_hgt,axis=0)
 			hur = np.append(hur,temp_hur,axis=0)
 			dp = np.append(dp,temp_dp,axis=0)
+			wap = np.append(wap,temp_wap,axis=0)
 			uas = np.append(uas,temp_uas,axis=0)
 			vas = np.append(vas,temp_vas,axis=0)
+			tas = np.append(tas,temp_vas,axis=0)
+			ta2d = np.append(ta2d,temp_vas,axis=0)
 			ps = np.append(ps,temp_ps,axis=0)
 
 			ta_file.close();z_file.close();ua_file.close();va_file.close();hur_file.close();uas_file.close();vas_file.close();ps_file.close()
@@ -127,7 +147,7 @@ def read_barra_ad(domain,times,wg_only):
 	if wg_only:
 		return [max_max_wg,max_wg,lon,lat,date_times]
 	else:
-		return [max_max_wg,max_wg,ta,dp,hur,hgt,terrain,pres,ps,ua,va,uas,vas,lon,lat,date_times]
+		return [max_max_wg,max_wg,ta,dp,hur,hgt,terrain,pres,ps,wap,ua,va,uas,vas,tas,ta2d,lon,lat,date_times]
 	
 #IF WANTING TO LOOP OVER TIME, CHANGE READ_BARRA TO READ ALL TIMES IN A RANGE, THEN LOOP OVER TIME DIMENSION WITHIN CALC_PARAM
 

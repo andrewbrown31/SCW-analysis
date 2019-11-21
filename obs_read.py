@@ -1,12 +1,16 @@
+import metpy.units as units
+import metpy.calc as mpcalc
+import wrf
 import numpy as np
 import pandas as pd
 import datetime as dt
 import math
 import os
 import pytz
-from tzwhere import tzwhere
 #from event_analysis import get_aus_stn_info
 import netCDF4 as nc
+from SkewT import get_dcape
+from wrf_parallel import get_shear_hgt
 try:
 	import sharppy.sharptab.profile as profile
 	import sharppy.sharptab.utils as utils
@@ -105,17 +109,19 @@ def analyse_events(event_type, domain, model=None, lightning_only=False, lightni
 	
 	return df
 
-def read_upperair_obs(start_date,end_date):
+def read_upperair_obs(start_date,end_date,fout,code="wrfpython"):
 
-	#Read in upper air obs for 2300 UTC soundings 2010-2015 Adelaide AP
+	#Read in upper air obs for Adelaide, Woomera, Sydney and Darwin, and compute convective indices using 
+	# either wrfpython or SHARPpy. Note that if wrfpython is chosen, then all wind indices, k-index, total 
+	# totals and DCAPE are still calculated using SHARPpy
 
 	names = ["record_id","stn_id","date_time","ta","ta_quality","dp","dp_quality",\
 		"rh","rh_quality","ws","ws_quality","wd","wd_quality","p","p_quality",
 		"z","z_quality","symbol"]
 	path = "/g/data/eg3/ab4502/ExtremeWind/obs/upper_air/"
-	fnames = [path + "UA01D_Data_023034_999999999664589.txt", \
-		path + "UA01D_Data_014015_999999999664589.txt", \
-		path + "UA01D_Data_016001_999999999664589.txt", \
+	fnames = [path + "UA01D_Data_023034_999999999664589.txt",\
+		path + "UA01D_Data_014015_999999999664589.txt",\
+		path + "UA01D_Data_016001_999999999664589.txt",\
 		path + "UA01D_Data_066037_999999999664589.txt" ]
 	df = pd.DataFrame()
 	for f in fnames:
@@ -140,6 +146,10 @@ def read_upperair_obs(start_date,end_date):
 	df = pd.DataFrame(columns=["stn_id","mu_cape","ml_cape","k_index","s06","Umean800_600",\
 			"Umean01","dcape","t_totals"])
 
+	stn_det = pd.read_csv("/g/data/eg3/ab4502/ExtremeWind/obs/aws/"+\
+			"daily_aus_full/DC02D_StnDet_999999999643799.txt")
+
+	no_points = []
 	for name, group in groups:
 
 		print(name)
@@ -149,48 +159,152 @@ def read_upperair_obs(start_date,end_date):
 		group = group.dropna(subset=["ta","dp","rh","ua","va","z"])
 
 		if ((group.shape[0] > min_no_of_points) & (group.p.min()<200) & (group.p.max()>850) ):
-			prof = profile.create_profile(pres = group.p, hght = group.z, tmpc = group.ta, \
-					dwpc = group.dp, u = group.ua, v=group.va, strictQC=False)
-			
-			sb_parcel = params.parcelx(prof, flag=1, dp=-10)
-			mu_parcel = params.parcelx(prof, flag=3, dp=-10)
-			ml_parcel = params.parcelx(prof, flag=4, dp=-10)
-			eff_parcel = params.parcelx(prof, flag=6, ecape=100, ecinh=-250, dp=-10)
-			p1km = interp.pres(prof, interp.to_msl(prof, 1000.))
-			p6km = interp.pres(prof, interp.to_msl(prof, 6000.))
-			sfc = prof.pres[prof.sfc]
-			s06_u, s06_v = winds.wind_shear(prof, sfc, p6km)
-			u01, v01  = winds.mean_wind(prof, sfc, p1km)
-			u800_600, v800_600  = winds.mean_wind(prof, 800, 600)
-			s06 = utils.KTS2MS( utils.mag(s06_u, s06_v) )
-			Umean800_600 = utils.KTS2MS( utils.mag(u800_600, v800_600) )
-			Umean01 = utils.KTS2MS( utils.mag(u01, v01) )
-			v_totals = params.v_totals(prof)
-			c_totals = params.c_totals(prof)
-			t_totals = c_totals + v_totals
-			dcape = params.dcape(prof)[0]
-			if dcape < 0:
-				dcape = 0
-			ml_el = ml_parcel.elhght
-			if np.ma.is_masked(ml_el):
-				ml_el = np.nanmax(prof.hght)
+			no_points.append(group.shape[0])
 
-			t = an - (group.date.iloc[0].hour + group.date.iloc[0].minute/60.)
-			t_idx = np.argmin(abs(t))
+			if code == "sharppy":
+				prof = profile.create_profile(pres = group.p, hght = group.z, tmpc = group.ta, \
+						dwpc = group.dp, u = group.ua, v=group.va, strictQC=False)
+				
+				sb_parcel = params.parcelx(prof, flag=1, dp=-10)
+				mu_parcel = params.parcelx(prof, flag=3, dp=-10)
+				ml_parcel = params.parcelx(prof, flag=4, dp=-10)
+				eff_parcel = params.parcelx(prof, flag=6, ecape=100, ecinh=-250, dp=-10)
+				p1km = interp.pres(prof, interp.to_msl(prof, 1000.))
+				p6km = interp.pres(prof, interp.to_msl(prof, 6000.))
+				sfc = prof.pres[prof.sfc]
+				s06_u, s06_v = winds.wind_shear(prof, sfc, p6km)
+				u01, v01  = winds.mean_wind(prof, sfc, p1km)
+				u800_600, v800_600  = winds.mean_wind(prof, 800, 600)
+				s06 = utils.KTS2MS( utils.mag(s06_u, s06_v) )
+				Umean800_600 = utils.KTS2MS( utils.mag(u800_600, v800_600) )
+				Umean01 = utils.KTS2MS( utils.mag(u01, v01) )
+				v_totals = params.v_totals(prof)
+				c_totals = params.c_totals(prof)
+				t_totals = c_totals + v_totals
+				dcape = params.dcape(prof)[0]
+				if dcape < 0:
+					dcape = 0
+				ml_el = ml_parcel.elhght
+				if np.ma.is_masked(ml_el):
+					ml_el = np.nanmax(prof.hght)
 
-			print(ml_parcel.bplus)
+			elif code == "wrfpython":
+				
+				#prof = profile.create_profile(pres = group.p, hght = group.z, \
+				#		tmpc = group.ta, \
+				#		dwpc = group.dp, u = group.ua, v=group.va, \
+				#		strictQC=False)
+				terrain = stn_det.loc[np.in1d(\
+					stn_det["Bureau of Meteorology Station Number"], \
+					group.stn_id.unique()), \
+					"Height of station above mean sea level in metres"]\
+					.values[0]
+				group.loc[:,"q"] = mpcalc.mixing_ratio_from_relative_humidity(\
+					(mpcalc.relative_humidity_from_dewpoint(group.ta.values\
+					*units.units.degC, \
+					group.dp.values*units.units.degC)*100*units.units.percent), \
+					group.ta.values*units.units.degC,\
+					group.p.values*units.units.hPa)
+				res = wrf.cape_3d(group.p.values, group.ta.values+273.15, \
+					group.q.values, group.z.values, \
+					terrain, group.p.max(), ter_follow=False).values
+				
+				ml_inds = ((group.p <= group.p.max()) & \
+					(group.p >= (group.p.max() - 100)))
+				ml_ta_avg = np.ma.masked_where(~ml_inds, group.ta.values).mean()
+				ml_q_avg = np.ma.masked_where(~ml_inds, group.q.values).mean()
+				ml_hgt_avg = np.ma.masked_where(~ml_inds, group.z).mean()
+				ml_p3d_avg = np.ma.masked_where(~ml_inds, group.p).mean()
+				#Insert the mean values into the bottom of the 3d arrays pressure-level arrays
+				ml_ta_arr = np.insert(group.ta.values,0,ml_ta_avg)
+				ml_q_arr = np.insert(group.q.values,0,ml_q_avg)
+				ml_hgt_arr = np.insert(group.z.values,0,ml_hgt_avg)
+				ml_p3d_arr = np.insert(group.p.values,0,ml_p3d_avg)
+				#Sort by ascending p
+				idx = np.argsort(ml_p3d_arr)
+				ml_ta_arr = ml_ta_arr[idx]
+				ml_q_arr = ml_q_arr[idx]
+				ml_hgt_arr = ml_hgt_arr[idx]
+				ml_p3d_arr = ml_p3d_arr[idx]
+				#Calculate CAPE using wrf-python. 
+				cape3d_mlavg = np.squeeze(wrf.cape_3d(ml_p3d_arr,\
+					(ml_ta_arr + 273.15),\
+					ml_q_arr,\
+					ml_hgt_arr,terrain,\
+					group.p.max(),False,meta=False, missing=0))
+				ml_cape = np.ma.masked_where(~((ml_ta_arr==ml_ta_avg) & (ml_p3d_arr==ml_p3d_avg)),\
+					cape3d_mlavg.data[0]).max()
+				ml_cin = np.ma.masked_where(~((ml_ta_arr==ml_ta_avg) & (ml_p3d_arr==ml_p3d_avg)),\
+					cape3d_mlavg.data[1]).max()
+				ml_el = np.ma.masked_where(~((ml_ta_arr==ml_ta_avg) & (ml_p3d_arr==ml_p3d_avg)),\
+					cape3d_mlavg.data[4]).max()
+				cape = res[0]
+				cin = res[1]
+				lfc = res[2]
+				lcl = res[3]
+				el = res[4]
 
-			df = pd.concat([ df, \
-				pd.DataFrame({"stn_id":group.stn_id.iloc[0],"mu_cape":mu_parcel.bplus, \
+				#p1km = interp.pres(prof, interp.to_msl(prof, 1000.))
+				#p6km = interp.pres(prof, interp.to_msl(prof, 6000.))
+				#sfc = prof.pres[prof.sfc]
+				#s06_u, s06_v = winds.wind_shear(prof, sfc, p6km)
+				#u01, v01  = winds.mean_wind(prof, sfc, p1km)
+				#u800_600, v800_600  = winds.mean_wind(prof, 800, 600)
+				#s06 = utils.KTS2MS( utils.mag(s06_u, s06_v) )
+				#Umean800_600 = utils.KTS2MS( utils.mag(u800_600, v800_600) )
+				#Umean01 = utils.KTS2MS( utils.mag(u01, v01) )
+				#v_totals = params.v_totals(prof)
+				#c_totals = params.c_totals(prof)
+				#t_totals = c_totals + v_totals
+				mu_cape = np.max(cape)
+				mu_cin = cin[np.nanargmax(cape)]
+				#dcape = params.dcape(prof)[0]
+				dcape = np.squeeze(get_dcape(group.p.values[np.newaxis][np.newaxis].T, \
+					group.ta.values[np.newaxis][np.newaxis].T, \
+					group.q.values[np.newaxis][np.newaxis].T, \
+					group.z.values[np.newaxis][np.newaxis].T, \
+					group.p.values, group.p.iloc[0], sfc_included=True))
+				thetae = mpcalc.equivalent_potential_temperature(\
+					group.p.values * units.units.hectopascal, \
+					group.ta.values * units.units.degC, \
+					group.dp.values * units.units.degC)
+				thetae[group.z < 1000] = np.nan
+				thetae[group.z > 6000] = np.nan
+				dcape = dcape[np.nanargmin(thetae)]
+				if dcape < 0:
+					dcape = 0
+				print(dcape)
+				#k_index = params.k_index(prof)
+				k_index = 0
+				t_totals = 0
+				s06 = 0
+				Umean01 = 0
+				Umean800_600 = 0
+
+			t =  (group.date.iloc[0].hour + group.date.iloc[0].minute/60.)
+
+			if code == "sharppy":
+				df = pd.concat([ df, \
+					pd.DataFrame({"stn_id":group.stn_id.iloc[0],"mu_cape":mu_parcel.bplus, \
 						"ml_cape":ml_parcel.bplus, "mu_cin":abs(mu_parcel.bminus),\
 						"ml_cin":abs(ml_parcel.bminus),"s06":s06,\
 						"Umean800_600":Umean800_600, "k_index":params.k_index(prof) ,\
 						"Umean01":Umean01,"t_totals":t_totals, "ml_el":ml_el,\
 						"dcape":dcape}, \
-						index=[group.date.iloc[0].replace(hour=int(an[t_idx]), minute=0)])],\
+						index=[group.date.iloc[0].replace(hour=int(t), minute=0)])],\
+					axis=0)
+			elif code == "wrfpython":
+				df = pd.concat([ df, \
+					pd.DataFrame({"stn_id":group.stn_id.iloc[0],"mu_cape":mu_cape, \
+						"ml_cape":ml_cape, "mu_cin":mu_cin,\
+						"ml_cin":ml_cin,"s06":s06,\
+						"Umean800_600":Umean800_600, "k_index":k_index ,\
+						"Umean01":Umean01,"t_totals":t_totals, "ml_el":ml_el,\
+						"dcape":dcape}, \
+						index=[group.date.iloc[0].replace(hour=int(t), minute=0)])],\
 					axis=0)
 
-	df.to_pickle("/g/data/eg3/ab4502/ExtremeWind/points/UA_points.pkl")
+	df.to_pickle("/g/data/eg3/ab4502/ExtremeWind/points/"+fout+".pkl")
 
 	return df
 
@@ -290,28 +404,33 @@ def read_convective_wind_gusts():
 
 	#An INCOMPLETE_MONTH flag is raised at a station if for a given month, less than 90% of days are recorded
 
+
+	#EDIT: REMOVED DISTRICT (between lon and height)
+
 	#Set csv column names
-	names = ["record_id","stn_no","stn_name","locality", "state","lat","lon","district","height","date_str",\
+	names = ["record_id","stn_no","stn_name","locality", "state","lat","lon","height","date_str",\
 		"wind_gust","quality","wind_dir", "wind_dir_quality", "max_gust_str_lt", \
 		"max_gust_time_quality", "eof"]
 
 	#Set csv read data types
 	data_types = dict(record_id=str, stn_no=int, stn_name=str, locality=str, state=str, lat=float, lon=float,\
-				district=str, height=str, date_str=str, wind_gust=float, quality=str, \
-				wind_dir=str, wind_dir_quality=str, max_gust_str_lt=str, max_gust_time_quality=str,\
+				height=str, date_str=str, wind_gust=float, quality=str, \
+				wind_dir=str, wind_dir_quality=str, max_gust_str_lt=str,\
+				max_gust_time_quality=str,\
 				eof=str)
 
 	renames = aus_stn_info()
 
 	#Load csv file
 	print("LOADING TEXT FILE")
-	f = "/g/data/eg3/ab4502/ExtremeWind/obs/aws/daily_aus_full/DC02D_Data_999999999643799.txt"
-	#f = "/short/eg3/ab4502/ExtremeWind/aws/daily_aus_full_2005_2015/DC02D_Data_999999999662395.txt"
+	#f = "/g/data/eg3/ab4502/ExtremeWind/obs/aws/daily_aus_full/DC02D_Data_999999999643799.txt"
+	f = "/g/data/eg3/ab4502/ExtremeWind/obs/aws/daily_aus_full//DC02D_Data_999999999714009.txt"
 	df = pd.read_csv(f, names=names, dtype=data_types, \
 		na_values={"wind_gust":'     ', "max_gust_str_lt":"    "})
 	df = df.replace({"stn_name":renames})
 	df["locality"] = df["locality"].str.strip()
-	df["wind_dir"] = df["wind_dir"].str.strip()
+	#df["wind_dir"] = df["wind_dir"].str.strip()
+	df["wind_dir"] = pd.to_numeric(df.wind_dir, errors="coerce")
 	df["stn_name"] = df["stn_name"].str.strip()
 
 	#Get station info
@@ -383,21 +502,10 @@ def read_convective_wind_gusts():
 
 	#For each gust from 2005-2015, get lightning information. Data is 6 hourly, and has been binned temporally
 	# centred on the time stamp, and spatially into a 0.25 degree grid
-	lightning = load_lightning(domain="aus", daily=False, smoothing=True).set_index(\
-			["date","loc_id"]).reset_index("loc_id")
-	##lightning = load_lightning(domain="aus_large", daily=False, smoothing=True).set_index(\
-	##		["date","loc_id"]).reset_index("loc_id")
-	#locs = np.unique(lightning["loc_id"])
-	#print("RESAMPLING LIGHTNING DATA WITH A -2 AND 2 ROLLING WINDOW...")
-	#lightning_resampled = pd.DataFrame()
-	#for l in locs:
-	#	temp_df = lightning[lightning.loc_id==l]
-	#	temp_df.loc[:,"lightning_prev"] = temp_df["lightning"].sort_index().rolling("6H",\
-	#					closed="both").max()
-	#	temp_df.loc[:,"lightning_next"] = temp_df["lightning"].sort_index().rolling("12H",\
-	#					closed="right").max().shift(-1)
-	#	lightning_resampled = pd.concat([lightning_resampled, temp_df],axis=0)
-
+	#lightning = load_lightning(domain="aus", daily=False, smoothing=True).set_index(\
+	#		["date","loc_id"]).reset_index("loc_id")
+	lightning = read_lightning("lightning_aus_50", rad = 50, dmax = False, smoothing=True, loc_id=loc_id, points=points).\
+			set_index(["date","loc_id"]).reset_index("loc_id")
 
 	#Convert the AWS date-time object to UTC. Needs to be done separately for each station (different time zones)
 	#Time zones from Olson dataset and includes DST info. Not sure if this includes sporadic changes in DST
@@ -412,9 +520,12 @@ def read_convective_wind_gusts():
 	for l in df.stn_name.unique():
 		temp_df = df.loc[df.stn_name==l].reset_index()
 		temp_tz = tzs[temp_df.iloc[0].state.strip()]
+		if l == "Giles":
+			temp_tz = tzs["SA"] 	#Apparently Giles follows the S.A. time zone
 		temp_df["gust_time_utc"] = pd.DatetimeIndex(temp_df.gust_time_lt, tz=temp_tz, \
 						ambiguous='NaT').tz_convert("UTC")
 		temp_df2 = pd.concat([temp_df2, temp_df], axis=0)
+	#For times which aren't able to be converted (NaT) use the UTC offset from the next day
 	temp_df2 = temp_df2.reset_index()
 	nat_inds = np.array(temp_df2[temp_df2.gust_time_utc.isnull()].index)
 	for i in np.arange(0,len(nat_inds)):
@@ -708,7 +819,7 @@ def read_non_synoptic_wind_gusts():
 
 	return df_full
 
-def read_lightning(fname, dmax = False, smoothing=True, loc_id=None, points=None):
+def read_lightning(fname, rad = 100, dmax = False, smoothing=True, loc_id=None, points=None):
 	#Read Andrew Dowdy's lightning dataset for a list of points. Either nearest point (smoothing = False) or 
 	# sum over +/- 1 degree in lat/lon
 	if (loc_id is None) | (points is None):
@@ -728,10 +839,9 @@ def read_lightning(fname, dmax = False, smoothing=True, loc_id=None, points=None
 		time_dt = [dt.datetime(years[year],1,1,0,0,0) + dt.timedelta(hours=int(times[x])) \
 				for x in np.arange(0,len(times))]
 		for p in np.arange(0,len(points)):
-			print(loc_id[p])
 			dist = latlon_dist(points[p][1], points[p][0], y, x)
 			mask = np.zeros(lightning_year.shape, dtype=bool)
-			mask[:,:,:] = (dist > 100)[np.newaxis,:,:]
+			mask[:,:,:] = (dist > rad)[np.newaxis,:,:]
 			#lat_ind = np.argmin(abs(f.variables["lat"][:]-points[p][1]))
 			#lon_ind = np.argmin(abs(f.variables["lon"][:]-points[p][0]))
 			#if smoothing:
@@ -815,61 +925,74 @@ def read_clim_ind(ind):
 
 	#Create annual time series' for each season
 
-	seasons = [[2,3,4],[5,6,7],[8,9,10],[11,12,1]]
-	names = ["FMA","MJJ","ASO","NDJ"]
-	years = np.arange(1979,2017)
+	seasons = [[3,4,5],[6,7,8],[9,10,11],[12,1,2]]
+	names = ["MAM","JJA","SON","DJF"]
+	years = np.arange(1979,2019)
 	if ind == "nino34":
 		#NINO3.4
 		df = pd.read_table("/g/data/eg3/ab4502/ExtremeWind/clim_ind/nino34.txt",names=np.arange(0,13,1),\
 			index_col=0,sep="  ",skiprows=[0,1,2],skipfooter=3,engine="python")
+		df.loc[2019,9] = 26.68
+		df.loc[:,9] = pd.to_numeric(df[9])
 		time_series = pd.DataFrame(columns=np.append(names,"ANN"),index=years)
 		for y in years:
 			for s in np.arange(0,len(seasons)):
 				if s == 3:	#IF NDJ
-					mean = np.mean([df.loc[y,seasons[s][0]],df.loc[y,seasons[s][1]],\
+					mean = np.mean([df.loc[y,seasons[s][0]],df.loc[y+1,seasons[s][1]],\
 					df.loc[y+1,seasons[s][2]]])
 				else:
 					mean = np.mean([df.loc[y,seasons[s][0]],df.loc[y,seasons[s][1]],\
 					df.loc[y,seasons[s][2]]])
-			time_series.loc[y,names[s]] = mean
-			time_series.loc[y,"ANN"] = np.mean(df.loc[y,:])
+				time_series.loc[y,names[s]] = mean
+				time_series.loc[y,"ANN"] = np.mean(df.loc[y,:])
 
 	#DMI
 	elif ind == "dmi":
+		years = np.arange(1979,2018)
 		df = pd.read_table("/g/data/eg3/ab4502/ExtremeWind/clim_ind/dmi.txt",names=np.arange(0,13,1),\
 			index_col=0,sep="  ",skiprows=[0,1,2],skipfooter=6,engine="python")
 		time_series = pd.DataFrame(columns=np.append(names,"ANN"),index=years)
 		for y in years:
 			for s in np.arange(0,len(seasons)):
 				if s == 3:	#IF NDJ
-					mean = np.mean([df.loc[y,seasons[s][0]],df.loc[y,seasons[s][1]],\
+					mean = np.mean([df.loc[y,seasons[s][0]],df.loc[y+1,seasons[s][1]],\
 					df.loc[y+1,seasons[s][2]]])
 				else:
 					mean = np.mean([df.loc[y,seasons[s][0]],df.loc[y,seasons[s][1]],\
 					df.loc[y,seasons[s][2]]])
-			time_series.loc[y,names[s]] = mean
-			time_series.loc[y,"ANN"] = np.mean(df.loc[y,:])
+				time_series.loc[y,names[s]] = mean
+				time_series.loc[y,"ANN"] = np.mean(df.loc[y,:])
 
 	#SAM
 	elif ind == "sam":
+		years = np.arange(1979,2019)
 		df = pd.read_table("/g/data/eg3/ab4502/ExtremeWind/clim_ind/sam.txt",names=np.arange(0,13,1),\
 			index_col=0,sep="  | ",engine="python")
 		time_series = pd.DataFrame(columns=np.append(names,"ANN"),index=years)
 		for y in years:
 			for s in np.arange(0,len(seasons)):
 				if s == 3:	#IF NDJ
-					mean = np.mean([df.loc[y,seasons[s][0]],df.loc[y,seasons[s][1]],\
+					mean = np.mean([df.loc[y,seasons[s][0]],df.loc[y+1,seasons[s][1]],\
 					df.loc[y+1,seasons[s][2]]])
 				else:
 					mean = np.mean([df.loc[y,seasons[s][0]],df.loc[y,seasons[s][1]],\
 					df.loc[y,seasons[s][2]]])
-			time_series.loc[y,names[s]] = mean
-			time_series.loc[y,"ANN"] = np.mean(df.loc[y,:])
-
+				time_series.loc[y,names[s]] = mean
+				time_series.loc[y,"ANN"] = np.mean(df.loc[y,:])
+	elif ind == "mjo":
+		mjo = pd.read_csv("/g/data/eg3/ab4502/ExtremeWind/clim_ind/mjo_rmm.txt", \
+			header=1,  delim_whitespace=True,names=["year","month","day","rmm1","rmm2","phase",\
+			"amplitude","a","b","c","d"],index_col=False).iloc[:,0:7]
+		mjo.loc[:,"datetime"] = pd.to_datetime({"year":mjo.year,"month":mjo.month,"day":mjo.day})
+		mjo = mjo.loc[(mjo["datetime"] >= dt.datetime(1979,1,1)) \
+			& (mjo["datetime"]<dt.datetime(2019,1,1)),:]
+		mjo.loc[:,"active"] = np.where((np.in1d(mjo["phase"],[4,5,6,7])) & (mjo["amplitude"] >= 1), 1, 0)
+		mjo.loc[:,"inactive"] = np.where((np.in1d(mjo["phase"],[8,1,2,3])) & (mjo["amplitude"] >= 1), 1, 0)
+		time_series = mjo.set_index("datetime")[["active","inactive"]]
 	try:
 		return time_series
 	except:
-		raise NameError("MUST BE ""sam"", ""nino34"" or ""dmi""")
+		raise NameError("MUST BE ""sam"", ""nino34"", ""dmi"" or ""mjo""")
 
 def read_bom_shtc(infile):
     """
@@ -1068,5 +1191,6 @@ if __name__ == "__main__":
 
 	#df = read_lightning(False)
 	#read_aws_daily_aus()
-	#read_upperair_obs(dt.datetime(2005,1,1),dt.datetime(2016,1,1))
+	#df = read_upperair_obs(dt.datetime(2005,1,1),dt.datetime(2005,2,1), "UA_wrfpython_2005", "wrfpython")
+	#df = read_upperair_obs(dt.datetime(2005,1,1),dt.datetime(2015,12,31), "UA_sharppy", "sharppy")
 

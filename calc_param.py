@@ -2082,6 +2082,10 @@ def nc_attributes(param):
 		units = ""
 		long_name = "microburst_windspeed_potential_index_goes_mlcape"
 		least_significant_digit = 3
+	elif param == "wmpi":
+		units = ""
+		long_name = "wet_microburst_potential_index_proctor"
+		least_significant_digit = 3
 	elif param == "sfc_thetae":
 		units = "degC"
 		long_name = "sfc_equivalent_potential_temperature"

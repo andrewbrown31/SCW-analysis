@@ -13,6 +13,7 @@ import os
 try:
 	import metpy.units as units
 	import metpy.calc as mpcalc
+	from mpi4py import MPI
 except:
 	pass
 import wrf
@@ -24,7 +25,6 @@ from erai_read import get_mask as  get_erai_mask
 from barra_read import read_barra, read_barra_fc
 from barra_ad_read import read_barra_ad
 from barra_read import get_mask as  get_barra_mask
-from mpi4py import MPI
 
 #-------------------------------------------------------------------------------------------------
 
@@ -851,7 +851,7 @@ if __name__ == "__main__":
 				"dmgwind", "dmgwind_fixed", "hmi", "wmsi_ml",\
 				"dmi", "mwpi_ml", "convgust_wet", "convgust_dry", "windex",\
 				"gustex", "eff_sherb", "sherb", "mmp", \
-				"wndg","mburst","sweat","k_index",\
+				"wndg","mburst","sweat","k_index","wmpi",\
 				\
 				"F10", "Fn10", "Fs10", "icon10", "vgt10", "conv10", "vo10",\
 					])
@@ -1249,11 +1249,23 @@ if __name__ == "__main__":
 		dpd500 = get_var_p_lvl(np.copy(sfc_ta), sfc_p_3d, 500) - \
 				get_var_p_lvl(np.copy(sfc_dp), sfc_p_3d, 500)
 		if int(is_dcape) == 1:
-			dcape, ddraft_temp = get_dcape(np.array(sfc_p_3d[np.concatenate([[1100], p]) >= 500]), \
-						sfc_ta[np.concatenate([[1100], p]) >= 500], \
-						sfc_hgt[np.concatenate([[1100], p]) >= 500], \
-						np.array(p[p>=500]), ps[t])
-			ddraft_temp[ddraft_temp<0] = 0
+			#Define DCAPE as the area between the moist adiabat of a descending parcel and the 
+			# environmental temperature (w/o virtual temperature correction). Starting parcel 
+			# chosen by the pressure level with minimum thetae
+			dcape, ddraft_temp = get_dcape(np.array(sfc_p_3d[np.concatenate([[1100], p]) >= 300]), \
+						sfc_ta[np.concatenate([[1100], p]) >= 300], \
+						sfc_q[np.concatenate([[1100], p]) >= 300], \
+						sfc_hgt[np.concatenate([[1100], p]) >= 300], \
+						np.array(p[p>=300]), ps[t])
+			sfc_thetae300 = sfc_thetae_unit[np.concatenate([[1100], p]) >= 300].data
+			sfc_p300 = sfc_p_3d[np.concatenate([[1100], p]) >= 300]
+			sfc_thetae300[(p_3d[t] - sfc_p300) > 400] = np.nan 
+			sfc_thetae300[(sfc_p300 > p_3d[t])] = np.nan 
+			#Calculate for all levels (sfc to 400 hPa agl), and then mask based on height agl 
+			dcape = np.nanargmin(sfc_thetae300, axis=0).choose(dcape)
+			ddraft_temp = tas[t] - \
+				np.nanargmin(sfc_thetae300, axis=0).choose(ddraft_temp)
+			ddraft_temp[(ddraft_temp<0) | (np.isnan(ddraft_temp))] = 0
 		else:
 			ddraft_temp = np.zeros(dpd500.shape)
 			dcape = np.zeros(dpd500.shape)
@@ -1358,6 +1370,8 @@ if __name__ == "__main__":
 		wmsi_ml = (ml_cape * te_diff) / 1000
 		dmi = lr750_500 + dpd700 - dpd500
 		mwpi_ml = (ml_cape / 100.) + (lr850_670 + dpd850 - dpd670)
+		wmpi = np.sqrt( np.power(melting_hgt,2) * (lr_freezing / 1000. - 5.5e-3) + \
+				melting_hgt * (q1 - 1.5*q_melting) / 3.) /5.
 		dmi[dmi<0] = 0
 		hmi[hmi<0] = 0
 		wmsi_ml[wmsi_ml<0] = 0
@@ -1407,8 +1421,8 @@ if __name__ == "__main__":
 		output = fill_output(output, t, param, ps_chunk, "eff_cape", eff_cape)
 		output = fill_output(output, t, param, ps_chunk, "sb_cape", sb_cape)
 		output = fill_output(output, t, param, ps_chunk, "ml_cin", ml_cin)
-		output = fill_output(output, t, param, ps_chunk, "mu_cin", ml_cin)
-		output = fill_output(output, t, param, ps_chunk, "eff_cin", ml_cin)
+		output = fill_output(output, t, param, ps_chunk, "mu_cin", mu_cin)
+		output = fill_output(output, t, param, ps_chunk, "eff_cin", eff_cin)
 		output = fill_output(output, t, param, ps_chunk, "sb_cin", sb_cin)
 		output = fill_output(output, t, param, ps_chunk, "ml_lcl", ml_lcl)
 		output = fill_output(output, t, param, ps_chunk, "mu_lcl", mu_lcl)
@@ -1501,6 +1515,7 @@ if __name__ == "__main__":
 		output = fill_output(output, t, param, ps_chunk, "wmsi_ml", wmsi_ml)
 		output = fill_output(output, t, param, ps_chunk, "dmi", dmi)
 		output = fill_output(output, t, param, ps_chunk, "mwpi_ml", mwpi_ml)
+		output = fill_output(output, t, param, ps_chunk, "wmpi", wmpi)
 		output = fill_output(output, t, param, ps_chunk, "ship", ship)
 		output = fill_output(output, t, param, ps_chunk, "scp", scp)
 		output = fill_output(output, t, param, ps_chunk, "scp_fixed", scp_fixed)

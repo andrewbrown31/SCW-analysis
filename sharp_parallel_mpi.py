@@ -622,7 +622,7 @@ if __name__ == "__main__":
 		if k_index < 0:
 			k_index = 0
 
-		#Wind gust forecasting stratergy as in Miller (1972)
+		#Wind gust forecasting strategy as in Miller (1972)
 		T1 = abs( thermo.wetlift(prof.pres[0], prof.tmpc[0], 600) - interp.temp(prof, 600) )
 		T2 = abs( thermo.wetlift(pwb0, interp.temp(prof, pwb0), sfc) - prof.tmpc[0] )
 		Vprime = utils.KTS2MS( 13 * np.sqrt( (T1 + T2) / 2) + (1/3 * (Umean01) ) )
@@ -764,8 +764,6 @@ if __name__ == "__main__":
 					eff_pcl.bplus * utils.KTS2MS(s06)
 				output[i,np.where(param=="wmsi_mu")[0][0]] = \
 					wmsi_mu
-				output[i,np.where(param=="mwpi_mu")[0][0]] = \
-					mwpi_mu
 
 			#Winds
 			output[i,np.where(param=="Uwindinf")[0][0]] = \
@@ -921,6 +919,9 @@ if __name__ == "__main__":
 		print("Time taken for each element on processor 1: %s" \
 			%((dt.datetime.now() - start)/float(ua_chunk.shape[0])), )
 
+	print(output.shape, output_data.shape, output.dtype, output_data.dtype)
+	print(split_sizes_output)
+	print(displacements_output)
 	#Gather output data together to root node
 	comm.Gatherv(output, \
 		[output_data, split_sizes_output, displacements_output, MPI.DOUBLE], \

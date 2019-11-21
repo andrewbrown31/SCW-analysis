@@ -5,9 +5,9 @@ import datetime as dt
 import glob
 import pandas as pd
 import xarray as xr
-from calc_param import get_dp
 
 from metpy.calc import vertical_velocity_pressure as omega
+import metpy.calc as mpcalc
 from metpy.units import units
 
 def read_barra(domain,times):
@@ -245,15 +245,18 @@ def read_barra_fc(domain,times):
 		if pres_full.shape[0] == ta_file["air_temp"].shape[1]:
 
 			#Load data
-			temp_ta = ta_file["air_temp"][np.in1d(times, date_list), p_ind,lat_ind,lon_ind] - 273.15
-			temp_ua = ua_file["wnd_ucmp"][np.in1d(times, date_list),p_ind,lat_ind,lon_ind]
-			temp_va = va_file["wnd_vcmp"][np.in1d(times, date_list),p_ind,lat_ind,lon_ind]
-			temp_hgt = z_file["geop_ht"][np.in1d(times, date_list),p_ind,lat_ind,lon_ind]
-			temp_hur = hur_file["relhum"][np.in1d(times, date_list),p_ind,lat_ind,lon_ind]
+			temp_ta = ta_file["air_temp"][np.in1d(times, date_list), ta_file["pressure"][:] >= 100,\
+				lat_ind,lon_ind] - 273.15
+			temp_ua = ua_file["wnd_ucmp"][np.in1d(times, date_list), ua_file["pressure"][:] >= 100,lat_ind,lon_ind]
+			temp_va = va_file["wnd_vcmp"][np.in1d(times, date_list),va_file["pressure"][:] >= 100,lat_ind,lon_ind]
+			temp_hgt = z_file["geop_ht"][np.in1d(times, date_list),z_file["pressure"][:] >= 100,lat_ind,lon_ind]
+			temp_hur = hur_file["relhum"][np.in1d(times, date_list),hur_file["pressure"][:] >= 100,lat_ind,lon_ind]
 			temp_hur[temp_hur<0] = 0
 			temp_hur[temp_hur>100] = 100
 			temp_dp = get_dp(temp_ta,temp_hur)
-			temp_wap = omega( w_file["vertical_wnd"][np.in1d(times, date_list),p_ind,lat_ind,lon_ind] * (units.metre / units.second),\
+			temp_wap = omega( w_file["vertical_wnd"][np.in1d(times, date_list),\
+				(np.in1d(w_file["pressure"][:], pres_full)) & (w_file["pressure"][:] >= 100),\
+				lat_ind,lon_ind] * (units.metre / units.second),\
 				p_3d * (units.hPa), \
 				temp_ta * units.degC )
 
@@ -580,7 +583,7 @@ def to_points_loop(loc_id,points,fname,start_year,end_year,variables=False):
 	#As in to_points(), but by looping over monthly data
 	from dask.diagnostics import ProgressBar
 	import gc
-	#ProgressBar().register()
+	ProgressBar().register()
 
 	dates = []
 	for y in np.arange(start_year,end_year+1):
@@ -634,6 +637,82 @@ def to_points_loop(loc_id,points,fname,start_year,end_year,variables=False):
 
 	df.sort_values(["loc_id","time"]).to_pickle("/g/data/eg3/ab4502/ExtremeWind/points/"+fname+".pkl")
 
+def to_points_loop_ctk(loc_id,points,fname,start_year,end_year,variable):
+
+	#As in to_points_loop() but for Nathan's CTK data
+	#loc_id is a list of strings with names for each point
+	#points is a list of lat-lon pairings, same length as loc_id
+	#fname is the name of the pickle output file
+	#start_year and end_year are ints
+	#variable is a string, which must be a key within the "codes" dictionay below
+
+	from dask.diagnostics import ProgressBar
+	import gc
+	import warnings
+	warnings.simplefilter("ignore")
+
+	#Create monthly list of dates from start year to end year
+	dates = []
+	for y in np.arange(start_year,end_year+1):
+		for m in np.arange(1,13):
+			dates.append(dt.datetime(y,m,1,0,0,0))
+
+	#Initialise output dataframe
+	df = pd.DataFrame()
+
+	#Explicitly set grib codes for convective ctk parameters. The values are the parameter codes within
+	# the grib file, the key is just what you want to call the output
+	codes = {"ml_cape":"39", "ml_cin":"41", "eff_cape":"99", "eff_cin":"101",\
+			"s06":"132"}
+
+	#Load BARRA-R LSM
+	lsm = nc.Dataset("/g/data/ma05/BARRA_R/v1/static/lnd_mask-an-slv-PT0H-BARRA_R-v1.nc").\
+		variables["lnd_mask"][:]
+
+	#Loop over monthly dates, read netcdf data and extract point time series
+	for t in np.arange(len(dates)):
+
+		#Load grib files
+		print(dates[t])
+		files = glob.glob("/g/data/ma05/BARRA_R/v1/products/ctk/"+
+			dates[t].strftime("%Y")+"/"+dates[t].strftime("%m")+"/*.grib2")
+		files.sort()
+		f=xr.open_mfdataset(files, engine="cfgrib", backend_kwargs={"read_keys":["parameterName"], \
+			"filter_by_keys":{"parameterName":codes[variable]}})
+
+		#Use LSM
+		lat = f.latitude.data
+		lon = f.longitude.data
+		x,y = np.meshgrid(lon,lat)
+		x[lsm==0] = np.nan
+		y[lsm==0] = np.nan
+
+		#For each point of interest, get the lat/lon index
+		dist_lon = []
+		dist_lat = []
+		for i in np.arange(len(loc_id)):
+			dist = np.sqrt(np.square(x-points[i][0]) + \
+				np.square(y-points[i][1]))
+			temp_lat,temp_lon = np.unravel_index(np.nanargmin(dist),dist.shape)
+			dist_lon.append(temp_lon)
+			dist_lat.append(temp_lat)
+
+		#Extract time series from xarray DataSet
+		temp_df = f.unknown.isel(latitude = xr.DataArray(dist_lat, dims="points"), \
+				longitude = xr.DataArray(dist_lon, dims="points")).persist().to_dataframe()
+
+		#Clean up time series dataframe
+		temp_df = temp_df.reset_index()
+		for p in np.arange(len(loc_id)):
+			temp_df.loc[temp_df.points==p,"loc_id"] = loc_id[p]
+		temp_df = temp_df.drop("points",axis=1).rename(columns={"unknown":variable})
+		df = pd.concat([df, temp_df])
+		f.close()
+		gc.collect()
+
+	#Save time series output
+	df.sort_values(["loc_id","time"]).to_pickle("/g/data/eg3/ab4502/ExtremeWind/points/"+fname+".pkl")
+
 def get_aus_stn_info():
 	names = ["id", "stn_no", "district", "stn_name", "1", "2", "lat", "lon", "3", "4", "5", "6", "7", "8", \
 			"9", "10", "11", "12", "13", "14", "15", "16"]	
@@ -678,21 +757,40 @@ def get_aus_stn_info():
 	points = [(df.lon.iloc[i], df.lat.iloc[i]) for i in np.arange(df.shape[0])]
 	return [df.stn_name.values,points]
 
+def get_dp(ta,hur,dp_mask=True):
+	#Dew point approximation found at https://gist.github.com/sourceperl/45587ea99ff123745428
+	#Same as "Magnus formula" https://en.wikipedia.org/wiki/Dew_point
+	#For points where RH is zero, set the dew point temperature to -85 deg C
+	#EDIT: Leave points where RH is zero masked as NaNs. Hanlde them after creating a SHARPpy object (by 
+	# making the missing dp equal to the mean of the above and below layers)
+	#EDIT: Replace with metpy code
 
+	dp = np.array(mpcalc.dewpoint_rh(ta * units.degC, hur * units.percent))
+
+	if dp_mask:
+		return dp
+	else:
+		dp = np.array(dp)
+		dp[np.isnan(dp)] = -85.
+		return dp
 
 if __name__ == "__main__":
 
 	if len(sys.argv) > 1:
-		start_time = int(sys.argv[1])
-		end_time = int(sys.argv[2])
+		start_year = int(sys.argv[1])
+		end_year = int(sys.argv[2])
+	if len(sys.argv) > 3:
+		variable = sys.argv[3]
 	
 	#loc_id = ['Melbourne', 'Wollongong', 'Gympie', 'Grafton', 'Canberra', 'Marburg', \
 	#	'Adelaide', 'Namoi', 'Perth', 'Hobart']
-	#radar_latitude = [-37.8553, -34.2625, -25.9574, -29.622, -35.6614, -27.608, -34.6169, -31.0236, -32.3917, -43.1122]
-	#radar_longitude = [144.7554, 150.8752, 152.577, 152.951, 149.5122, 152.539, 138.4689, 150.1917, 115.867, 147.8057]
+	#radar_latitude = [-37.8553, -34.2625, -25.9574, -29.622, -35.6614, -27.608, -34.6169,\
+	#		-31.0236, -32.3917, -43.1122]
+	#radar_longitude = [144.7554, 150.8752, 152.577, 152.951, 149.5122, 152.539, 138.4689, \
+	#		150.1917, 115.867, 147.8057]
 	#points = [(radar_longitude[i], radar_latitude[i]) for i in np.arange(len(radar_latitude))]
 
 	loc_id, points = get_aus_stn_info()
 
-	to_points_loop(loc_id, points, "barra_allvars_"+str(start_time)+"_"+str(end_time), \
-			start_time, end_time)
+	to_points_loop(loc_id,points,"barra_hail_"+str(start_year)+"_"+str(end_year),\
+			start_year,end_year,variables=["ml_cape","s06","mlcape*s06","ship","mhgt","wbz","lr13","qmean03"])

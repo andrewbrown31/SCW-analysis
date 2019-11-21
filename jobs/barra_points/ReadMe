@@ -1,0 +1,7 @@
+
+Extract BARRA 1-hr point data from netcdf convective parameter output
+
+This is a simple driver for the python script barra_read.py
+
+Any changes to the __main__ portion of that script will be reflected in the output of this driver (e.g. which spatial points being extracted)
+

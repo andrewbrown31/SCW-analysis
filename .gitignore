@@ -1,10 +1,9 @@
 figs/
 SHARPpy/
 SkewT/
-jobs/
+jobs/messages/
 *.csv
 *.pyc
 *.swp
 *.swo
 *.csh
-*.sh

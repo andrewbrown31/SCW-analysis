@@ -1,3 +1,4 @@
+import sys
 import xarray as xr
 import netCDF4 as nc
 import numpy as np
@@ -140,7 +141,7 @@ def get_pressure(top):
 
 def get_lsm():
 	#Load the ERA-Interim land-sea mask (land = 1)
-	lsm_file = nc.Dataset("/short/eg3/ab4502/erai_lsm.nc")
+	lsm_file = nc.Dataset("/g/data/ub4/era5/netcdf/static_era5.nc")
 	lsm = np.squeeze(lsm_file.variables["lsm"][:])
 	lsm_lon = np.squeeze(lsm_file.variables["longitude"][:])
 	lsm_lat = np.squeeze(lsm_file.variables["latitude"][:])
@@ -199,11 +200,11 @@ def get_lat_lon():
 
 def get_mask(lon,lat):
 	#Return lsm for a given domain (with lats=lat and lons=lon)
-	nat_lon,nat_lat = get_lat_lon()
+	lsm,nat_lon,nat_lat = get_lsm()
 	lon_ind = np.where((nat_lon >= lon[0]) & (nat_lon <= lon[-1]))[0]
 	lat_ind = np.where((nat_lat >= lat[-1]) & (nat_lat <= lat[0]))[0]
-	lsm = reform_lsm(nat_lon,nat_lat)
 	lsm_domain = lsm[(lat_ind[0]):(lat_ind[-1]+1),(lon_ind[0]):(lon_ind[-1]+1)]
+	lsm_domain = np.where(lsm_domain > .5, 1, 0)
 
 	return lsm_domain
 
@@ -287,11 +288,70 @@ def to_points():
 	df_new = pd.merge(df_orig, df[["time","loc_id","wbz","Vprime"]], on=["time","loc_id"])
 	df_new.to_pickle("/g/data/eg3/ab4502/ExtremeWind/points/erai_points_sharppy_aus_1979_2017.pkl")
 
+def to_points_loop(loc_id,points,fname,start_year,end_year,variables=False):
+
+	#As in to_points(), but by looping over monthly data
+	from dask.diagnostics import ProgressBar
+	import gc
+	#ProgressBar().register()
+
+	dates = []
+	for y in np.arange(start_year,end_year+1):
+		for m in np.arange(1,13):
+			dates.append(dt.datetime(y,m,1,0,0,0))
+
+	df = pd.DataFrame()
+
+	#Read netcdf data
+	for t in np.arange(len(dates)):
+		print(dates[t])
+		f=xr.open_dataset(glob.glob("/g/data/eg3/ab4502/ExtremeWind/aus/"+\
+			"era5/era5_"+dates[t].strftime("%Y%m")+"*.nc")[0],\
+			chunks={"lat":139, "lon":178, "time":50}, engine="h5netcdf")
+
+		#Setup lsm
+		lat = f.coords.get("lat").values
+		lon = f.coords.get("lon").values
+		lsm = get_mask(lon,lat)
+		x,y = np.meshgrid(lon,lat)
+		x[lsm==0] = np.nan
+		y[lsm==0] = np.nan
+
+		dist_lon = []
+		dist_lat = []
+		for i in np.arange(len(loc_id)):
+
+			dist = np.sqrt(np.square(x-points[i][0]) + \
+				np.square(y-points[i][1]))
+			temp_lat,temp_lon = np.unravel_index(np.nanargmin(dist),dist.shape)
+			dist_lon.append(temp_lon)
+			dist_lat.append(temp_lat)
+
+		try:
+			f=f[variables]
+		except:
+			pass
+
+		temp_df = f.isel(lat = xr.DataArray(dist_lat, dims="points"), \
+				lon = xr.DataArray(dist_lon, dims="points")).persist().to_dataframe()
+
+		temp_df = temp_df.reset_index()
+
+		for p in np.arange(len(loc_id)):
+			temp_df.loc[temp_df.points==p,"loc_id"] = loc_id[p]
+
+		temp_df = temp_df.drop("points",axis=1)
+		df = pd.concat([df, temp_df])
+		f.close()
+		gc.collect()
+
+	df.sort_values(["loc_id","time"]).to_pickle("/g/data/eg3/ab4502/ExtremeWind/points/"+fname+".pkl")
+
 def get_aus_stn_info():
 	names = ["id", "stn_no", "district", "stn_name", "1", "2", "lat", "lon", "3", "4", "5", "6", "7", "8", \
 			"9", "10", "11", "12", "13", "14", "15", "16"]	
 
-	df = pd.read_csv("/short/eg3/ab4502/ExtremeWind/aws/daily_aus_full/DC02D_StnDet_999999999643799.txt",\
+	df = pd.read_csv("/g/data/eg3/ab4502/ExtremeWind/obs/aws/daily_aus_full/DC02D_StnDet_999999999643799.txt",\
 		names=names, header=0)
 
 	#Dict to map station names to
@@ -339,4 +399,11 @@ def get_aus_stn_info():
 
 if __name__ == "__main__":
 
-	to_points()
+	if len(sys.argv) > 1:
+		start_time = int(sys.argv[1])
+		end_time = int(sys.argv[2])
+
+	loc_id, points = get_aus_stn_info()
+
+	to_points_loop(loc_id, points, "era5_allvars_"+str(start_time)+"_"+str(end_time), \
+			start_time, end_time)

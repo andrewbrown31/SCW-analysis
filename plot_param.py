@@ -1,3 +1,4 @@
+import itertools
 from barra_read import date_seq
 import numpy as np
 import datetime as dt
@@ -11,33 +12,239 @@ import os
 from scipy.interpolate import griddata
 from scipy.stats import gaussian_kde
 from matplotlib.colors import LogNorm
-from obs_read import load_lightning, analyse_events
+from obs_read import load_lightning, analyse_events, get_aus_stn_info
 import pandas as pd
-#import seaborn as sb
+from scipy.stats import spearmanr as spr
+import matplotlib
 
-def compare_obs_soundings():
+def plot_ranked_hss():
 
-	#Compare observed soundings (2005 - 2015) at Adelaide AP, Woomera, Darwin and Sydney to
-	# ERA-Interim (and later, ERA5 and BARRA-R)
+	#Load in ERA5 and BARRA HSS stats, and plot both
 
-	erai = pd.read_pickle("/g/data/eg3/ab4502/ExtremeWind/points/erai_points_sharppy_aus_1979_2017.pkl").set_index("time")
-	obs = pd.read_pickle("/g/data/eg3/ab4502/ExtremeWind/points/UA_points.pkl").reset_index().rename({"index":"time"}, axis=1).set_index("time")
-	locs = ["Adelaide", "Woomera", "Sydney", "Darwin"]
-	stn_id = [23034, 16001, 66037, 14015]
-	#params = obs.drop("stn_id", axis=1).columns.values
-	params = ['k_index']
-	for p in params:
-		plt.figure()
-		for i in np.arange(len(locs)):
-			obs_p_df = obs.loc[obs["stn_id"]==stn_id[i],p].sort_index()
-			erai_p_df = erai.loc[erai["loc_id"]==locs[i], p]
-			p_df = pd.merge(obs_p_df, erai_p_df, suffixes=("","_erai"), on="time").dropna()
-			plt.subplot(2,2,i+1)
-			plt.title(locs[i])
-			plt.scatter(p_df.loc[p_df[p]>=0, p], p_df.loc[p_df[p]>=0, p+"_erai"], visible="False", \
-				label=round(np.corrcoef(p_df.loc[p_df[p]>=0, p], p_df.loc[p_df[p]>=0, p+"_erai"])[1,0], 3))
-			plt.legend()
-		plt.suptitle(p)
+	era5, df = optimise_pss("/g/data/eg3/ab4502/ExtremeWind/points/era5_allvars_2005_2015.pkl",\
+			T=1000, compute=False, l_thresh=2, is_pss="hss", model_name="era5")
+	barra, df = optimise_pss("/g/data/eg3/ab4502/ExtremeWind/points/barra_allvars_2005_2015.pkl",\
+			T=1000, compute=False, l_thresh=2, is_pss="hss", model_name="barra_fc")
+	hss = pd.merge(era5, barra, how="outer", suffixes=("_era5","_barra"), left_index=True, right_index=True)
+	hss = hss.rename(index={"ship":"SHIP", "k_index":"K-index", "ml_cape":"MLCAPE", "srhe_left":"SRHE", \
+		"ml_el":"MLEL", "mu_cape":"MUCAPE", "eff_cape":"Eff-CAPE", "sb_cape":"SBCAPE", \
+		"wmsi_ml":"WMSI", "dcp":"DCP", "mlcape*s06":"MLCS6", "eff_sherb":"SHERBE", "ebwd":"EBWD",\
+		"mu_el":"MUEL", "eff_el":"Eff-EL", "sb_el":"SBEL", "mucape*s06":"MUCS6", "sweat":"SWEAT",\
+		"Umean800_600":"Umean800-600", "Ust_left":"Ust", "sherb":"SHERB", "t_totals":"T-totals", \
+		"scp_fixed":"SCP", "dmgwind_fixed":"DmgWind", "lr36":"LR36", "lr_freezing":"LR-Freezing", \
+		"srh06_left":"SRH06", "s06":"S06", "wg10":"WindGust", "srh01_left":"SRH01",\
+		"qmeansubcloud":"Qmeansubcloud", "s010":"S010", "effcape*s06":"Eff-CS6", "mmp":"MMP",\
+		"sbcape*s06":"SBCS6", "q_melting":"Qmelting", "gustex":"GUSTEX"}) 
+
+	titles = ["Lightning", "Extreme measured gust conditioned on lightning", \
+			"Measured convective gust", "STA wind report"]
+	event = ["pss_light", "pss_conv_aws_cond_light", "pss_conv_aws", "pss_sta"]
+	for i in np.arange(len(event)):
+		ax = plt.subplot(2,2,i+1)
+		if i < 3:
+			hss.sort_values(event[i]+"_barra", na_position="first", ascending=True).iloc[-20:]\
+				[[event[i]+"_barra", event[i]+"_era5"]].plot.\
+				barh(color=["k","grey"],legend=False,ax=ax)
+		else:
+			hss.sort_values(event[i]+"_barra", na_position="first", ascending=True).iloc[-20:]\
+				[[event[i]+"_barra", event[i]+"_era5"]].\
+				rename(columns={event[i]+"_barra":"BARRA", event[i]+"_era5":"ERA5"}).\
+				plot.barh(color=["k","grey"],legend=True,ax=ax)
+		plt.title(titles[i])
+		if i in [2,3]:
+			plt.xlabel("HSS")
+		
+	
+
+def plot_roc_curve():
+
+	#Plot a ROC curve for two variables based on BARRA data, and label the maximised
+	# HSS and PSS. One variable is a fitted logistic equation
+	
+	from event_analysis import optimise_pss 
+	pss_df, mod = optimise_pss("/g/data/eg3/ab4502/ExtremeWind/points/barra_allvars_2005_2015.pkl",
+	T=1000, compute=False, l_thresh=2, is_pss="hss", model_name="barra_fc") 
+	from sklearn.linear_model import LogisticRegression 
+	predictors = ["ml_el","k_index","dcape","Umean06","t_totals","U1","ml_cin"]
+	logit = LogisticRegression(class_weight="balanced", solver="liblinear",max_iter=1000)
+	logit_mod = logit.fit(mod[predictors], mod["is_conv_aws"])
+	p = logit_mod.predict_proba(mod[predictors])[:,1]
+	pods = [] 
+	fars = [] 
+	pss = [] 
+	hss = [] 
+	hss_free = [] 
+	thresh = np.linspace(0,1,100) 
+	for t in thresh: 
+		hits = ((mod["is_conv_aws"]==1) & (p>=t)).sum() 
+		misses = ((mod["is_conv_aws"]==1) & (p<t)).sum() 
+		fa = ((mod["is_conv_aws"]==0) & (p>=t)).sum() 
+		cn = ((mod["is_conv_aws"]==0) & (p<t)).sum() 
+		pods.append(hits / (hits+misses)) 
+		fars.append(fa / (fa+cn)) 
+		pss.append((hits / (hits+misses)) - (fa / (fa + cn))) 
+		hss_free.append(( 2*(hits*cn - misses*fa) ) / ( misses*misses + fa*fa + 2*hits*cn + (misses + fa) * (hits + cn) )) 
+		if (hits / (hits+misses)) > 0.67: 
+			hss.append(( 2*(hits*cn - misses*fa) ) / ( misses*misses + fa*fa + 2*hits*cn + (misses + fa) * (hits + cn) )) 
+	plt.plot(fars, pods, color="g", label="logistic equation") 
+	plt.text(fars[np.argmax(pss)], pods[np.argmax(pss)]+.01, "PSS="+str(round(np.max(pss),2))+"("+str(round(thresh[np.argmax(pss)],1))+")", color="g") 
+	plt.plot(fars[np.argmax(pss)], pods[np.argmax(pss)], "ro") 
+	plt.text(fars[np.argmax(hss)], pods[np.argmax(hss)]+.01, "HSS="+str(round(np.max(hss),2))+"("+str(round(thresh[np.argmax(hss)],1))+")", color="g") 
+	plt.plot(fars[np.argmax(hss)], pods[np.argmax(hss)], "ro") 
+	plt.text(fars[np.argmax(hss_free)], pods[np.argmax(hss_free)]+.01, "HSS (2)="+str(round(np.max(hss_free),2))+"("+str(round(thresh[np.argmax(hss_free)],1))+")", color="g") 
+	plt.plot(fars[np.argmax(hss_free)], pods[np.argmax(hss_free)], "ro") 
+
+	predictors = ["ml_el","k_index","dcape","Umean06","t_totals","U1"]
+	logit = LogisticRegression(class_weight="balanced", solver="liblinear",max_iter=1000)
+	logit_mod = logit.fit(mod[predictors], mod["is_conv_aws"])
+	p = logit_mod.predict_proba(mod[predictors])[:,1]
+	pods = [] 
+	fars = [] 
+	pss = [] 
+	hss = [] 
+	hss_free = [] 
+	thresh = np.linspace(0,1,100) 
+	for t in thresh: 
+		hits = ((mod["is_conv_aws"]==1) & (p>=t)).sum() 
+		misses = ((mod["is_conv_aws"]==1) & (p<t)).sum() 
+		fa = ((mod["is_conv_aws"]==0) & (p>=t)).sum() 
+		cn = ((mod["is_conv_aws"]==0) & (p<t)).sum() 
+		pods.append(hits / (hits+misses)) 
+		fars.append(fa / (fa+cn)) 
+		pss.append((hits / (hits+misses)) - (fa / (fa + cn))) 
+		hss_free.append(( 2*(hits*cn - misses*fa) ) / ( misses*misses + fa*fa + 2*hits*cn + (misses + fa) * (hits + cn) )) 
+		if (hits / (hits+misses)) > 0.67: 
+			hss.append(( 2*(hits*cn - misses*fa) ) / ( misses*misses + fa*fa + 2*hits*cn + (misses + fa) * (hits + cn) )) 
+	plt.plot(fars, pods, color="k", label="logistic equation w ml_cin") 
+	plt.text(fars[np.argmax(pss)], pods[np.argmax(pss)]+.01, "PSS="+str(round(np.max(pss),2))+"("+str(round(thresh[np.argmax(pss)],1))+")", color="k") 
+	plt.plot(fars[np.argmax(pss)], pods[np.argmax(pss)], "ro") 
+	plt.text(fars[np.argmax(hss)], pods[np.argmax(hss)]+.01, "HSS="+str(round(np.max(hss),2))+"("+str(round(thresh[np.argmax(hss)],1))+")", color="k") 
+	plt.plot(fars[np.argmax(hss)], pods[np.argmax(hss)], "ro") 
+	plt.text(fars[np.argmax(hss_free)], pods[np.argmax(hss_free)]+.01, "HSS (2)="+str(round(np.max(hss_free),2))+"("+str(round(thresh[np.argmax(hss_free)],1))+")", color="k") 
+	plt.plot(fars[np.argmax(hss_free)], pods[np.argmax(hss_free)], "ro") 
+
+	pods = []  
+	fars = []  
+	pss = [] 
+	hss = [] 
+	hss_free = [] 
+	thresh = np.linspace(0,mod["t_totals"].max(),100)  
+	for t in thresh:  
+		hits = ((mod["is_conv_aws"]==1) & (mod["t_totals"]>=t)).sum()  
+		misses = ((mod["is_conv_aws"]==1) & (mod["t_totals"]<t)).sum()  
+		fa = ((mod["is_conv_aws"]==0) & (mod["t_totals"]>=t)).sum()  
+		cn = ((mod["is_conv_aws"]==0) & (mod["t_totals"]<t)).sum()  
+		pods.append(hits / (hits+misses)) 
+		fars.append(fa / (fa+cn))  
+		pss.append((hits / (hits+misses)) - (fa / (fa + cn))) 
+		hss_free.append(( 2*(hits*cn - misses*fa) ) / ( misses*misses + fa*fa + 2*hits*cn + (misses + fa) * (hits + cn) )) 
+		if (hits / (hits+misses)) > 0.67: 
+			hss.append(( 2*(hits*cn - misses*fa) ) / ( misses*misses + fa*fa + 2*hits*cn + (misses + fa) * (hits + cn) )) 
+	plt.plot(fars, pods, color="b", label="total totals")
+	plt.text(fars[np.argmax(pss)], pods[np.argmax(pss)]-.05, "PSS="+str(round(np.max(pss),2))+"("+str(round(thresh[np.argmax(pss)],1))+")", color="b") 
+	plt.plot(fars[np.argmax(pss)], pods[np.argmax(pss)], "ro")  
+	plt.text(fars[np.argmax(hss)], pods[np.argmax(hss)]-.05, "HSS="+str(round(np.max(hss),2))+"("+str(round(thresh[np.argmax(hss)],1))+")", color="b") 
+	plt.plot(fars[np.argmax(hss)], pods[np.argmax(hss)], "ro") 
+	plt.text(fars[np.argmax(hss_free)], pods[np.argmax(hss_free)]+.01, "HSS (2)="+str(round(np.max(hss_free),2))+"("+str(round(thresh[np.argmax(hss_free)],1))+")", color="b") 
+	plt.plot(fars[np.argmax(hss_free)], pods[np.argmax(hss_free)], "ro") 
+	plt.plot([0,1],[0,1],"k") 
+	plt.axhline(0.67, color="k", linestyle="--") 
+	plt.ylabel("POD") 
+	plt.xlabel("POFD") 
+	plt.legend() 
+	plt.show() 
+
+def compare_ctk_soundings():
+
+	#Create a merged dataframe of BARRA pressure-level CAPE, model level CAPE and radiosonde derived CAPE
+
+	#Load data
+	prs = pd.read_pickle("/g/data/eg3/ab4502/ExtremeWind/points/barra_allvars_2005_2015.pkl")
+	#mdl_cin = pd.read_pickle("/g/data/eg3/ab4502/ExtremeWind/points/barra_ctk_ml_cin_2005_2015.pkl")
+	#mdl_cape = pd.read_pickle("/g/data/eg3/ab4502/ExtremeWind/points/barra_ctk_ml_cape_2005_2015.pkl")
+	#mdl = pd.merge(mdl_cin, mdl_cape[["time","loc_id","ml_cape"]], on=["time","loc_id"])
+	mdl = pd.read_pickle("/g/data/eg3/ab4502/ExtremeWind/points/barra_allvars_2005_2015.pkl")
+	obs_wrf = pd.read_pickle("/g/data/eg3/ab4502/ExtremeWind/points/UA_wrfpython.pkl").reset_index().rename(columns={"index":"time"})
+	obs_sharp = pd.read_pickle("/g/data/eg3/ab4502/ExtremeWind/points/UA_sharppy.pkl").reset_index().rename(columns={"index":"time"})
+
+	#For cin, flip the sign from the MDL data
+	mdl["ml_cin"] = -1 * mdl["ml_cin"]
+
+	#Create station name column in observation data
+	stn_map = {14015:"Darwin",66037:"Sydney",16001:"Woomera",23034:"Adelaide"}
+	obs_sharp["stn_name"] = obs_sharp["stn_id"].map(stn_map)
+	obs_wrf["stn_name"] = obs_wrf["stn_id"].map(stn_map)
+
+	#Merge datasets
+	df = pd.merge(prs, mdl, how="inner", on=["time","loc_id"], suffixes=("_prs","_mdl"))
+	df = pd.merge(df, obs_wrf, how="inner", left_on=["time","loc_id"], right_on=["time","stn_name"], \
+		suffixes=("","_obs_wrf")).\
+		rename(columns={"ml_cin":"ml_cin_obs_wrf", "ml_cape":"ml_cape_obs_wrf","dcape":"dcape_obs_wrf"})
+	df = pd.merge(df, obs_sharp, how="inner", left_on=["time","loc_id"], right_on=["time","stn_name"], \
+		suffixes=("","_obs_sharp")).\
+		rename(columns={"ml_cin":"ml_cin_obs_sharp", "ml_cape":"ml_cape_obs_sharp","dcape":"dcape_obs_sharp"})
+	df = df[["ml_cin_prs","ml_cin_mdl","ml_cin_obs_wrf","ml_cin_obs_sharp",\
+		"ml_cape_prs","ml_cape_mdl","ml_cape_obs_wrf","ml_cape_obs_sharp",\
+		"dcape_prs","dcape_obs_sharp","dcape_obs_wrf",\
+		"k_index","time","loc_id"]]
+	
+	#Create a daily max dataframe for comparison with lightning
+	df_dmax = df.groupby("loc_id").resample("1D",on="time").max().drop(columns=["time","loc_id"]).reset_index()
+	lightning = pd.read_pickle("/g/data/eg3/ab4502/ExtremeWind/ad_data/lightning_aus_50_smoothed.pkl")
+	lightning = lightning.loc[lightning["loc_id"].isin(list(stn_map.values())), :]
+	lightning = lightning.groupby("loc_id").resample("1D", on="date").max().drop(columns=["loc_id","date"]).\
+			reset_index()
+	df_dmax = pd.merge(df_dmax, lightning, left_on=["time","loc_id"], right_on=["date","loc_id"],\
+		how="left").dropna()
+	df_dmax["is_light"] = (df_dmax["lightning"] >= 2)*1
+
+	#Plot PSS for lightning
+	from event_analysis import pss
+	p = "dcape_prs"
+	#FOR CIN...
+	df_dmax.loc[:,"is_conv_aws_cond_light"] = np.where(df_dmax["lightning"]>=2, 0, np.nan)
+	#df_dmax.loc[(df_dmax["lightning"]>=2) & (df_, "light_cond_cape"] = 1
+	df_dmax.loc[(df_dmax[p.replace("cin","cape")] >= 100) & (df_dmax["lightning"]<2), "light_cond_cape"] = 0
+	pss_all = []
+	thresh_all = []
+	for t in np.linspace(0,1000,100):
+		a,b = pss([t, df_dmax, p, "is_conv_aws_cond_light", "pss"])
+		pss_all.append(a); thresh_all.append(b)
+	plt.figure(); plt.subplot(221)
+	box = plt.boxplot( [df_dmax[(df_dmax.light_cond_cape==0)][p],\
+		df_dmax[(df_dmax.light_cond_cape==1)][p] ], whis=1e10, 
+		labels=["Non-lightning", \
+			"Lightning"])
+	plt.yscale("symlog")
+	ax=plt.gca(); ax.axhline(thresh_all[np.argmax(pss_all)],color="k",linestyle="--")
+	plt.text(1.5,thresh_all[np.argmax(pss_all)],"PSS="+str(round(np.max(pss_all),3)),\
+		horizontalalignment='center',verticalalignment="bottom")
+	plt.title(p)
+
+	#Plot a comparison daily max time series
+	loc = "Darwin"
+	df[df.loc_id==loc][["ml_cin_prs","ml_cin_mdl","ml_cin_obs_wrf","ml_cin_obs_sharp","time"]]\
+		.set_index("time").loc[slice("2014-9-1","2015-4-1"),:].resample("1D").max().\
+		plot(marker="o",markersize=4)
+	plt.legend(["PRS (wrf-python)", "MDL (ctk code)","OBS (wrf-python)", "OBS (SHARPpy)"])
+
+	#Plot a density plot comparison and compute the Spearman correlation coefficient
+	x = "ml_cin_obs_sharp"
+	y = "ml_cin_prs"
+	plt.hist2d(df.loc[:, x], df.loc[:, y], cmap=plt.get_cmap("Greys"), \
+		norm=matplotlib.colors.SymLogNorm(1),\
+		vmax=1000, bins=np.concatenate([[0],np.logspace(0,4,20)]))
+	plt.xscale("symlog");plt.yscale("symlog")
+	plt.colorbar()
+	xb, xt = plt.gca().get_xlim()
+	yb, yt = plt.gca().get_ylim()
+	plt.text(xt, 0, \
+		"r = "+str(round(spr(df.dropna().loc[:, x], df.dropna().loc[:, y]).correlation, 3)), \
+		horizontalalignment="right", verticalalignment="bottom")
+	plt.plot([min(xb, yb), max(xt,yt)], [min(xb, yb), max(xt,yt)], color="r")
+
+	plt.show()
+
 
 def bootstrap_slope(x,y,n_boot):
 
@@ -77,12 +284,40 @@ def sta_versus_aws():
 
 	from scipy.ndimage.filters import gaussian_filter as filter
 
-	l_thresh = 100
+	l_thresh = 2
 
-	#df = pd.read_pickle("/short/eg3/ab4502/ExtremeWind/aws/convective_wind_gust_aus_2005_2015.pkl")
-	from event_analysis import optimise_pss, get_aus_stn_info
-	pss_df, df = optimise_pss("/g/data/eg3/ab4502/ExtremeWind/points/erai_points_sharppy_aus_1979_2017.pkl", \
-		compute=False, l_thresh=l_thresh, is_pss=False)
+	df = pd.read_pickle("/g/data/eg3/ab4502/ExtremeWind/obs/aws/convective_wind_gust_aus_2005_2015_v2.pkl")
+	df.loc[:, "is_conv_aws"] = np.where((df.wind_gust >= 25) & (df.lightning >= l_thresh) & (df.tc_affected==0), 1, 0)
+	df.loc[:, "is_sta"] = np.where((df.is_sta == 1) & (df.tc_affected==0), 1, 0)
+	df.loc[:, "is_light"] = np.where((df.lightning >= l_thresh) & (df.tc_affected==0), 1, 0)
+	df.loc[:, "is_windy"] = np.where((df.wind_gust >= 25) & (df.tc_affected==0), 1, 0)
+
+	fit_model = False
+	if fit_model:
+		
+		#This code repeats the analysis for STA and convective AWS events but with using environmental
+		# variables from a reanalyis model
+		#Load from "optimise_pss()" as data has already been matched with observations and saved
+		#This code will be edited a lot based on how environmental variables will be combined (e.g. logistic
+		# equation, thresholds, etc)
+
+		from event_analysis import optimise_pss
+		pss_df, mod = optimise_pss("/g/data/eg3/ab4502/ExtremeWind/points/era5_allvars_2005_2015.pkl",\
+			T=1000, compute=False, l_thresh=2, is_pss="hss", model_name="era5")
+		from sklearn.linear_model import LogisticRegression
+		#CONV AWS
+		predictors = ["ml_el","k_index","dcape","s06","t_totals","Umean06"]
+		logit = LogisticRegression(class_weight="balanced", solver="liblinear",max_iter=1000)
+		logit_mod = logit.fit(mod[predictors], mod["is_conv_aws"])
+		p = logit_mod.predict_proba(mod[predictors])[:,1]
+		mod.loc[:, "model"] = ((p >= 0.87)) * 1
+		#STA
+		predictors = ["ml_el","mu_cape","dcape","s06","Umean06","t_totals","ml_cin","U1"]
+		logit = LogisticRegression(class_weight="balanced", solver="liblinear",max_iter=1000)
+		logit_mod = logit.fit(mod[predictors], mod["is_sta"])
+		p = logit_mod.predict_proba(mod[predictors])[:,1]
+		mod.loc[:, "model_sta"] = ((p >= 0.75)) * 1
+		mod["month"] = pd.DatetimeIndex(mod["time"]).month
 
 	#SPATIAL DISTRIBUTION
 	m = Basemap(llcrnrlon=110, llcrnrlat=-45, urcrnrlon=160, urcrnrlat=-10,projection="cyl");\
@@ -93,76 +328,144 @@ def sta_versus_aws():
 	no_stns,y,x=np.histogram2d( lat_stns, lon_stns, \
 			bins=20,range=([-45,-10],[110,160]));\
 	no_stns[no_stns==0] = 1
+	locs = np.unique(df["stn_name"])
 
-	#STA reports
+	#Get number of observations for each loc
+	obs = []
+	g = df.groupby("stn_name")
+	for l in locs:
+		obs.append((~g.get_group(l).wind_gust.isna()).sum())
+	obs=np.array(obs) / 365.	
+
+	import matplotlib	
+
+	#Seasonal (kde)
 	plt.figure()
-	plt.title("STA REPORTS NEAR AWS STATIONS");\
-	d,y,x=np.histogram2d(df[df["is_sta"]==1]["lat"].values, \
-			df[df["is_sta"]==1]["lon"].values, bins=20,range=([-45,-10],[110,160]));\
-	x = np.array([(x[i-1] + x[i]) / 2. for i in np.arange(1,len(x))])
-	y = [(y[i-1] + y[i]) / 2. for i in np.arange(1,len(y))]
-	x,y=np.meshgrid(x,y);\
-	m.pcolor(x,y,filter(d/(no_stns),1), vmin=0, cmap=plt.get_cmap("hot_r",10));\
-	plt.colorbar()
+	dirs = ["N", "NNE", "NE", "ENE", "E", "ESE", "SE","SSE", "S", "SSW","SW", "WSW", "W", "WNW", "NW", "NNW"]
+	dir_map = dict(zip(dirs, np.arange(len(dirs))))
+	months = np.arange(1,13)
+	month_map = dict(zip([7,8,9,10,11,12,1,2,3,4,5,6],months))
+	df[df["is_conv_aws"]==1]["month"].map(month_map).plot(kind="kde",ind=np.linspace(1,12,1000), color="k", label="AWS")
+	df[df["is_sta"]==1]["month"].map(month_map).plot(kind="kde",ind=np.linspace(1,12,1000), color="grey", label="STA")
+	if fit_model:
+		mod[mod["model"]==1]["month"].map(month_map).plot(kind="kde",ind=np.linspace(1,12,1000), color="red", label="BARRA")
+	ax = plt.gca()
+	ax.xaxis.set_ticks(months)
+	ax.xaxis.set_ticklabels(month_map.keys())
+	plt.legend()
+	plt.figure()
+	df[df["is_conv_aws"]==1]["wind_dir"].map(dir_map).plot(kind="kde",ind=np.linspace(0,len(dirs)-1,1000), color="k",label="AWS")
+	df[df["is_sta"]==1]["wind_dir"].map(dir_map).plot(kind="kde",ind=np.linspace(0,len(dirs)-1,1000), color="grey",label="STA")
+	plt.legend()
+	ax = plt.gca()
+	ax.xaxis.set_ticks(np.arange(0,len(dirs)))
+	ax.xaxis.set_ticklabels(dir_map.keys())
+	ax.xaxis.set_tick_params(rotation=45)
+
+	#Final fig
+	plt.subplot(221)
+	plt.title("Measured convective gusts")
+	mind=0 
+	maxd=1 
+	scale=10 
+	cm = plt.get_cmap("Reds")
+	norm = matplotlib.colors.Normalize(vmin=mind,vmax=maxd) 
+	sm = plt.cm.ScalarMappable(cmap=cm, norm=norm) 
+	for i in np.arange(len(locs)): 
+		c = cm((df[(df.is_conv_aws==1) & (df.stn_name==locs[i])].shape[0] / obs[i] - mind)/(maxd-mind) ) 
+		m.plot( df[df["stn_name"]==locs[i]]["lon"].iloc[0], df[df["stn_name"]==locs[i]]["lat"].iloc[0],
+		"o", linestyle="none", color = c,
+		markersize=scale,
+		markeredgecolor="k") 
+	cb=plt.colorbar(sm) 
+	cb.set_label("Events per year")
+	m.drawcoastlines() 
+	plt.subplot(222)
+	plt.title("STA wind reports")
+	mind=0 
+	maxd=5 
+	scale=10
+	norm = matplotlib.colors.Normalize(vmin=mind,vmax=maxd) 
+	sm = plt.cm.ScalarMappable(cmap=cm, norm=norm) 
+	for i in np.arange(len(locs)): 
+		ms = np.log(df[(df.is_sta==1) & (df.stn_name==locs[i])].shape[0] + 2) / 11. * scale 
+		c = cm((df[(df.is_sta==1) & (df.stn_name==locs[i])].shape[0] / 11. - mind)/(maxd-mind) ) 
+		m.plot( df[df["stn_name"]==locs[i]]["lon"].iloc[0], df[df["stn_name"]==locs[i]]["lat"].iloc[0],
+		"o", linestyle="none", color = c,
+		markersize = scale,
+		markeredgecolor="k") 
+	cb=plt.colorbar(sm) 
+	cb.set_label("Events per year")
 	m.drawcoastlines()
-	m.plot(lon_stns, lat_stns, latlon=True, marker="x", color="b", linestyle="none", markersize=10, \
-		markeredgewidth=2)
-	 
-	#Conv AWS
-	plt.figure()
-	plt.title("AWS (OVER 25 m/s) + LIGHTNING (OVER"+str(l_thresh)+")");\
-	d_aws, t1, t2 = np.histogram2d(df[df["is_conv_aws"]==1]["lat"].values, \
-		df[df["is_conv_aws"]==1]["lon"].values, bins=20, range=([-45,-10],[110,160]))
-	m.pcolor(x,y,filter(d_aws/(no_stns),1) , vmin=0, cmap=plt.get_cmap("hot_r",10));\
-	plt.colorbar()
-	m.drawcoastlines();\
-	m.plot(lon_stns, lat_stns, latlon=True, marker="x", color="b", linestyle="none", markersize=10, \
-		markeredgewidth=2)
-	 
-	#COND
-	df["cond"] = (df["ml_el"]<6000) & (df["k_index"]>=20) & (df["s06"]>=12) & (df["Umean800_600"]>=16) & (df["Umean01"]>=10) |\
-		(df["ml_el"]>=6000) & (df["Umean800_600"]>=5) & (df["t_totals"]>=46) & (df["k_index"]>=30)
-	plt.figure()
-	plt.title("CONDITIONAL PARAMETER");\
-	d_cond, t1, t2 = np.histogram2d(df[df["cond"]]["lat"].values[:,0], \
-		df[df["cond"]]["lon"].values[:,0], bins=20, range=([-45,-10],[110,160]))
-	m.pcolor(x,y,filter(d_cond/(no_stns),1) , vmin=0, cmap=plt.get_cmap("hot_r",10));\
-	plt.colorbar()
-	m.drawcoastlines();\
-	m.plot(lon_stns, lat_stns, latlon=True, marker="x", color="b", linestyle="none", markersize=10, \
-		markeredgewidth=2)
+	ax = plt.subplot(223)
+	month_df = pd.concat({"aws":df[df["is_conv_aws"]==1]["month"].value_counts(),
+	"sta":df[df["is_sta"]==1]["month"].value_counts()},
+	axis=1, sort=False) 
+	(month_df / month_df.sum()).reindex([7,8,9,10,11,12,1,2,3,4,5,6]).plot(kind="bar",
+	color=["k","grey"], ax=ax, legend=False) 
+	ax = plt.gca() 
+	ax.set_xticklabels(["J", "A", "S", "O", "N", "D", "J", "F", "M", "A", "M", "J"]) 
+	ax.tick_params("x",rotation=0)
+	plt.title("\nMonthly frequency distribution")
+	ax = plt.subplot(224)
 
-	#LOGIT
-	#df["logit"] = ( 1 / ( 1 + np.exp(-(df["ml_el"]*3.64413046e-05 + df["k_index"]*1.89036078e-01 + \
-	#		df["t_totals"]*1.55224631e-01 + df["Umean800_600"]*1.48836578e-01 + df["dcape"]*9.90171054e-04 + \
-	#		df["Umean01"]*1.30845911e-01 + df["s06"]*3.05869355e-02 - 16.48218016)) ) ) >= 0.8
-	df["logit"] = ( 1 / ( 1 + np.exp(-(df["k_index"]*0.19316489 + \
-			df["t_totals"]*0.15998639 + df["Umean800_600"]*0.14080648 + \
-			df["dcape"]*0.00101607 + \
-			df["Umean01"]*0.12578321 + df["s03"]*0.04713518 - 16.48541647)) ) ) >= 0.8
-	plt.figure()
-	plt.title("LOGISTIC EQUATION");\
-	d_logit, t1, t2 = np.histogram2d(df[df["logit"]]["lat"].values[:,0], \
-		df[df["logit"]]["lon"].values[:,0], bins=20, range=([-45,-10],[110,160]))
-	m.pcolor(x,y,filter(d_logit/(no_stns),1) , vmin=0, cmap=plt.get_cmap("hot_r",10));\
-	plt.colorbar()
-	m.drawcoastlines();\
-	m.plot(lon_stns, lat_stns, latlon=True, marker="x", color="b", linestyle="none", markersize=10, \
-		markeredgewidth=2)
+	#wind_dir_df = pd.concat({"AWS":\
+	#		pd.DataFrame([degToCompass(df[df["is_conv_aws"]==1]["wind_dir"].iloc[i]) \
+	#			for i in np.arange(df[df["is_conv_aws"]==1]["wind_dir"].shape[0])])[0]\
+	#		.value_counts(),\
+	#		"STA":\
+	#		pd.DataFrame([degToCompass(df[df["is_sta"]==1]["wind_dir"].iloc[i]) \
+	#			for i in np.arange(df[df["is_sta"]==1]["wind_dir"].shape[0])])[0]\
+	#		.value_counts()},
+	#	axis=1, sort=False) 
+	#(wind_dir_df / wind_dir_df.sum()).reindex(["N", "NNE", "NE", "ENE", "E", "ESE", "SE",
+	#"SSE", "S", "SSW","SW", "WSW", "W", "WNW", "NW", "NNW"]).plot(kind="bar", color=["k","grey"],ax=ax) 
+	#Consider replacing with seaborn
 
-	#WIND DIRECTION DISTRIBUTION
-	wind_dir_df = pd.concat({"aws":df[df["is_conv_aws"]==1]["wind_dir"].value_counts(), \
-		"sta":df[df["is_sta"]==1]["wind_dir"].value_counts()}, \
-		axis=1, sort=False)
-	(wind_dir_df / wind_dir_df.sum()).reindex(["N", "NNE", "NE", "ENE", "E", "ESE", "SE", \
-		"SSE", "S", "SSW","SW", "WSW", "W", "WNW", "NW", "NNW"]).plot(kind="bar")
-
-	#SEASONAL DISTRIBUTION
-	month_df = pd.concat({"aws":df[df["is_conv_aws"]==1]["month"].value_counts(), \
-		"sta":df[df["is_sta"]==1]["month"].value_counts()}, \
-		axis=1, sort=False)
-	(month_df / month_df.sum()).reindex([7,8,9,10,11,12,1,2,3,4,5,6]).plot(kind="bar")
-
+	wind_dir_df = pd.concat({"AWS":\
+			pd.cut(df[df["is_conv_aws"]==1]["wind_dir"], np.arange(0,365,22.5)).value_counts(),\
+				"STA":\
+			pd.cut(df[df["is_sta"]==1]["wind_dir"], np.arange(0,365,22.5)).value_counts()},\
+		axis=1, sort=False) 
+	(wind_dir_df / wind_dir_df.sum()).plot(kind="bar", color=["k","grey"],ax=ax)
+	ax.set_title("Wind direction frequency distribution")
+	ax.xaxis.set_ticklabels(np.arange(22.5,365+22.5,22.5))
+	if fit_model:
+		plt.figure()
+		#Add AWS wind directions to the model dataframe
+		mod = pd.merge(mod, df[["stn_name","hourly_floor_utc","wind_dir"]], \
+			on=["stn_name","hourly_floor_utc"], how="left")
+		#cols = ["k","grey","#bd0026","#f03b20","#fd8d3c","#fecc5c"]
+		cols = ["k","grey","#006837","#31a354","#78c679","#c2e699"]
+		#SEASONAL DISTRIBUTION
+		ax = plt.subplot(121)
+		month_df = pd.concat({"aws":df[df["is_conv_aws"]==1]["month"].value_counts(), \
+			"sta":df[df["is_sta"]==1]["month"].value_counts(),\
+			"barra logit measured":mod[(mod["model"]==1)]["month"].value_counts(), \
+			"barra logit sta":mod[(mod["model_sta"]==1)]["month"].value_counts(), \
+			"barra effcape*s06":mod[(mod["effcape*s06"]>=21910)]["month"].value_counts(), \
+			"barra t_totals":mod[(mod["t_totals"]>=48.95)]["month"].value_counts()}, \
+			axis=1, sort=False)
+		(month_df / month_df.sum()).reindex([7,8,9,10,11,12,1,2,3,4,5,6]).plot(kind="bar", \
+			color=cols, ax=ax, legend=False)
+		ax.set_xticklabels(["J", "A", "S", "O", "N", "D", "J", "F", "M", "A", "M", "J"]) 
+		ax.tick_params("x",rotation=0)
+		plt.title("Monthly frequency distribution")
+		#WIND DIRECTION DISTRIBUTION
+		ax = plt.subplot(122)
+		wind_dir_df = pd.concat({"AWS":df[df["is_conv_aws"]==1]["wind_dir"].value_counts(), \
+			"STA":df[df["is_sta"]==1]["wind_dir"].value_counts(), \
+			"ERA5 logistic eq. (measured convective gusts)":mod[(mod["model"]==1)]["wind_dir"]\
+				.value_counts(),\
+			"ERA5 logistic eq. (STA)":mod[(mod["model"]==1)]["wind_dir"].value_counts(),\
+			"ERA5 Eff-CS6":mod[(mod["effcape*s06"]>=21910)]["wind_dir"].value_counts(), \
+			"ERA5 T-totals":mod[(mod["t_totals"]>=48.95)]["wind_dir"].value_counts()}, \
+			axis=1, sort=False)
+		(wind_dir_df / wind_dir_df.sum()).reindex(["N", "NNE", "NE", "ENE", "E", "ESE", "SE", \
+			"SSE", "S", "SSW","SW", "WSW", "W", "WNW", "NW", "NNW"]).plot(kind="bar", \
+			color=cols, ax=ax)
+		plt.title("Wind direction frequency distribution")
+	
 	plt.show()
  
 def temporal_dist_plots():
@@ -1096,7 +1399,7 @@ def contour_properties(param):
 		extreme_levels = np.linspace(0,400,11)
 		cb_lab = "J/Kg"
 		range = [0,600]
-		log_plot = False
+		log_plot = True
 	elif param in ["s06","ssfc6"]:
 		cmap = cm.Reds
 		mean_levels = np.linspace(14,18,17)
@@ -1284,8 +1587,24 @@ def contour_properties(param):
 		cb_lab = "no. of days"
 		range = [-20,20]
 		log_plot = False
+	else:
+		cmap = cm.Reds
+		mean_levels = None
+		extreme_levels = None
+		threshold = None
+		cb_lab = ""
+		range = None
+		log_plot = False
 	
 	return [cmap,mean_levels,extreme_levels,cb_lab,range,log_plot,threshold]
+
+def degToCompass(num):
+	if np.isnan(num):
+		pass
+	else:
+		val=int((num/22.5)+.5)
+		arr=["N","NNE","NE","ENE","E","ESE", "SE", "SSE","S","SSW","SW","WSW","W","WNW","NW","NNW"]
+		return(arr[(val % 16)])
 
 if __name__ == "__main__":
 

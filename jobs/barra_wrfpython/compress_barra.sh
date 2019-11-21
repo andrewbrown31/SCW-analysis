@@ -1,8 +1,8 @@
 #!/bin/sh 
   
 #PBS -P eg3  
-#PBS -q normal
-#PBS -l walltime=48:00:00,mem=128GB  
+#PBS -q express
+#PBS -l walltime=24:00:00,mem=128GB  
 #PBS -l ncpus=16
 #PBS -o /home/548/ab4502/working/ExtremeWind/jobs/messages/compress_barra.o 
 #PBS -e /home/548/ab4502/working/ExtremeWind/jobs/messages/compress_barra.e 
@@ -15,4 +15,4 @@
 module use /g/data3/hh5/public/modules
 module load conda
 
-nccompress -r -d 1 -b 5000 -o -pa /g/data/eg3/ab4502/ExtremeWind/aus/barra_fc/
+nccompress -r -d 1 -b 5000 -o -pa -np 16 /g/data/eg3/ab4502/ExtremeWind/aus/barra_fc/

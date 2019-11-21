@@ -4,8 +4,8 @@
 #PBS -q express
 #PBS -l walltime=24:00:00,mem=256GB 
 #PBS -l ncpus=32
-#PBS -o /home/548/ab4502/working/ExtremeWind/jobs/messages/barra_fc_wrf_python_YEAR.o 
-#PBS -e /home/548/ab4502/working/ExtremeWind/jobs/messages/barra_fc_wrf_python_YEAR.e 
+#PBS -o /home/548/ab4502/working/ExtremeWind/jobs/messages/barra_fc_wrf_python_1995.o 
+#PBS -e /home/548/ab4502/working/ExtremeWind/jobs/messages/barra_fc_wrf_python_1995.e 
  
 #Set up conda/shell environments 
 conda activate wrfpython3.6 
@@ -13,9 +13,9 @@ module load mpi4py/3.0.0-py3
 module unload python3/3.6.2 
 
 #Initialise date
-d=YEAR-01-01
+d=1995-01-01
 #Specify end date
-while [ "$d" != YearPlusOne-01-01 ]; do
+while [ "$d" != 1996-01-01 ]; do
 
   start_time=$(date -d "$d" +%Y%m%d)"00"
   end_time=$(date -d "$d"  +%Y%m%d)"23"
@@ -30,8 +30,8 @@ done
 #Concaternate daily netcdf output into monthly files
 module load cdo
 path="/g/data/eg3/ab4502/ExtremeWind/aus/barra_fc/"
-d=YEAR-01-01
-while [ "$d" != YearPlusOne-01-01 ]; do
+d=1995-01-01
+while [ "$d" != 1996-01-01 ]; do
 
   files=$(date -d "$d" +%Y%m)
   start_date=$(date -d "$d" +%Y%m%d)

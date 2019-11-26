@@ -174,7 +174,7 @@ def read_barra_fc(domain,times):
 	vas = np.empty((len(date_list),len(lat_ind),len(lon_ind)))
 	tas = np.empty((len(date_list),len(lat_ind),len(lon_ind)))
 	ta2d = np.empty((len(date_list),len(lat_ind),len(lon_ind)))
-	ps = np.empty((len(date_list),len(lat_ind),len(lon_ind)))
+	ps = np.zeros((len(date_list),len(lat_ind),len(lon_ind)))
 	p_3d = np.moveaxis(np.tile(pres,[ta.shape[2],ta.shape[3],1]),2,0)
 	wg10 = np.zeros(ps.shape)
 
@@ -199,7 +199,8 @@ def read_barra_fc(domain,times):
 
 		if temp_time.year >= 1990:
 
-			temp_fname_prs = glob.glob("/g/data/ma05/BARRA_R/v1/forecast/prs/air_temp/"+\
+			#EDIT TO GET DATA FROM THE "PROD" DIRECTORY
+			temp_fname_prs = glob.glob("/g/data/ma05/prod/BARRA_R/v1/forecast/prs/air_temp/"+\
 				temp_time.strftime("%Y")+"/"+temp_time.strftime("%m")+\
 				"/air_temp-fc-prs-PT1H-BARRA_R-v1*"+temp_time.strftime("%Y")+\
 				temp_time.strftime("%m")+temp_time.strftime("%d")+"T"+\
@@ -225,7 +226,7 @@ def read_barra_fc(domain,times):
 		z_file = nc.Dataset(glob.glob(prs_fnames[t].replace("air_temp","geop_ht").replace("v1.1","*").replace("v1","*"))[0])
 		ua_file = nc.Dataset(glob.glob(prs_fnames[t].replace("air_temp","wnd_ucmp").replace("v1.1","*").replace("v1","*"))[0])
 		va_file = nc.Dataset(glob.glob(prs_fnames[t].replace("air_temp","wnd_vcmp").replace("v1.1","*").replace("v1","*"))[0])
-		w_file = nc.Dataset(glob.glob(prs_fnames[t].replace("air_temp","vertical_wnd").replace("v1.1","*").replace("v1","*"))[0])
+		w_file = nc.Dataset(glob.glob(prs_fnames[t].replace("air_temp","vertical_wnd").replace("v1.1","*").replace("v1","*").replace("prod/",""))[0])
 		hur_file = nc.Dataset(glob.glob(prs_fnames[t].replace("air_temp","relhum").replace("v1.1","*").replace("v1","*"))[0])
 	
 		uas_file = nc.Dataset(spec_fnames[t])
@@ -471,7 +472,7 @@ def get_pressure(top, date):
 	hour = dt.datetime.strftime(date,"%H")
 
 	#Load BARRA analysis files
-	ta_file = nc.Dataset(glob.glob("/g/data/ma05/BARRA_R/v1/analysis/prs/air_temp/"\
+	ta_file = nc.Dataset(glob.glob("/g/data/ma05/prod/BARRA_R/v1/analysis/prs/air_temp/"\
 +year+"/"+month+"/air_temp-an-prs-PT0H-BARRA_R-v1*"+year+month+day+"T"+hour+"*.nc")[0])
 
 	p =ta_file["pressure"][:]

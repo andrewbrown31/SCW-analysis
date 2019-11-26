@@ -158,151 +158,176 @@ def read_upperair_obs(start_date,end_date,fout,code="wrfpython"):
 
 		group = group.dropna(subset=["ta","dp","rh","ua","va","z"])
 
-		if ((group.shape[0] > min_no_of_points) & (group.p.min()<200) & (group.p.max()>850) ):
-			no_points.append(group.shape[0])
+		if ( (group.shape[0] > min_no_of_points) & (group.p.min()<200) & (group.p.max()>850) ):
 
-			if code == "sharppy":
-				prof = profile.create_profile(pres = group.p, hght = group.z, tmpc = group.ta, \
-						dwpc = group.dp, u = group.ua, v=group.va, strictQC=False)
-				
-				sb_parcel = params.parcelx(prof, flag=1, dp=-10)
-				mu_parcel = params.parcelx(prof, flag=3, dp=-10)
-				ml_parcel = params.parcelx(prof, flag=4, dp=-10)
-				eff_parcel = params.parcelx(prof, flag=6, ecape=100, ecinh=-250, dp=-10)
-				p1km = interp.pres(prof, interp.to_msl(prof, 1000.))
-				p6km = interp.pres(prof, interp.to_msl(prof, 6000.))
-				sfc = prof.pres[prof.sfc]
-				s06_u, s06_v = winds.wind_shear(prof, sfc, p6km)
-				u01, v01  = winds.mean_wind(prof, sfc, p1km)
-				u800_600, v800_600  = winds.mean_wind(prof, 800, 600)
-				s06 = utils.KTS2MS( utils.mag(s06_u, s06_v) )
-				Umean800_600 = utils.KTS2MS( utils.mag(u800_600, v800_600) )
-				Umean01 = utils.KTS2MS( utils.mag(u01, v01) )
-				v_totals = params.v_totals(prof)
-				c_totals = params.c_totals(prof)
-				t_totals = c_totals + v_totals
-				dcape = params.dcape(prof)[0]
-				if dcape < 0:
-					dcape = 0
-				ml_el = ml_parcel.elhght
-				if np.ma.is_masked(ml_el):
-					ml_el = np.nanmax(prof.hght)
+			if (group.p[:-1].values - group.p[1:].values).max() < 100:
 
-			elif code == "wrfpython":
-				
-				#prof = profile.create_profile(pres = group.p, hght = group.z, \
-				#		tmpc = group.ta, \
-				#		dwpc = group.dp, u = group.ua, v=group.va, \
-				#		strictQC=False)
-				terrain = stn_det.loc[np.in1d(\
-					stn_det["Bureau of Meteorology Station Number"], \
-					group.stn_id.unique()), \
-					"Height of station above mean sea level in metres"]\
-					.values[0]
-				group.loc[:,"q"] = mpcalc.mixing_ratio_from_relative_humidity(\
-					(mpcalc.relative_humidity_from_dewpoint(group.ta.values\
-					*units.units.degC, \
-					group.dp.values*units.units.degC)*100*units.units.percent), \
-					group.ta.values*units.units.degC,\
-					group.p.values*units.units.hPa)
-				res = wrf.cape_3d(group.p.values, group.ta.values+273.15, \
-					group.q.values, group.z.values, \
-					terrain, group.p.max(), ter_follow=False).values
-				
-				ml_inds = ((group.p <= group.p.max()) & \
-					(group.p >= (group.p.max() - 100)))
-				ml_ta_avg = np.ma.masked_where(~ml_inds, group.ta.values).mean()
-				ml_q_avg = np.ma.masked_where(~ml_inds, group.q.values).mean()
-				ml_hgt_avg = np.ma.masked_where(~ml_inds, group.z).mean()
-				ml_p3d_avg = np.ma.masked_where(~ml_inds, group.p).mean()
-				#Insert the mean values into the bottom of the 3d arrays pressure-level arrays
-				ml_ta_arr = np.insert(group.ta.values,0,ml_ta_avg)
-				ml_q_arr = np.insert(group.q.values,0,ml_q_avg)
-				ml_hgt_arr = np.insert(group.z.values,0,ml_hgt_avg)
-				ml_p3d_arr = np.insert(group.p.values,0,ml_p3d_avg)
-				#Sort by ascending p
-				idx = np.argsort(ml_p3d_arr)
-				ml_ta_arr = ml_ta_arr[idx]
-				ml_q_arr = ml_q_arr[idx]
-				ml_hgt_arr = ml_hgt_arr[idx]
-				ml_p3d_arr = ml_p3d_arr[idx]
-				#Calculate CAPE using wrf-python. 
-				cape3d_mlavg = np.squeeze(wrf.cape_3d(ml_p3d_arr,\
-					(ml_ta_arr + 273.15),\
-					ml_q_arr,\
-					ml_hgt_arr,terrain,\
-					group.p.max(),False,meta=False, missing=0))
-				ml_cape = np.ma.masked_where(~((ml_ta_arr==ml_ta_avg) & (ml_p3d_arr==ml_p3d_avg)),\
-					cape3d_mlavg.data[0]).max()
-				ml_cin = np.ma.masked_where(~((ml_ta_arr==ml_ta_avg) & (ml_p3d_arr==ml_p3d_avg)),\
-					cape3d_mlavg.data[1]).max()
-				ml_el = np.ma.masked_where(~((ml_ta_arr==ml_ta_avg) & (ml_p3d_arr==ml_p3d_avg)),\
-					cape3d_mlavg.data[4]).max()
-				cape = res[0]
-				cin = res[1]
-				lfc = res[2]
-				lcl = res[3]
-				el = res[4]
+				no_points.append(group.shape[0])
 
-				#p1km = interp.pres(prof, interp.to_msl(prof, 1000.))
-				#p6km = interp.pres(prof, interp.to_msl(prof, 6000.))
-				#sfc = prof.pres[prof.sfc]
-				#s06_u, s06_v = winds.wind_shear(prof, sfc, p6km)
-				#u01, v01  = winds.mean_wind(prof, sfc, p1km)
-				#u800_600, v800_600  = winds.mean_wind(prof, 800, 600)
-				#s06 = utils.KTS2MS( utils.mag(s06_u, s06_v) )
-				#Umean800_600 = utils.KTS2MS( utils.mag(u800_600, v800_600) )
-				#Umean01 = utils.KTS2MS( utils.mag(u01, v01) )
-				#v_totals = params.v_totals(prof)
-				#c_totals = params.c_totals(prof)
-				#t_totals = c_totals + v_totals
-				mu_cape = np.max(cape)
-				mu_cin = cin[np.nanargmax(cape)]
-				#dcape = params.dcape(prof)[0]
-				dcape = np.squeeze(get_dcape(group.p.values[np.newaxis][np.newaxis].T, \
-					group.ta.values[np.newaxis][np.newaxis].T, \
-					group.q.values[np.newaxis][np.newaxis].T, \
-					group.z.values[np.newaxis][np.newaxis].T, \
-					group.p.values, group.p.iloc[0], sfc_included=True))
-				thetae = mpcalc.equivalent_potential_temperature(\
-					group.p.values * units.units.hectopascal, \
-					group.ta.values * units.units.degC, \
-					group.dp.values * units.units.degC)
-				thetae[group.z < 1000] = np.nan
-				thetae[group.z > 6000] = np.nan
-				dcape = dcape[np.nanargmin(thetae)]
-				if dcape < 0:
-					dcape = 0
-				print(dcape)
-				#k_index = params.k_index(prof)
-				k_index = 0
-				t_totals = 0
-				s06 = 0
-				Umean01 = 0
-				Umean800_600 = 0
+				if code == "sharppy":
+					prof = profile.create_profile(pres = group.p, \
+							hght = group.z, tmpc = group.ta, \
+							dwpc = group.dp, u = group.ua, v=group.va, strictQC=False)
+					
+					sb_parcel = params.parcelx(prof, flag=1, dp=-10)
+					mu_parcel = params.parcelx(prof, flag=3, dp=-10)
+					ml_parcel = params.parcelx(prof, flag=4, dp=-10)
+					eff_parcel = params.parcelx(prof, flag=6, ecape=100, ecinh=-250, dp=-10)
+					p1km = interp.pres(prof, interp.to_msl(prof, 1000.))
+					p6km = interp.pres(prof, interp.to_msl(prof, 6000.))
+					sfc = prof.pres[prof.sfc]
+					s06_u, s06_v = winds.wind_shear(prof, sfc, p6km)
+					u01, v01  = winds.mean_wind(prof, sfc, p1km)
+					u800_600, v800_600  = winds.mean_wind(prof, 800, 600)
+					s06 = utils.KTS2MS( utils.mag(s06_u, s06_v) )
+					Umean800_600 = utils.KTS2MS( utils.mag(u800_600, v800_600) )
+					Umean01 = utils.KTS2MS( utils.mag(u01, v01) )
+					v_totals = params.v_totals(prof)
+					c_totals = params.c_totals(prof)
+					t_totals = c_totals + v_totals
+					dcape = params.dcape(prof)[0]
+					if dcape < 0:
+						dcape = 0
+					ml_el = ml_parcel.elhght
+					if np.ma.is_masked(ml_el):
+						ml_el = np.nanmax(prof.hght)
 
-			t =  (group.date.iloc[0].hour + group.date.iloc[0].minute/60.)
+				elif code == "wrfpython":
+					
+					terrain = stn_det.loc[np.in1d(\
+						stn_det["Bureau of Meteorology Station Number"], \
+						group.stn_id.unique()), \
+						"Height of station above mean sea level in metres"]\
+						.values[0]
+					group.loc[:,"q"] = mpcalc.mixing_ratio_from_relative_humidity(\
+						(mpcalc.relative_humidity_from_dewpoint(group.ta.values\
+						*units.units.degC, \
+						group.dp.values*units.units.degC)*100*units.units.percent), \
+						group.ta.values*units.units.degC,\
+						group.p.values*units.units.hPa)
+					res = wrf.cape_3d(group.p.values, group.ta.values+273.15, \
+						group.q.values, group.z.values, \
+						terrain, group.p.max(), ter_follow=False).values
+					
+					ml_inds = ((group.p <= group.p.max()) & \
+						(group.p >= (group.p.max() - 100)))
+					ml_ta_avg = np.ma.masked_where(~ml_inds, group.ta.values).mean()
+					ml_q_avg = np.ma.masked_where(~ml_inds, group.q.values).mean()
+					ml_hgt_avg = np.ma.masked_where(~ml_inds, group.z).mean()
+					ml_p3d_avg = np.ma.masked_where(~ml_inds, group.p).mean()
+					#Insert the mean values into the bottom of the 3d arrays
+					# pressure-level arrays
+					ml_ta_arr = np.insert(group.ta.values,0,ml_ta_avg)
+					ml_q_arr = np.insert(group.q.values,0,ml_q_avg)
+					ml_hgt_arr = np.insert(group.z.values,0,ml_hgt_avg)
+					ml_p3d_arr = np.insert(group.p.values,0,ml_p3d_avg)
+					#Sort by ascending p
+					idx = np.argsort(ml_p3d_arr)
+					ml_ta_arr = ml_ta_arr[idx]
+					ml_q_arr = ml_q_arr[idx]
+					ml_hgt_arr = ml_hgt_arr[idx]
+					ml_p3d_arr = ml_p3d_arr[idx]
+					#Calculate CAPE using wrf-python. 
+					cape3d_mlavg = np.squeeze(wrf.cape_3d(ml_p3d_arr,\
+						(ml_ta_arr + 273.15),\
+						ml_q_arr,\
+						ml_hgt_arr,terrain,\
+						group.p.max(),False,meta=False, missing=0))
+					ml_cape = np.ma.masked_where(~((ml_ta_arr==ml_ta_avg) &\
+						 (ml_p3d_arr==ml_p3d_avg)),\
+						cape3d_mlavg.data[0]).max()
+					ml_cin = np.ma.masked_where(~((ml_ta_arr==ml_ta_avg) &\
+						(ml_p3d_arr==ml_p3d_avg)),\
+						cape3d_mlavg.data[1]).max()
+					ml_el = np.ma.masked_where(~((ml_ta_arr==ml_ta_avg) &\
+						(ml_p3d_arr==ml_p3d_avg)),\
+						cape3d_mlavg.data[4]).max()
+					cape = res[0]
+					cin = res[1]
+					lfc = res[2]
+					lcl = res[3]
+					el = res[4]
 
-			if code == "sharppy":
-				df = pd.concat([ df, \
-					pd.DataFrame({"stn_id":group.stn_id.iloc[0],"mu_cape":mu_parcel.bplus, \
-						"ml_cape":ml_parcel.bplus, "mu_cin":abs(mu_parcel.bminus),\
-						"ml_cin":abs(ml_parcel.bminus),"s06":s06,\
-						"Umean800_600":Umean800_600, "k_index":params.k_index(prof) ,\
-						"Umean01":Umean01,"t_totals":t_totals, "ml_el":ml_el,\
-						"dcape":dcape}, \
-						index=[group.date.iloc[0].replace(hour=int(t), minute=0)])],\
-					axis=0)
-			elif code == "wrfpython":
-				df = pd.concat([ df, \
-					pd.DataFrame({"stn_id":group.stn_id.iloc[0],"mu_cape":mu_cape, \
-						"ml_cape":ml_cape, "mu_cin":mu_cin,\
-						"ml_cin":ml_cin,"s06":s06,\
-						"Umean800_600":Umean800_600, "k_index":k_index ,\
-						"Umean01":Umean01,"t_totals":t_totals, "ml_el":ml_el,\
-						"dcape":dcape}, \
-						index=[group.date.iloc[0].replace(hour=int(t), minute=0)])],\
-					axis=0)
+					#Pressure weighted
+					umean01 = np.average(group[(group.z - terrain) <= 1000]["ua"], \
+							weights=group[(group.z - terrain) <= 1000]["p"])
+					vmean01 = np.average(group[(group.z - terrain) <= 1000]["va"], \
+							weights=group[(group.z - terrain) <= 1000]["p"])
+					umean800_600 = np.average(group[((group.p - terrain) <= 800) & \
+						((group.p - terrain) >= 600)]["ua"],\
+						weights = group[((group.p - terrain) <= 800) & \
+						((group.p - terrain) >= 600)]["p"] )
+					vmean800_600 = np.average(group[((group.p - terrain) <= 800) & \
+						((group.p - terrain) >= 600)]["va"],\
+						weights = group[((group.p - terrain) <= 800) & \
+						((group.p - terrain) >= 600)]["p"] )
+					#Non pressure weighted
+					#umean01 = group[(group.z - terrain) <= 1000]["ua"].mean()
+					#vmean01 = group[(group.z - terrain) <= 1000]["va"].mean()
+					#umean800_600 = group[((group.p - terrain) <= 800) & \
+					#	((group.p - terrain) >= 600)]["ua"].mean()
+					#vmean800_600 = group[((group.p - terrain) <= 800) & \
+					#	((group.p - terrain) >= 600)]["va"].mean()
+		
+					Umean01 = np.sqrt( umean01**2 + vmean01**2 )
+					Umean800_600 = np.sqrt( umean800_600**2 + vmean800_600**2 )
+					u0 = np.interp([0], group.z - terrain, group.ua)[0]
+					v0 = np.interp([0], group.z - terrain, group.va)[0]
+					u6 = np.interp([6000], group.z - terrain, group.ua)[0]
+					v6 = np.interp([6000], group.z - terrain, group.va)[0]
+					s06 = np.sqrt(np.square(u6-u0)+np.square(v6-v0))
+					ta850 = np.interp([850], np.flip(group.p) , np.flip(group.ta))[0]
+					ta500 = np.interp([500], np.flip(group.p) , np.flip(group.ta))[0]
+					v_totals = ta850 - ta500
+					dp850 = np.interp([850], np.flip(group.p) , np.flip(group.dp))[0]
+					c_totals = dp850 - ta500
+					t_totals = c_totals + v_totals
+					mu_cape = np.max(cape)
+					mu_cin = cin[np.nanargmax(cape)]
+					dcape = np.squeeze(get_dcape(group.p.values[np.newaxis][np.newaxis].T, \
+						group.ta.values[np.newaxis][np.newaxis].T, \
+						group.q.values[np.newaxis][np.newaxis].T, \
+						group.z.values[np.newaxis][np.newaxis].T, \
+						group.p.values, group.p.iloc[0], sfc_included=True))
+					thetae = mpcalc.equivalent_potential_temperature(\
+						group.p.values * units.units.hectopascal, \
+						group.ta.values * units.units.degC, \
+						group.dp.values * units.units.degC)
+					thetae[group.z < 1000] = np.nan
+					thetae[group.z > 6000] = np.nan
+					try:
+						dcape = dcape[np.nanargmin(thetae)]
+					except:
+						dcape = 0
+					if dcape < 0:
+						dcape = 0
+					dp700 = np.interp([700], np.flip(group.p) , np.flip(group.dp))[0]
+					ta700 = np.interp([700], np.flip(group.p) , np.flip(group.ta))[0]
+					k_index = ta850 - ta500 + (ta850 - dp850) - (ta700-dp700)
+
+				t =  (group.date.iloc[0].hour + group.date.iloc[0].minute/60.)
+
+				if code == "sharppy":
+					df = pd.concat([ df, \
+						pd.DataFrame({"stn_id":group.stn_id.iloc[0],\
+							"mu_cape":mu_parcel.bplus, \
+							"ml_cape":ml_parcel.bplus, "mu_cin":abs(mu_parcel.bminus),\
+							"ml_cin":abs(ml_parcel.bminus),"s06":s06,\
+							"Umean800_600":Umean800_600, "k_index":params.k_index(prof),\
+							"Umean01":Umean01,"t_totals":t_totals, "ml_el":ml_el,\
+							"dcape":dcape}, \
+							index=[group.date.iloc[0].replace(hour=int(t), minute=0)])],\
+						axis=0)
+				elif code == "wrfpython":
+					df = pd.concat([ df, \
+						pd.DataFrame({"stn_id":group.stn_id.iloc[0],"mu_cape":mu_cape, \
+							"ml_cape":ml_cape, "mu_cin":mu_cin,\
+							"ml_cin":ml_cin,"s06":s06,\
+							"Umean800_600":Umean800_600, "k_index":k_index ,\
+							"Umean01":Umean01,"t_totals":t_totals, "ml_el":ml_el,\
+							"dcape":dcape}, \
+							index=[group.date.iloc[0].replace(hour=int(t), minute=0)])],\
+						axis=0)
 
 	df.to_pickle("/g/data/eg3/ab4502/ExtremeWind/points/"+fout+".pkl")
 
@@ -1187,10 +1212,11 @@ if __name__ == "__main__":
 	#df.to_csv("/home/548/ab4502/working/ExtremeWind/data_obs_"+\
 	#	"Nov2012"+".csv",float_format="%.3f")
 	
-	read_convective_wind_gusts()
+	#read_convective_wind_gusts()
 
 	#df = read_lightning(False)
 	#read_aws_daily_aus()
-	#df = read_upperair_obs(dt.datetime(2005,1,1),dt.datetime(2005,2,1), "UA_wrfpython_2005", "wrfpython")
+	df = read_upperair_obs(dt.datetime(2005,1,1),dt.datetime(2015,12,31), "UA_wrfpython_pressure_weighted",\
+		"wrfpython")
 	#df = read_upperair_obs(dt.datetime(2005,1,1),dt.datetime(2015,12,31), "UA_sharppy", "sharppy")
 

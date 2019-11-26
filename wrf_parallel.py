@@ -75,10 +75,9 @@ def get_point(point,lon,lat,ta,dp,hgt,ua,va,uas,vas,hur):
 
 	return [ta,dp,hgt,ua,va,uas,vas,hur]
 
-def get_eff_cape(cape, cin, sfc_p_3d, sfc_ta, sfc_hgt, sfc_q, ps):
+def get_eff_cape(cape, cin, sfc_p_3d, sfc_ta, sfc_hgt, sfc_q, ps, terrain):
 
-	#cape_cond = (cape >= 100) & (cin <= 250) & (sfc_p_3d>(ps-500)) & (sfc_p_3d<ps)
-	cape_cond = (cape >= 100) & (cin <= 250) & (sfc_p_3d<ps)
+	cape_cond = (cape >= 100) & (cin <= 250) & (sfc_p_3d <= ps)
 	eff_cape_cond = np.zeros(cape_cond.shape, dtype=bool)
 	is_first = np.ones((cape_cond.shape[1], cape_cond.shape[2]), dtype=bool)
 	eff_cape_cond[0] = cape_cond[0]
@@ -89,17 +88,17 @@ def get_eff_cape(cape, cin, sfc_p_3d, sfc_ta, sfc_hgt, sfc_q, ps):
 
 	eff_p = np.where(eff_cape_cond,\
 		sfc_p_3d, np.nan)
-	eff_ta = np.where(eff_cape_cond,\
-		sfc_ta, np.nan)
 	eff_hgt = np.where(eff_cape_cond,\
 		sfc_hgt, np.nan)
-	eff_q = np.where(eff_cape_cond,\
-		sfc_q, np.nan)
+	#eff_ta = np.ma.masked_where(~eff_cape_cond, sfc_ta)
+	#eff_q = np.ma.masked_where(~eff_cape_cond, sfc_q)
 
 	eff_avg_p = (np.nanmin(eff_p,axis=0) + np.nanmax(eff_p,axis=0)) / 2
 	eff_avg_hgt = (np.nanmin(eff_hgt,axis=0) + np.nanmax(eff_hgt,axis=0)) / 2
-	eff_avg_ta = np.nanmean(eff_ta, axis=0)
-	eff_avg_q = np.nanmean(eff_q, axis=0)
+	#eff_avg_ta = np.ma.average(eff_ta, weights=sfc_p_3d,axis=0)
+	#eff_avg_q = np.ma.average(eff_q, weights=sfc_p_3d,axis=0)
+	eff_avg_ta = trapz_int3d(sfc_ta, sfc_p_3d, eff_cape_cond, np.nanmax(eff_p,axis=0), np.nanmin(eff_p,axis=0))
+	eff_avg_q = trapz_int3d(sfc_q, sfc_p_3d, eff_cape_cond, np.nanmax(eff_p,axis=0), np.nanmin(eff_p,axis=0))
 
 	eff_avg_p = np.where(np.isnan(eff_avg_p),\
 		np.ma.masked_where(~((sfc_p_3d==ps)),\
@@ -117,7 +116,7 @@ def get_eff_cape(cape, cin, sfc_p_3d, sfc_ta, sfc_hgt, sfc_q, ps):
 		np.ma.masked_where(~((sfc_p_3d==ps)),\
 		sfc_q).max(axis=0).filled(0)\
 		,eff_avg_q)
-	#Insert the mean values into the bottom of the 3d arrays pressure-level arrays
+	#Insert the pressure-weighted mean values into the bottom of the 3d arrays pressure-level arrays
 	eff_ta_arr = np.insert(sfc_ta,0,eff_avg_ta,axis=0)
 	eff_q_arr = np.insert(sfc_q,0,eff_avg_q,axis=0)
 	eff_hgt_arr = np.insert(sfc_hgt,0,eff_avg_hgt,axis=0)
@@ -162,27 +161,49 @@ def get_min_var_hgt(var3d, hgt, hgt_bot, hgt_top, terrain):
 	result = np.nanmin(var3d, axis=0)
 	return result
 
-def get_mean_var_hgt(var3d, hgt, hgt_bot, hgt_top, terrain, pressure_weighted=False, p3d=None):
+def trapz_int3d(var3d, p3d, cond, pbot, ptop):
 
-	hgt = hgt - terrain
-	var3d_ma = np.ma.masked_where((hgt < hgt_bot) | (hgt > hgt_top) | \
-			(np.isnan(hgt_bot)) | (np.isnan(hgt_top)) , var3d)
-	if pressure_weighted:
+	#Vertical intergration using the trapezoidal rule for finite integration. Scaled by the total difference in 
+	# pressure between the top and bottom layers, such that a mass-weighted mean is the output.
+	
+	#Cond is a boolean array which gives the layers of interest
+
+	#See Dean S. documentation for more info.
+
+	x,j,k = var3d.shape
+	result = np.zeros((j,k))
+	for i in np.arange(x-1):
+		p_layer = p3d[i+1] - p3d[i]
+		v_layer = var3d[i+1] + var3d[i]
+		layer = np.where( (cond[i+1] & cond[i]), v_layer*p_layer, 0)
+		result = result + layer
+	return ( 1 / (2 * (ptop - pbot) ) ) * result
+
+def get_mean_var_hgt(var3d, hgt, hgt_bot, hgt_top, terrain, mass_weighted=False, p3d=None):
+
+	if mass_weighted:
 		try:
-			result = np.ma.average(var3d, axis=0, weights=p3d)
+			cond = ( (hgt-terrain) < hgt_bot) | ( (hgt-terrain) > hgt_top) | (np.isnan(hgt_bot)) | (np.isnan(hgt_top))
+			topp = get_var_hgt_lvl(p3d, hgt, hgt_top, terrain)
+			botp = get_var_hgt_lvl(p3d, hgt, hgt_bot, terrain)
+			result = trapz_int3d( var3d, p3d, ~cond, botp, topp)
 		except:
 			raise ValueError("FUNCTION get_mean_var_hgt() IS FAILING TO TAKE A PRESSURE WEIGHTED"+\
 				" AVERAGE. HAS A 3D PRESSURE FIELD BEEN PARSED?")
 	else:
+		hgt = hgt - terrain
+		var3d_ma = np.ma.masked_where((hgt < hgt_bot) | (hgt > hgt_top) | \
+			(np.isnan(hgt_bot)) | (np.isnan(hgt_top)) , var3d)
 		result = np.ma.mean(var3d_ma, axis=0)
 	return result
 
-def get_mean_var_p(var3d, p3d, p_bot, p_top, ps, pressure_weighted=False):
+def get_mean_var_p(var3d, p3d, p_bot, p_top, ps, mass_weighted=False):
 
-	var3d_ma = np.ma.masked_where((p3d > p_bot) | (p3d < p_top) | (p3d > ps), var3d)
-	if pressure_weighted:
-		result = np.ma.average(var3d_ma, axis=0, weights=p3d)
+	if mass_weighted:
+		cond = ( p3d > p_bot) | ( p3d < p_top) | (p3d > ps)
+		result = trapz_int3d( var3d, p3d, ~cond, p_bot, p_top)
 	else:
+		var3d_ma = np.ma.masked_where((p3d > p_bot) | (p3d < p_top) | (p3d > ps), var3d)
 		result = np.ma.mean(var3d_ma, axis=0)
 	return result
 
@@ -274,6 +295,7 @@ def get_td_diff(t,td,p,p_level):
 def get_storm_motion(u, v, hgt, terrain):
 
 	#Get left and right storm motion vectors, using non-parcel bunkers storm motion (see SHARPpy)
+	#Non-pressure weighted mean
 	hgt = hgt-terrain
 	mnu6 = get_mean_var_hgt(np.copy(u),np.copy(hgt),0,6000,terrain)
 	mnv6 = get_mean_var_hgt(np.copy(v),np.copy(hgt),0,6000,terrain)
@@ -406,11 +428,11 @@ def get_sherb(s03, ebwd, lr03, lr700_500):
 	return [ (s03 / 27.) * (lr03 / 5.2) * (lr700_500 / 5.6) ,\
 			(ebwd / 27.) * (lr03 / 5.2) * (lr700_500 / 5.6) ]
 
-def get_wndg(ml_cape, ml_cin, lr03, u, v, hgt, terrain):
+def get_wndg(ml_cape, ml_cin, lr03, u, v, hgt, terrain, p3d):
 
 	ml_cin = -ml_cin
-	umean = get_mean_var_hgt(u, hgt, 1000, 3500, terrain)
-	vmean = get_mean_var_hgt(v, hgt, 1000, 3500, terrain)
+	umean = get_mean_var_hgt(u, hgt, 1000, 3500, terrain, True, p3d)
+	vmean = get_mean_var_hgt(v, hgt, 1000, 3500, terrain, True, p3d)
 	mean_wind = np.sqrt( umean**2 + vmean**2)
 
 	lr03[lr03 < 7] = 0
@@ -554,7 +576,7 @@ def get_var_hgt(var,hgt,var_value,terrain):
 
 	hgt = hgt - terrain
 
-	if t.ndim == 1:
+	if var.ndim == 1:
 		var_hgt = np.interp(var_value,np.flipud(var),np.flipud(hgt))
 	else:
 		var_hgt = np.array(wrf.interplevel(hgt, var, var_value))
@@ -582,7 +604,7 @@ def get_ship(mucape,muq,s06,lr75,h5_temp,frz_lvl):
 
 	return ship
 
-def get_mmp(u,v,mu_cape,t,hgt,terrain):
+def get_mmp(u,v,mu_cape,t,hgt,terrain,p3d):
 	#From SCP/SHARPpy
 	#NOTE: Is costly due to looping over each layer in 0-1 km and 6-10 km, and within this 
 	# loop, calling function get_shear_hgt which interpolates over lat/lon
@@ -601,8 +623,8 @@ def get_mmp(u,v,mu_cape,t,hgt,terrain):
 
 	lr38 = get_lr_hgt(t,hgt,3000,8000,terrain)
 
-	u_mean = get_mean_var_hgt(u,hgt,3000,12000,terrain)
-	v_mean = get_mean_var_hgt(v,hgt,3000,12000,terrain)
+	u_mean = get_mean_var_hgt(u,hgt,3000,12000,terrain,True,p3d)
+	v_mean = get_mean_var_hgt(v,hgt,3000,12000,terrain,True,p3d)
 	mean_wind = np.sqrt(np.square(u_mean)+np.square(v_mean))
 
 	a_0 = 13.0 # unitless
@@ -617,29 +639,6 @@ def get_mmp(u,v,mu_cape,t,hgt,terrain):
 	mmp[mu_cape<100] = 0
 
 	return mmp
-
-def critical_angle(u,v,hgt,u_sfc,v_sfc):
-	#From SHARPpy
-	#Angle between storm relative winds at 10 m and 10-500 m wind shear vector
-	#Used in junjuction with thunderstorm/supercell indices
-	u_storm, v_storm = get_mean_wind(u,v,hgt,0,6000,False,None,"papprox_hgt")
-	if u.ndim == 1:
-		u_500 = np.interp(500,hgt,u)
-		v_500 = np.interp(500,hgt,v)
-	else:
-		u_500 = wrf.interpz3d(u,hgt,500)
-		v_500 = wrf.interpz3d(v,hgt,500)
-
-	shear_u = u_500 - u_sfc
-	shear_v = v_500 - v_sfc
-	srw_u = u_storm - u_sfc
-	srw_v = v_storm - v_sfc
-
-	dot = shear_u * srw_u + shear_v * srw_v
-	shear_mag = np.sqrt(np.square(shear_u)+np.square(shear_v))
-	srw_mag = np.sqrt(np.square(srw_u)+np.square(srw_v))
-
-	return (np.degrees(np.arccos(dot / (shear_mag * srw_mag))))
 
 def maxtevv_fn(te, om, hgt, terrain):
 
@@ -712,8 +711,8 @@ def get_uh(om, p3d, ta, q_unit, u, v, dx, dy, hgt, terrain, hgt_bot=2000, hgt_to
 	w_comp = np.zeros( (len(levs)-1, om.shape[1], om.shape[2]) ) 
 	vo_comp = np.zeros( (len(levs)-1, om.shape[1], om.shape[2]) ) 
 	for l in np.arange(len(levs) - 1):
-		vo_comp[l] = get_mean_var_hgt(vo3d, hgt, levs[l], levs[l+1], terrain)
-		w_comp[l] = get_mean_var_hgt(w, hgt, levs[l], levs[l+1], terrain)
+		vo_comp[l] = get_mean_var_hgt(vo3d, hgt, levs[l], levs[l+1], terrain, True, p3d)
+		w_comp[l] = get_mean_var_hgt(w, hgt, levs[l], levs[l+1], terrain, True, p3d)
 	uh = np.sum((vo_comp * w_comp), axis=0) * 1000  
 	return uh
 
@@ -1059,7 +1058,7 @@ if __name__ == "__main__":
 		mod_cape = mod_cape_chunk.reshape((mod_cape_chunk.shape[0],orig_shape[2], orig_shape[3]))
 
 	#Assign p levels to a 3d array, with same dimensions as input variables (ta, hgt, etc.)
-	p_3d = np.moveaxis(np.tile(p,[ta.shape[2],ta.shape[3],1]),[0,1,2],[1,2,0])
+	p_3d = np.moveaxis(np.tile(p,[ta.shape[2],ta.shape[3],1]),[0,1,2],[1,2,0]).astype(np.float32)
 
 	tot_start = dt.datetime.now()
 	output = np.zeros((ta_chunk.shape[0]*ps_chunk.shape[1],len(param)))
@@ -1100,17 +1099,25 @@ if __name__ == "__main__":
 		sfc_thetae_unit = mpcalc.equivalent_potential_temperature(sfc_p_unit,sfc_ta_unit,sfc_dp_unit)
 		sfc_q = np.array(sfc_q_unit)
 		sfc_hur = np.array(sfc_hur_unit)
-		#APPROXMIATED USING THE ONE-THIRD RULE: KNOX (2017)
-		sfc_wb = sfc_ta - (1/3 * (sfc_ta - sfc_dp))
+		#sfc_wb = sfc_ta - (1/3 * (sfc_ta - sfc_dp))
+		sfc_wb = np.array(wrf.wetbulb( sfc_p_3d*100, sfc_ta+273.15, sfc_q, units="degC"))
 
 		#Calculate mixed-layer parcel indices, based on avg sfc-100 hPa AGL layer parcel.
 		#First, find avg values for ta, p, hgt and q for ML (between the surface
 		# and 100 hPa AGL)
 		ml_inds = ((sfc_p_3d <= ps[t]) & (sfc_p_3d >= (ps[t] - 100)))
-		ml_ta_avg = np.ma.masked_where(~ml_inds, sfc_ta).mean(axis=0, dtype=np.float32).data.astype(np.float32)
-		ml_q_avg = np.ma.masked_where(~ml_inds, sfc_q).mean(axis=0).data.astype(np.float32)
-		ml_hgt_avg = np.ma.masked_where(~ml_inds, sfc_hgt).mean(axis=0).data.astype(np.float32)
-		ml_p3d_avg = np.ma.masked_where(~ml_inds, sfc_p_3d).mean(axis=0).data.astype(np.float32)
+		#ml_p3d_avg = ps[t] - 50
+		#ml_hgt_avg = get_var_p_lvl(sfc_hgt, sfc_p_3d, ml_p3d_avg)
+		ml_p3d_avg = ( np.ma.masked_where(~ml_inds, sfc_p_3d).min(axis=0) + np.ma.masked_where(~ml_inds, sfc_p_3d).max(axis=0) ) / 2.
+		ml_hgt_avg = ( np.ma.masked_where(~ml_inds, sfc_hgt).min(axis=0) + np.ma.masked_where(~ml_inds, sfc_hgt).max(axis=0) ) / 2.
+
+		#ml_ta_avg = np.ma.average( np.ma.masked_where(~ml_inds, sfc_ta), axis=0).data.astype(np.float32)
+		#ml_q_avg = np.ma.average( np.ma.masked_where(~ml_inds, sfc_q), axis=0).data.astype(np.float32)
+		ml_ta_avg = trapz_int3d(sfc_ta, sfc_p_3d, ml_inds, np.ma.masked_where(~ml_inds, sfc_p_3d).max(axis=0), \
+				np.ma.masked_where(~ml_inds, sfc_p_3d).min(axis=0) ).astype(np.float32)
+		ml_q_avg = trapz_int3d(sfc_q, sfc_p_3d, ml_inds, np.ma.masked_where(~ml_inds, sfc_p_3d).max(axis=0), \
+				np.ma.masked_where(~ml_inds, sfc_p_3d).min(axis=0) ).astype(np.float32)
+
 		#Insert the mean values into the bottom of the 3d arrays pressure-level arrays
 		ml_ta_arr = np.insert(sfc_ta,0,ml_ta_avg,axis=0)
 		ml_q_arr = np.insert(sfc_q,0,ml_q_avg,axis=0)
@@ -1185,7 +1192,7 @@ if __name__ == "__main__":
 		#If no effective layer, effective layer CAPE is zero.
 		#Only levels below 500 hPa AGL are considered
 		eff_cape, eff_cin, eff_lfc, eff_lcl, eff_el, eff_hgt, eff_avg_hgt = get_eff_cape(\
-			cape, cin, sfc_p_3d, sfc_ta, sfc_hgt, sfc_q, ps[t])
+			cape, cin, sfc_p_3d, sfc_ta, sfc_hgt, sfc_q, ps[t], terrain)
 		eff_cape = np.where(np.isnan(eff_cape), sb_cape, eff_cape)
 		eff_cin = np.where(np.isnan(eff_cin), sb_cin, eff_cin)
 		eff_lfc = np.where(np.isnan(eff_lfc), sb_lfc, eff_lfc)
@@ -1195,41 +1202,41 @@ if __name__ == "__main__":
 		#Calculate other parameters
 		#Thermo
 		thermo_start = dt.datetime.now()
-		lr01 = get_lr_hgt(sfc_ta,sfc_hgt,0,1000,terrain)
-		lr03 = get_lr_hgt(sfc_ta,sfc_hgt,0,3000,terrain)
-		lr13 = get_lr_hgt(sfc_ta,sfc_hgt,1000,3000,terrain)
-		lr24 = get_lr_hgt(sfc_ta,sfc_hgt,2000,4000,terrain)
-		lr36 = get_lr_hgt(sfc_ta,sfc_hgt,3000,6000,terrain)
-		lr_freezing = get_lr_hgt(sfc_ta,sfc_hgt,0,"freezing",terrain)
-		lr_subcloud = get_lr_hgt(sfc_ta,sfc_hgt,0,ml_lcl,terrain)
+		lr01 = get_lr_hgt(sfc_ta,np.copy(sfc_hgt),0,1000,terrain)
+		lr03 = get_lr_hgt(sfc_ta,np.copy(sfc_hgt),0,3000,terrain)
+		lr13 = get_lr_hgt(sfc_ta,np.copy(sfc_hgt),1000,3000,terrain)
+		lr24 = get_lr_hgt(sfc_ta,np.copy(sfc_hgt),2000,4000,terrain)
+		lr36 = get_lr_hgt(sfc_ta,np.copy(sfc_hgt),3000,6000,terrain)
+		lr_freezing = get_lr_hgt(sfc_ta,np.copy(sfc_hgt),0,"freezing",terrain)
+		lr_subcloud = get_lr_hgt(sfc_ta,np.copy(sfc_hgt),0,ml_lcl,terrain)
 		lr850_670 = get_lr_p(ta[t], p_3d, hgt[t], 850, 670)
 		lr750_500 = get_lr_p(ta[t], p_3d, hgt[t], 750, 500)
 		lr700_500 = get_lr_p(ta[t], p_3d, hgt[t], 700, 500)
-		melting_hgt = get_t_hgt(sfc_ta,sfc_hgt,0,terrain)
-		hwb0 = get_var_hgt(sfc_wb,sfc_hgt,0,terrain)
-		rhmean01 = get_mean_var_hgt(np.copy(sfc_hur),sfc_hgt,0,1000,terrain)
-		rhmean03 = get_mean_var_hgt(np.copy(sfc_hur),sfc_hgt,0,3000,terrain)
-		rhmean06 = get_mean_var_hgt(np.copy(sfc_hur),sfc_hgt,0,6000,terrain)
-		rhmean13 = get_mean_var_hgt(np.copy(sfc_hur),sfc_hgt,1000,3000,terrain)
-		rhmean36 = get_mean_var_hgt(np.copy(sfc_hur),sfc_hgt,3000,6000,terrain)
-		rhmeansubcloud = get_mean_var_hgt(np.copy(sfc_hur),sfc_hgt,0,ml_lcl,terrain)
-		qmean01 = get_mean_var_hgt(np.copy(sfc_q),sfc_hgt,0,1000,terrain) * 1000
-		qmean03 = get_mean_var_hgt(np.copy(sfc_q),sfc_hgt,0,3000,terrain) * 1000
-		qmean06 = get_mean_var_hgt(np.copy(sfc_q),sfc_hgt,0,6000,terrain) * 1000
-		qmean13 = get_mean_var_hgt(np.copy(sfc_q),sfc_hgt,1000,3000,terrain) * 1000
-		qmean36 = get_mean_var_hgt(np.copy(sfc_q),sfc_hgt,3000,6000,terrain) * 1000
-		qmeansubcloud = get_mean_var_hgt(np.copy(sfc_q),sfc_hgt,0,ml_lcl,terrain) * 1000
-		q_melting = get_var_hgt_lvl(np.copy(sfc_q), sfc_hgt, melting_hgt, terrain) * 1000
-		q1 = get_var_hgt_lvl(np.copy(sfc_q), sfc_hgt, 1000, terrain) * 1000
-		q3 = get_var_hgt_lvl(np.copy(sfc_q), sfc_hgt, 3000, terrain) * 1000
-		q6 = get_var_hgt_lvl(np.copy(sfc_q), sfc_hgt, 6000, terrain) * 1000
-		sfc_thetae = get_var_hgt_lvl(np.array(sfc_thetae_unit), sfc_hgt, 0, terrain)
-		rhmin01 = get_min_var_hgt(np.copy(sfc_hur), sfc_hgt, 0, 1000, terrain)
-		rhmin03 = get_min_var_hgt(np.copy(sfc_hur), sfc_hgt, 0, 3000, terrain)
-		rhmin06 = get_min_var_hgt(np.copy(sfc_hur), sfc_hgt, 0, 6000, terrain)
-		rhmin13 = get_min_var_hgt(np.copy(sfc_hur), sfc_hgt, 1000, 3000, terrain)
-		rhmin36 = get_min_var_hgt(np.copy(sfc_hur), sfc_hgt, 3000, 6000, terrain)
-		rhminsubcloud = get_min_var_hgt(np.copy(sfc_hur), sfc_hgt, 0, ml_lcl, terrain)
+		melting_hgt = get_t_hgt(sfc_ta,np.copy(sfc_hgt),0,terrain)
+		hwb0 = get_var_hgt(sfc_wb,np.copy(sfc_hgt),0,terrain)
+		rhmean01 = get_mean_var_hgt(np.copy(sfc_hur),np.copy(sfc_hgt),0,1000,terrain,True,np.copy(sfc_p_3d))
+		rhmean03 = get_mean_var_hgt(np.copy(sfc_hur),np.copy(sfc_hgt),0,3000,terrain,True,np.copy(sfc_p_3d))
+		rhmean06 = get_mean_var_hgt(np.copy(sfc_hur),np.copy(sfc_hgt),0,6000,terrain,True,np.copy(sfc_p_3d))
+		rhmean13 = get_mean_var_hgt(np.copy(sfc_hur),np.copy(sfc_hgt),1000,3000,terrain,True,np.copy(sfc_p_3d))
+		rhmean36 = get_mean_var_hgt(np.copy(sfc_hur),np.copy(sfc_hgt),3000,6000,terrain,True,np.copy(sfc_p_3d))
+		rhmeansubcloud = get_mean_var_hgt(np.copy(sfc_hur),np.copy(sfc_hgt),0,ml_lcl,terrain,True,np.copy(sfc_p_3d))
+		qmean01 = get_mean_var_hgt(np.copy(sfc_q),np.copy(sfc_hgt),0,1000,terrain,True,np.copy(sfc_p_3d)) * 1000
+		qmean03 = get_mean_var_hgt(np.copy(sfc_q),np.copy(sfc_hgt),0,3000,terrain,True,np.copy(sfc_p_3d)) * 1000
+		qmean06 = get_mean_var_hgt(np.copy(sfc_q),np.copy(sfc_hgt),0,6000,terrain,True,np.copy(sfc_p_3d)) * 1000
+		qmean13 = get_mean_var_hgt(np.copy(sfc_q),np.copy(sfc_hgt),1000,3000,terrain,True,np.copy(sfc_p_3d)) * 1000
+		qmean36 = get_mean_var_hgt(np.copy(sfc_q),np.copy(sfc_hgt),3000,6000,terrain,True,np.copy(sfc_p_3d)) * 1000
+		qmeansubcloud = get_mean_var_hgt(np.copy(sfc_q),np.copy(sfc_hgt),0,ml_lcl,terrain,True,np.copy(sfc_p_3d)) * 1000
+		q_melting = get_var_hgt_lvl(np.copy(sfc_q), np.copy(sfc_hgt), melting_hgt, terrain) * 1000
+		q1 = get_var_hgt_lvl(np.copy(sfc_q), np.copy(sfc_hgt), 1000, terrain) * 1000
+		q3 = get_var_hgt_lvl(np.copy(sfc_q), np.copy(sfc_hgt), 3000, terrain) * 1000
+		q6 = get_var_hgt_lvl(np.copy(sfc_q), np.copy(sfc_hgt), 6000, terrain) * 1000
+		sfc_thetae = get_var_hgt_lvl(np.array(sfc_thetae_unit), np.copy(sfc_hgt), 0, terrain)
+		rhmin01 = get_min_var_hgt(np.copy(sfc_hur), np.copy(sfc_hgt), 0, 1000, terrain)
+		rhmin03 = get_min_var_hgt(np.copy(sfc_hur), np.copy(sfc_hgt), 0, 3000, terrain)
+		rhmin06 = get_min_var_hgt(np.copy(sfc_hur), np.copy(sfc_hgt), 0, 6000, terrain)
+		rhmin13 = get_min_var_hgt(np.copy(sfc_hur), np.copy(sfc_hgt), 1000, 3000, terrain)
+		rhmin36 = get_min_var_hgt(np.copy(sfc_hur), np.copy(sfc_hgt), 3000, 6000, terrain)
+		rhminsubcloud = get_min_var_hgt(np.copy(sfc_hur), np.copy(sfc_hgt), 0, ml_lcl, terrain)
 		v_totals = get_var_p_lvl(np.copy(sfc_ta), sfc_p_3d, 850) - \
 				get_var_p_lvl(np.copy(sfc_ta), sfc_p_3d, 500)
 		c_totals = get_var_p_lvl(np.copy(sfc_dp), sfc_p_3d, 850) - \
@@ -1237,9 +1244,9 @@ if __name__ == "__main__":
 		t_totals = v_totals + c_totals
 		pwat = get_pwat(sfc_q, p, sfc_p_3d, p_3d)
 		if model != "era5":
-			maxtevv = maxtevv_fn(np.array(sfc_thetae_unit), np.copy(sfc_wap), sfc_hgt, terrain)
-		te_diff = thetae_diff(np.array(sfc_thetae_unit), sfc_hgt, terrain)
-		tei = tei_fn(np.array(sfc_thetae_unit), sfc_p_3d, ps[t], sfc_hgt, terrain)
+			maxtevv = maxtevv_fn(np.array(sfc_thetae_unit), np.copy(sfc_wap), np.copy(sfc_hgt), terrain)
+		te_diff = thetae_diff(np.array(sfc_thetae_unit), np.copy(sfc_hgt), terrain)
+		tei = tei_fn(np.array(sfc_thetae_unit), sfc_p_3d, ps[t], np.copy(sfc_hgt), terrain)
 		dpd850 = get_var_p_lvl(np.copy(sfc_ta), sfc_p_3d, 850) - \
 				get_var_p_lvl(np.copy(sfc_dp), sfc_p_3d, 850)
 		dpd700 = get_var_p_lvl(np.copy(sfc_ta), sfc_p_3d, 700) - \
@@ -1248,7 +1255,7 @@ if __name__ == "__main__":
 				get_var_p_lvl(np.copy(sfc_dp), sfc_p_3d, 670)
 		dpd500 = get_var_p_lvl(np.copy(sfc_ta), sfc_p_3d, 500) - \
 				get_var_p_lvl(np.copy(sfc_dp), sfc_p_3d, 500)
-		if int(is_dcape) == 1:
+		if (int(is_dcape) == 1) & (ps[t].max() > 0):
 			#Define DCAPE as the area between the moist adiabat of a descending parcel and the 
 			# environmental temperature (w/o virtual temperature correction). Starting parcel 
 			# chosen by the pressure level with minimum thetae
@@ -1271,58 +1278,59 @@ if __name__ == "__main__":
 			dcape = np.zeros(dpd500.shape)
 		#Winds
 		winds_start = dt.datetime.now()
-		umeanwindinf = get_mean_var_hgt(sfc_ua, sfc_hgt, np.nanmin(eff_hgt,axis=0), \
-					np.nanmax(eff_hgt,axis=0),terrain)
-		vmeanwindinf = get_mean_var_hgt(sfc_va, sfc_hgt, np.nanmin(eff_hgt,axis=0),\
-					np.nanmax(eff_hgt,axis=0),terrain)
-		umean01 = get_mean_var_hgt(sfc_ua, sfc_hgt, 0, 1000, terrain)
-		vmean01 = get_mean_var_hgt(sfc_va, sfc_hgt, 0, 1000, terrain)
-		umean03 = get_mean_var_hgt(sfc_ua, sfc_hgt, 0, 3000, terrain)
-		vmean03 = get_mean_var_hgt(sfc_va, sfc_hgt, 0, 3000, terrain)
-		umean06 = get_mean_var_hgt(sfc_ua, sfc_hgt, 0, 6000, terrain)
-		vmean06 = get_mean_var_hgt(sfc_va, sfc_hgt, 0, 6000, terrain)
-		umean800_600 = get_mean_var_p(ua[t], p_3d, 800, 600, ps[t])
-		vmean800_600 = get_mean_var_p(va[t], p_3d, 800, 600, ps[t])
+		umeanwindinf = get_mean_var_hgt(sfc_ua, np.copy(sfc_hgt), np.nanmin(eff_hgt,axis=0), \
+					np.nanmax(eff_hgt,axis=0),0,False,sfc_p_3d)
+		vmeanwindinf = get_mean_var_hgt(sfc_va, np.copy(sfc_hgt), np.nanmin(eff_hgt,axis=0),\
+					np.nanmax(eff_hgt,axis=0),0,False,sfc_p_3d)
+		print(np.nanmax(eff_hgt,axis=0))
+		umean01 = get_mean_var_hgt(sfc_ua, np.copy(sfc_hgt), 0, 1000, terrain, mass_weighted=True, p3d=np.copy(sfc_p_3d))
+		vmean01 = get_mean_var_hgt(sfc_va, np.copy(sfc_hgt), 0, 1000, terrain, mass_weighted=True, p3d=np.copy(sfc_p_3d))
+		umean03 = get_mean_var_hgt(sfc_ua, np.copy(sfc_hgt), 0, 3000, terrain, mass_weighted=True, p3d=np.copy(sfc_p_3d))
+		vmean03 = get_mean_var_hgt(sfc_va, np.copy(sfc_hgt), 0, 3000, terrain, mass_weighted=True, p3d=np.copy(sfc_p_3d))
+		umean06 = get_mean_var_hgt(sfc_ua, np.copy(sfc_hgt), 0, 6000, terrain, mass_weighted=True, p3d=np.copy(sfc_p_3d))
+		vmean06 = get_mean_var_hgt(sfc_va, np.copy(sfc_hgt), 0, 6000, terrain, mass_weighted=True, p3d=np.copy(sfc_p_3d))
+		umean800_600 = get_mean_var_p(ua[t], p_3d, 800, 600, ps[t], mass_weighted=True)
+		vmean800_600 = get_mean_var_p(va[t], p_3d, 800, 600, ps[t], mass_weighted=True)
 		Umeanwindinf = np.sqrt( (umeanwindinf**2) + (vmeanwindinf**2) )
 		Umean01 = np.sqrt( (umean01**2) + (vmean01**2) )
 		Umean03 = np.sqrt( (umean03**2) + (vmean03**2) )
 		Umean06 = np.sqrt( (umean06**2) + (vmean06**2) )
 		Umean800_600 = np.sqrt( (umean800_600**2) + (vmean800_600**2) )
-		uwindinf = get_var_hgt_lvl(sfc_ua, sfc_hgt, eff_avg_hgt, terrain)
-		vwindinf = get_var_hgt_lvl(sfc_va, sfc_hgt, eff_avg_hgt, terrain)
-		u10 = get_var_hgt_lvl(sfc_ua, sfc_hgt, 10, terrain)
-		v10 = get_var_hgt_lvl(sfc_va, sfc_hgt, 10, terrain)
+		uwindinf = get_var_hgt_lvl(sfc_ua, np.copy(sfc_hgt), eff_avg_hgt, terrain)
+		vwindinf = get_var_hgt_lvl(sfc_va, np.copy(sfc_hgt), eff_avg_hgt, terrain)
+		u10 = get_var_hgt_lvl(sfc_ua, np.copy(sfc_hgt), 10, terrain)
+		v10 = get_var_hgt_lvl(sfc_va, np.copy(sfc_hgt), 10, terrain)
 		u500 = get_var_p_lvl(np.copy(sfc_ua), sfc_p_3d, 500)
 		v500 = get_var_p_lvl(np.copy(sfc_va), sfc_p_3d, 500)
-		u1 = get_var_hgt_lvl(sfc_ua, sfc_hgt, 1000, terrain) 
-		v1 = get_var_hgt_lvl(sfc_va, sfc_hgt, 1000, terrain) 
-		u3 = get_var_hgt_lvl(sfc_ua, sfc_hgt, 3000, terrain) 
-		v3 = get_var_hgt_lvl(sfc_va, sfc_hgt, 3000, terrain) 
-		u6 = get_var_hgt_lvl(sfc_ua, sfc_hgt, 6000, terrain) 
-		v6 = get_var_hgt_lvl(sfc_va, sfc_hgt, 6000, terrain) 
+		u1 = get_var_hgt_lvl(sfc_ua, np.copy(sfc_hgt), 1000, terrain) 
+		v1 = get_var_hgt_lvl(sfc_va, np.copy(sfc_hgt), 1000, terrain) 
+		u3 = get_var_hgt_lvl(sfc_ua, np.copy(sfc_hgt), 3000, terrain) 
+		v3 = get_var_hgt_lvl(sfc_va, np.copy(sfc_hgt), 3000, terrain) 
+		u6 = get_var_hgt_lvl(sfc_ua, np.copy(sfc_hgt), 6000, terrain) 
+		v6 = get_var_hgt_lvl(sfc_va, np.copy(sfc_hgt), 6000, terrain) 
 		Uwindinf = np.sqrt( (uwindinf**2) + (vwindinf**2) )
 		U500 = np.sqrt( (u500**2) + (v500**2) )
 		U10 = np.sqrt( (u10**2) + (v10**2) )
 		U1 = np.sqrt( (u1**2) + (v1**2) )
 		U3 = np.sqrt( (u3**2) + (v3**2) )
 		U6 = np.sqrt( (u6**2) + (v6**2) )
-		scld = get_shear_hgt(sfc_ua, sfc_va, sfc_hgt, ml_lcl, 0.5*mu_el, terrain)
-		s01 = get_shear_hgt(sfc_ua, sfc_va, sfc_hgt, 0, 1000, terrain)
-		s03 = get_shear_hgt(sfc_ua, sfc_va, sfc_hgt, 0, 3000, terrain)
-		s06 = get_shear_hgt(sfc_ua, sfc_va, sfc_hgt, 0, 6000, terrain)
-		s010 = get_shear_hgt(sfc_ua, sfc_va, sfc_hgt, 0, 10000, terrain)
-		s13 = get_shear_hgt(sfc_ua, sfc_va, sfc_hgt, 1000, 3000, terrain)
-		s36 = get_shear_hgt(sfc_ua, sfc_va, sfc_hgt, 3000, 6000, terrain)
-		ebwd = get_shear_hgt(sfc_va, sfc_va, sfc_hgt, np.nanmin(eff_hgt,axis=0),\
+		scld = get_shear_hgt(sfc_ua, sfc_va, np.copy(sfc_hgt), ml_lcl, 0.5*mu_el, terrain)
+		s01 = get_shear_hgt(sfc_ua, sfc_va, np.copy(sfc_hgt), 0, 1000, terrain)
+		s03 = get_shear_hgt(sfc_ua, sfc_va, np.copy(sfc_hgt), 0, 3000, terrain)
+		s06 = get_shear_hgt(sfc_ua, sfc_va, np.copy(sfc_hgt), 0, 6000, terrain)
+		s010 = get_shear_hgt(sfc_ua, sfc_va, np.copy(sfc_hgt), 0, 10000, terrain)
+		s13 = get_shear_hgt(sfc_ua, sfc_va, np.copy(sfc_hgt), 1000, 3000, terrain)
+		s36 = get_shear_hgt(sfc_ua, sfc_va, np.copy(sfc_hgt), 3000, 6000, terrain)
+		ebwd = get_shear_hgt(sfc_va, sfc_va, np.copy(sfc_hgt), np.nanmin(eff_hgt,axis=0),\
 					(mu_el - np.nanmin(eff_hgt,axis=0) ) / 2 + np.nanmin(eff_hgt,axis=0),\
 					terrain)
-		srh01_left, srh01_right = get_srh(sfc_ua, sfc_va, sfc_hgt, 0, 1000, terrain)
-		srh03_left, srh03_right = get_srh(sfc_ua, sfc_va, sfc_hgt, 0, 3000, terrain)
-		srh06_left, srh06_right = get_srh(sfc_ua, sfc_va, sfc_hgt, 0, 6000, terrain)
-		srhe_left, srhe_right = get_srh(sfc_ua, sfc_va, sfc_hgt, \
+		srh01_left, srh01_right = get_srh(sfc_ua, sfc_va, np.copy(sfc_hgt), 0, 1000, terrain)
+		srh03_left, srh03_right = get_srh(sfc_ua, sfc_va, np.copy(sfc_hgt), 0, 3000, terrain)
+		srh06_left, srh06_right = get_srh(sfc_ua, sfc_va, np.copy(sfc_hgt), 0, 6000, terrain)
+		srhe_left, srhe_right = get_srh(sfc_ua, sfc_va, np.copy(sfc_hgt), \
 						np.nanmin(eff_hgt,axis=0), np.nanmax(eff_hgt,axis=0), terrain)
 		ust_right, vst_right, ust_left, vst_left = \
-			get_storm_motion(sfc_ua, sfc_va, sfc_hgt, terrain)
+			get_storm_motion(sfc_ua, sfc_va, np.copy(sfc_hgt), terrain)
 		sru01_right = umean01 - ust_right
 		srv01_right = vmean01 - vst_right
 		sru03_right = umean03 - ust_right
@@ -1344,16 +1352,16 @@ if __name__ == "__main__":
 		Usr03_left = np.sqrt( sru03_left**2 + srv03_left**2)
 		Usr06_left = np.sqrt( sru06_left**2 + srv06_left**2)
 		if model != "era5":
-			omega01 = get_mean_var_hgt(wap[t], hgt[t], 0, 1000, terrain)
-			omega03 = get_mean_var_hgt(wap[t], hgt[t], 0, 3000, terrain)
-			omega06 = get_mean_var_hgt(wap[t], hgt[t], 0, 6000, terrain)
+			omega01 = get_mean_var_hgt(wap[t], hgt[t], 0, 1000, terrain, True, np.copy(p_3d))
+			omega03 = get_mean_var_hgt(wap[t], hgt[t], 0, 3000, terrain, True, np.copy(p_3d))
+			omega06 = get_mean_var_hgt(wap[t], hgt[t], 0, 6000, terrain, True, np.copy(p_3d))
 		#Kinematic
 		kinematic_start = dt.datetime.now()
 		x, y = np.meshgrid(lon,lat)
 		dx, dy = mpcalc.lat_lon_grid_deltas(x,y)
-		thetae10 = get_var_hgt_lvl(np.array(sfc_thetae_unit), sfc_hgt, 10, terrain)
-		thetae01 = get_mean_var_hgt(np.array(sfc_thetae_unit), sfc_hgt, 0, 1000, terrain)
-		thetae03 = get_mean_var_hgt(np.array(sfc_thetae_unit), sfc_hgt, 0, 3000, terrain)
+		thetae10 = get_var_hgt_lvl(np.array(sfc_thetae_unit), np.copy(sfc_hgt), 10, terrain)
+		thetae01 = get_mean_var_hgt(np.array(sfc_thetae_unit), np.copy(sfc_hgt), 0, 1000, terrain, True, np.copy(sfc_p_3d))
+		thetae03 = get_mean_var_hgt(np.array(sfc_thetae_unit), np.copy(sfc_hgt), 0, 3000, terrain, True, np.copy(sfc_p_3d))
 		F10, Fn10, Fs10, icon10, vgt10, conv10, vo10 = \
 				kinematics(u10, v10, thetae10, dx, dy, y)
 		F01, Fn01, Fs01, icon01, vgt01, conv01, vo01 = \
@@ -1401,15 +1409,16 @@ if __name__ == "__main__":
 		effcs6 = eff_cape * np.power(s06, 1.67)
 		if model == "erai":
 			cs6 = mod_cape[t] * np.power(s06, 1.67)
-		wndg = get_wndg(np.copy(ml_cape), np.copy(ml_cin), np.copy(lr03), sfc_ua, sfc_va, sfc_hgt, terrain)
+		wndg = get_wndg(np.copy(ml_cape), np.copy(ml_cin), np.copy(lr03), sfc_ua, sfc_va, np.copy(sfc_hgt), terrain,\
+			np.copy(sfc_p_3d))
 		sweat = get_sweat(np.copy(sfc_p_3d), np.copy(sfc_dp), np.copy(t_totals), sfc_ua, sfc_va)
-		mmp = get_mmp(sfc_ua, sfc_va, np.copy(mu_cape), sfc_ta, sfc_hgt, terrain)
+		mmp = get_mmp(sfc_ua, sfc_va, np.copy(mu_cape), sfc_ta, np.copy(sfc_hgt), terrain, np.copy(sfc_p_3d))
 		dmgwind = (dcape/800.) * (Uwindinf / 8.)
 		dmgwind_fixed = (dcape/800.) * (Umean800_600 / 8.)
 		mburst = get_mburst(np.copy(sb_cape), np.copy(lr03), np.copy(v_totals), \
 				np.copy(dcape), np.copy(pwat), np.copy(tei), \
 				np.array(sfc_thetae_unit), \
-				sfc_hgt, terrain)
+				np.copy(sfc_hgt), terrain)
 		mburst[mburst<0] = 0
 		convgust_wet = np.sqrt( (Umean800_600**2) + (np.sqrt(2*dcape))**2 )
 		convgust_dry = np.sqrt( (Umean800_600**2) + (np.sqrt(dcape))**2 )

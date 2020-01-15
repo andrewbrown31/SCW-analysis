@@ -10,7 +10,7 @@ import pytz
 #from event_analysis import get_aus_stn_info
 import netCDF4 as nc
 from SkewT import get_dcape
-from wrf_parallel import get_shear_hgt
+from wrf_parallel import get_shear_hgt, trapz_int3d
 try:
 	import sharppy.sharptab.profile as profile
 	import sharppy.sharptab.utils as utils
@@ -119,10 +119,10 @@ def read_upperair_obs(start_date,end_date,fout,code="wrfpython"):
 		"rh","rh_quality","ws","ws_quality","wd","wd_quality","p","p_quality",
 		"z","z_quality","symbol"]
 	path = "/g/data/eg3/ab4502/ExtremeWind/obs/upper_air/"
-	fnames = [path + "UA01D_Data_023034_999999999664589.txt",\
-		path + "UA01D_Data_014015_999999999664589.txt",\
-		path + "UA01D_Data_016001_999999999664589.txt",\
-		path + "UA01D_Data_066037_999999999664589.txt" ]
+	fnames = [path + "UA01D_Data_023034_999999999723955.txt",\
+		path + "UA01D_Data_014015_999999999723955.txt",\
+		path + "UA01D_Data_016001_999999999723955.txt",\
+		path + "UA01D_Data_066037_999999999723955.txt" ]
 	df = pd.DataFrame()
 	for f in fnames:
 		df = pd.concat([df, pd.read_csv(f ,\
@@ -141,7 +141,6 @@ def read_upperair_obs(start_date,end_date,fout,code="wrfpython"):
 	min_no_of_points = 12	#Set min no of points required to consider sounding
 	mu_cape = []
 	times = []
-	an = np.array([0,6,12,18])
 
 	df = pd.DataFrame(columns=["stn_id","mu_cape","ml_cape","k_index","s06","Umean800_600",\
 			"Umean01","dcape","t_totals"])
@@ -172,7 +171,8 @@ def read_upperair_obs(start_date,end_date,fout,code="wrfpython"):
 					sb_parcel = params.parcelx(prof, flag=1, dp=-10)
 					mu_parcel = params.parcelx(prof, flag=3, dp=-10)
 					ml_parcel = params.parcelx(prof, flag=4, dp=-10)
-					eff_parcel = params.parcelx(prof, flag=6, ecape=100, ecinh=-250, dp=-10)
+					eff_parcel = params.parcelx(prof, flag=6, ecape=100,\
+					     ecinh=-250, dp=-10)
 					p1km = interp.pres(prof, interp.to_msl(prof, 1000.))
 					p6km = interp.pres(prof, interp.to_msl(prof, 6000.))
 					sfc = prof.pres[prof.sfc]
@@ -211,8 +211,16 @@ def read_upperair_obs(start_date,end_date,fout,code="wrfpython"):
 					
 					ml_inds = ((group.p <= group.p.max()) & \
 						(group.p >= (group.p.max() - 100)))
-					ml_ta_avg = np.ma.masked_where(~ml_inds, group.ta.values).mean()
-					ml_q_avg = np.ma.masked_where(~ml_inds, group.q.values).mean()
+					ml_ta_avg = np.squeeze( trapz_int3d( \
+						group.ta.values[np.newaxis][np.newaxis].T, \
+						group.p.values[np.newaxis][np.newaxis].T, \
+						np.array(ml_inds)[np.newaxis][np.newaxis].T ) )\
+						.data.astype(np.float32)
+					ml_q_avg = np.squeeze( trapz_int3d( \
+						group.q.values[np.newaxis][np.newaxis].T, \
+						group.p.values[np.newaxis][np.newaxis].T, \
+						np.array(ml_inds)[np.newaxis][np.newaxis].T ) )\
+						.data.astype(np.float32)
 					ml_hgt_avg = np.ma.masked_where(~ml_inds, group.z).mean()
 					ml_p3d_avg = np.ma.masked_where(~ml_inds, group.p).mean()
 					#Insert the mean values into the bottom of the 3d arrays
@@ -248,19 +256,28 @@ def read_upperair_obs(start_date,end_date,fout,code="wrfpython"):
 					lcl = res[3]
 					el = res[4]
 
-					#Pressure weighted
-					umean01 = np.average(group[(group.z - terrain) <= 1000]["ua"], \
-							weights=group[(group.z - terrain) <= 1000]["p"])
-					vmean01 = np.average(group[(group.z - terrain) <= 1000]["va"], \
-							weights=group[(group.z - terrain) <= 1000]["p"])
-					umean800_600 = np.average(group[((group.p - terrain) <= 800) & \
-						((group.p - terrain) >= 600)]["ua"],\
-						weights = group[((group.p - terrain) <= 800) & \
-						((group.p - terrain) >= 600)]["p"] )
-					vmean800_600 = np.average(group[((group.p - terrain) <= 800) & \
-						((group.p - terrain) >= 600)]["va"],\
-						weights = group[((group.p - terrain) <= 800) & \
-						((group.p - terrain) >= 600)]["p"] )
+					#Mass-weighted
+					umean01 = np.squeeze(trapz_int3d( group.ua.values[np.newaxis][np.newaxis].T,\
+						group.p.values[np.newaxis][np.newaxis].T, \
+						np.array((group.z - terrain) <= 1000)[np.newaxis][np.newaxis].T,)\
+						.data)
+					vmean01 = np.squeeze(trapz_int3d( group.va.values[np.newaxis][np.newaxis].T,\
+						group.p.values[np.newaxis][np.newaxis].T, \
+						np.array((group.z - terrain) <= 1000)[np.newaxis][np.newaxis].T,)\
+						.data)
+					umean800_600 =\
+						np.squeeze(trapz_int3d( group.ua.values[np.newaxis][np.newaxis].T,\
+						group.p.values[np.newaxis][np.newaxis].T, \
+						np.array((group.p <= 800) & \
+						(group.p >= 600) )[np.newaxis][np.newaxis].T,)\
+						.data)
+					vmean800_600 =\
+						np.squeeze(trapz_int3d( group.va.values[np.newaxis][np.newaxis].T,\
+						group.p.values[np.newaxis][np.newaxis].T, \
+						np.array((group.p <= 800) & \
+						(group.p >= 600) )[np.newaxis][np.newaxis].T,)\
+						.data)
+
 					#Non pressure weighted
 					#umean01 = group[(group.z - terrain) <= 1000]["ua"].mean()
 					#vmean01 = group[(group.z - terrain) <= 1000]["va"].mean()
@@ -293,8 +310,7 @@ def read_upperair_obs(start_date,end_date,fout,code="wrfpython"):
 						group.p.values * units.units.hectopascal, \
 						group.ta.values * units.units.degC, \
 						group.dp.values * units.units.degC)
-					thetae[group.z < 1000] = np.nan
-					thetae[group.z > 6000] = np.nan
+					thetae[abs(group.p - group.p.iloc[0]) > 400] = np.nan
 					try:
 						dcape = dcape[np.nanargmin(thetae)]
 					except:
@@ -449,7 +465,7 @@ def read_convective_wind_gusts():
 	#Load csv file
 	print("LOADING TEXT FILE")
 	#f = "/g/data/eg3/ab4502/ExtremeWind/obs/aws/daily_aus_full/DC02D_Data_999999999643799.txt"
-	f = "/g/data/eg3/ab4502/ExtremeWind/obs/aws/daily_aus_full//DC02D_Data_999999999714009.txt"
+	f = "/g/data/eg3/ab4502/ExtremeWind/obs/aws/daily_aus_full/DC02D_Data_999999999720188.txt"
 	df = pd.read_csv(f, names=names, dtype=data_types, \
 		na_values={"wind_gust":'     ', "max_gust_str_lt":"    "})
 	df = df.replace({"stn_name":renames})
@@ -509,7 +525,7 @@ def read_convective_wind_gusts():
 	
 	#Set up TC dataframe. Only worry about 2005 onwards as this is when lightning is available
 	tc_df = read_bom_shtc("/g/data/eg3/ab4502/ExtremeWind/shtc_2604.csv")
-	tc_df = tc_df[(tc_df.datetime >= dt.datetime(2005,1,1)) & (tc_df.datetime<dt.datetime(2018,1,1))]
+	tc_df = tc_df[(tc_df.datetime >= dt.datetime(2005,1,1)) & (tc_df.datetime<dt.datetime(2019,1,1))]
 	#Loop through the TCs and assign a stn_name if it is within 500 km a TC on
 	# that day
 	tc_affected_date = []
@@ -614,7 +630,7 @@ def read_convective_wind_gusts():
 		"day_lt","hour_lt","min_lt","daily_date_utc","gust_time_lt","gust_time_utc", "hourly_time_utc",\
 		"hourly_floor_utc","tc_affected","lightning","incomplete_month",\
 		"sta_wind","sta_wind_id","sta_date","sta_daily_date","is_sta"]].\
-		to_pickle("/g/data/eg3/ab4502/ExtremeWind/obs/aws/convective_wind_gust_aus_2005_2015_v2.pkl")
+		to_pickle("/g/data/eg3/ab4502/ExtremeWind/obs/aws/convective_wind_gust_aus_2005_2018.pkl")
 
 	return df
 
@@ -851,43 +867,36 @@ def read_lightning(fname, rad = 100, dmax = False, smoothing=True, loc_id=None, 
 		loc_id,points = get_aus_stn_info()
 	
 	path = "/g/data/eg3/ab4502/ExtremeWind/ad_data/lightning/"
-	years = np.arange(2005,2016)
-	lightning = np.empty((1460*len(years),241,361))
+	years = np.arange(2005,2019)
 	df = pd.DataFrame()
 	for year in np.arange(0,len(years)):
 		print("READING LIGHTNING DATA FOR YEAR "+str(years[year]))
 		f = nc.Dataset(path+"lightning_Australasia0.250000degree_6.00000hr_"+\
 			str(years[year])+".nc")
-		x,y = np.meshgrid(f.variables["lon"][:], f.variables["lat"][:])
+		if year == 0:
+			x,y = np.meshgrid(f.variables["lon"][:], f.variables["lat"][:])
 		lightning_year = f.variables["Lightning_observed"][:]
 		times = f.variables["time"][:]
-		time_dt = [dt.datetime(years[year],1,1,0,0,0) + dt.timedelta(hours=int(times[x])) \
-				for x in np.arange(0,len(times))]
+		if years[year] >= 2016:
+			time_dt = [dt.datetime(years[year],1,1,0,0,0) + dt.timedelta(hours=6*int(times[i])) \
+				for i in np.arange(0,len(times))]
+		else:
+			time_dt = [dt.datetime(years[year],1,1,0,0,0) + dt.timedelta(hours=int(times[i])) \
+				for i in np.arange(0,len(times))]
 		for p in np.arange(0,len(points)):
 			dist = latlon_dist(points[p][1], points[p][0], y, x)
 			mask = np.zeros(lightning_year.shape, dtype=bool)
+			#Sum all lightning counts within "rad" (in km) 
 			mask[:,:,:] = (dist > rad)[np.newaxis,:,:]
-			#lat_ind = np.argmin(abs(f.variables["lat"][:]-points[p][1]))
-			#lon_ind = np.argmin(abs(f.variables["lon"][:]-points[p][0]))
-			#if smoothing:
-			#Sum all lightning counts within +/- 1 deg of the grid point closest
-			# to "point"
 			temp_lightning = np.ma.masked_where(mask, \
 				lightning_year ).sum(axis=(1,2))
-			    #temp_lightning = np.sum(f.variables["Lightning_observed"]\
-				#	[:,(lat_ind-4):(lat_ind+5),(lon_ind-4):(lon_ind+5)],axis=(1,2))
-			#else:
-			#    temp_lightning = f.variables["Lightning_observed"][:,lat_ind,lon_ind]
 			
 			temp_df = pd.DataFrame(\
 				{"lightning":temp_lightning,\
 				"loc_id":loc_id[p],"date":time_dt,"lon":points[p][0],\
 				"lat":points[p][1]})
 			df = df.append(temp_df)
-	#if smoothing:
 	df.to_pickle("/g/data/eg3/ab4502/ExtremeWind/ad_data/"+fname+"_smoothed.pkl")
-	#else:
-	#	df.to_pickle("/g/data/eg3/ab4502/ExtremeWind/ad_data/"+fname+".pkl")
 
 	if dmax:
 
@@ -1216,7 +1225,8 @@ if __name__ == "__main__":
 
 	#df = read_lightning(False)
 	#read_aws_daily_aus()
-	df = read_upperair_obs(dt.datetime(2005,1,1),dt.datetime(2015,12,31), "UA_wrfpython_pressure_weighted",\
-		"wrfpython")
-	#df = read_upperair_obs(dt.datetime(2005,1,1),dt.datetime(2015,12,31), "UA_sharppy", "sharppy")
+	#df = read_upperair_obs(dt.datetime(2005,1,1),dt.datetime(2018,12,31),\
+	 #   "UA_wrfpython", "wrfpython")
+	df = read_upperair_obs(dt.datetime(2005,1,1),dt.datetime(2018,12,31), \
+	    "UA_sharppy", "sharppy")
 

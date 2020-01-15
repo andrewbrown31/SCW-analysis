@@ -1684,7 +1684,7 @@ def nc_attributes(param):
 		least_significant_digit = 1
 	elif param == "cp":
 		units = "mm/hr"
-		long_name = "convective_precipitation_erai"
+		long_name = "convective_precipitation"
 		least_significant_digit = 8
 	elif param == "dcp2":
 		units = ""

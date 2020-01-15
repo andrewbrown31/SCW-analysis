@@ -140,7 +140,9 @@ def read_barra(domain,times):
 	
 #IF WANTING TO LOOP OVER TIME, CHANGE READ_BARRA TO READ ALL TIMES IN A RANGE, THEN LOOP OVER TIME DIMENSION WITHIN CALC_PARAM
 
-def read_barra_fc(domain,times):
+def read_barra_fc(domain,times,mslp=False):
+	#If mslp=True, then replace ps with mslp
+
 	#Open BARRA netcdf files and extract variables needed for a range of times and given
 	# spatial domain
 	#NOTE, currently this uses analysis files, with no time dimension length=1. For
@@ -204,17 +206,17 @@ def read_barra_fc(domain,times):
 				temp_time.strftime("%Y")+"/"+temp_time.strftime("%m")+\
 				"/air_temp-fc-prs-PT1H-BARRA_R-v1*"+temp_time.strftime("%Y")+\
 				temp_time.strftime("%m")+temp_time.strftime("%d")+"T"+\
-				temp_time.strftime("%H")+"*.nc")[0]
+				temp_time.strftime("%H")+"*.sub.nc")[0]
 			temp_fname_slv = glob.glob("/g/data/ma05/BARRA_R/v1/forecast/slv/dewpt_scrn/"+\
 				temp_time.strftime("%Y")+"/"+temp_time.strftime("%m")+\
 				"/dewpt_scrn-fc-slv-PT1H-BARRA_R-v1*"+temp_time.strftime("%Y")+\
 				temp_time.strftime("%m")+temp_time.strftime("%d")+"T"+\
-				temp_time.strftime("%H")+"*.nc")[0]
+				temp_time.strftime("%H")+"*.sub.nc")[0]
 			temp_fname_spec = glob.glob("/g/data/ma05/BARRA_R/v1/forecast/spec/uwnd10m/"+\
 				temp_time.strftime("%Y")+"/"+temp_time.strftime("%m")+\
 				"/uwnd10m-fc-spec-PT1H-BARRA_R-v1*"+temp_time.strftime("%Y")+\
 				temp_time.strftime("%m")+temp_time.strftime("%d")+"T"+\
-				temp_time.strftime("%H")+"*.nc")[0]
+				temp_time.strftime("%H")+"*.sub.nc")[0]
 			if temp_fname_prs not in prs_fnames:
 				prs_fnames.append(temp_fname_prs)
 				slv_fnames.append(temp_fname_slv)
@@ -223,16 +225,27 @@ def read_barra_fc(domain,times):
 	for t in np.arange(0,len(prs_fnames)):
 		#Load BARRA analysis files
 		ta_file = nc.Dataset(prs_fnames[t])
-		z_file = nc.Dataset(glob.glob(prs_fnames[t].replace("air_temp","geop_ht").replace("v1.1","*").replace("v1","*"))[0])
+		z_file = nc.Dataset(glob.glob(prs_fnames[t].replace("air_temp","geop_ht").replace("v1.1","*").replace("v1","*").replace(".nc","*"))[0])
 		ua_file = nc.Dataset(glob.glob(prs_fnames[t].replace("air_temp","wnd_ucmp").replace("v1.1","*").replace("v1","*"))[0])
 		va_file = nc.Dataset(glob.glob(prs_fnames[t].replace("air_temp","wnd_vcmp").replace("v1.1","*").replace("v1","*"))[0])
-		w_file = nc.Dataset(glob.glob(prs_fnames[t].replace("air_temp","vertical_wnd").replace("v1.1","*").replace("v1","*").replace("prod/",""))[0])
+		try:
+			w_file = nc.Dataset(glob.glob(prs_fnames[t].replace("air_temp","vertical_wnd").\
+				replace("v1.1","*").replace("v1","*"))[0])
+		except:
+			try:
+				w_file = nc.Dataset(glob.glob(prs_fnames[t].replace("air_temp","vertical_wnd").\
+					replace("v1.1","*").replace("v1","*").replace("prod/",""))[0])
+			except:
+				raise OSError("W file not found")
 		hur_file = nc.Dataset(glob.glob(prs_fnames[t].replace("air_temp","relhum").replace("v1.1","*").replace("v1","*"))[0])
 	
 		uas_file = nc.Dataset(spec_fnames[t])
 		vas_file = nc.Dataset(spec_fnames[t].replace("uwnd10m","vwnd10m"))
 		tas_file = nc.Dataset(spec_fnames[t].replace("uwnd10m","temp_scrn"))
-		ps_file = nc.Dataset(spec_fnames[t].replace("uwnd10m","sfc_pres"))
+		if mslp:
+		    ps_file = nc.Dataset(spec_fnames[t].replace("uwnd10m","mslp"))
+		else:
+		    ps_file = nc.Dataset(spec_fnames[t].replace("uwnd10m","sfc_pres"))
 		wg_file = nc.Dataset(spec_fnames[t].replace("uwnd10m","max_wndgust10m"))
 
 		ta2d_file = nc.Dataset(slv_fnames[t])
@@ -256,7 +269,9 @@ def read_barra_fc(domain,times):
 			temp_hur[temp_hur>100] = 100
 			temp_dp = get_dp(temp_ta,temp_hur)
 			temp_wap = omega( w_file["vertical_wnd"][np.in1d(times, date_list),\
-				(np.in1d(w_file["pressure"][:], pres_full)) & (w_file["pressure"][:] >= 100),\
+				(np.in1d(w_file["pressure"][:].astype(np.float32), \
+					pres_full.astype(np.float32))) \
+				& (w_file["pressure"][:] >= 100),\
 				lat_ind,lon_ind] * (units.metre / units.second),\
 				p_3d * (units.hPa), \
 				temp_ta * units.degC )
@@ -286,7 +301,10 @@ def read_barra_fc(domain,times):
 		vas[np.in1d(date_list, times),:,:] = vas_file["vwnd10m"][np.in1d(times, date_list),lat_ind,lon_ind]
 		tas[np.in1d(date_list, times),:,:] = tas_file["temp_scrn"][np.in1d(times, date_list),lat_ind,lon_ind] - 273.15
 		ta2d[np.in1d(date_list, times),:,:] = ta2d_file["dewpt_scrn"][np.in1d(times, date_list),lat_ind,lon_ind] - 273.15
-		ps[np.in1d(date_list, times),:,:] = ps_file["sfc_pres"][np.in1d(times, date_list),lat_ind,lon_ind]/100 
+		if mslp:
+		    ps[np.in1d(date_list, times),:,:] = ps_file["mslp"][np.in1d(times, date_list),lat_ind,lon_ind]/100 
+		else:
+		    ps[np.in1d(date_list, times),:,:] = ps_file["sfc_pres"][np.in1d(times, date_list),lat_ind,lon_ind]/100 
 		wg10[np.in1d(date_list, times),:,:] = wg_file["max_wndgust10m"][np.in1d(times, date_list),lat_ind,lon_ind]
 
 		uas_file.close();vas_file.close();ps_file.close();tas_file.close();ta2d_file.close()
@@ -793,5 +811,5 @@ if __name__ == "__main__":
 
 	loc_id, points = get_aus_stn_info()
 
-	to_points_loop(loc_id,points,"barra_hail_"+str(start_year)+"_"+str(end_year),\
-			start_year,end_year,variables=["ml_cape","s06","mlcape*s06","ship","mhgt","wbz","lr13","qmean03"])
+	to_points_loop(loc_id,points,"barra_allvars_"+str(start_year)+"_"+str(end_year),\
+			start_year,end_year)

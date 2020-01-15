@@ -97,8 +97,8 @@ def get_eff_cape(cape, cin, sfc_p_3d, sfc_ta, sfc_hgt, sfc_q, ps, terrain):
 	eff_avg_hgt = (np.nanmin(eff_hgt,axis=0) + np.nanmax(eff_hgt,axis=0)) / 2
 	#eff_avg_ta = np.ma.average(eff_ta, weights=sfc_p_3d,axis=0)
 	#eff_avg_q = np.ma.average(eff_q, weights=sfc_p_3d,axis=0)
-	eff_avg_ta = trapz_int3d(sfc_ta, sfc_p_3d, eff_cape_cond, np.nanmax(eff_p,axis=0), np.nanmin(eff_p,axis=0))
-	eff_avg_q = trapz_int3d(sfc_q, sfc_p_3d, eff_cape_cond, np.nanmax(eff_p,axis=0), np.nanmin(eff_p,axis=0))
+	eff_avg_ta = trapz_int3d(sfc_ta, sfc_p_3d, eff_cape_cond)
+	eff_avg_q = trapz_int3d(sfc_q, sfc_p_3d, eff_cape_cond)
 
 	eff_avg_p = np.where(np.isnan(eff_avg_p),\
 		np.ma.masked_where(~((sfc_p_3d==ps)),\
@@ -161,7 +161,7 @@ def get_min_var_hgt(var3d, hgt, hgt_bot, hgt_top, terrain):
 	result = np.nanmin(var3d, axis=0)
 	return result
 
-def trapz_int3d(var3d, p3d, cond, pbot, ptop):
+def trapz_int3d(var3d, p3d, cond):
 
 	#Vertical intergration using the trapezoidal rule for finite integration. Scaled by the total difference in 
 	# pressure between the top and bottom layers, such that a mass-weighted mean is the output.
@@ -177,6 +177,9 @@ def trapz_int3d(var3d, p3d, cond, pbot, ptop):
 		v_layer = var3d[i+1] + var3d[i]
 		layer = np.where( (cond[i+1] & cond[i]), v_layer*p_layer, 0)
 		result = result + layer
+	p_masked = np.ma.masked_where(~cond, p3d)
+	ptop = p_masked.min(axis=0)
+	pbot = p_masked.max(axis=0)
 	return ( 1 / (2 * (ptop - pbot) ) ) * result
 
 def get_mean_var_hgt(var3d, hgt, hgt_bot, hgt_top, terrain, mass_weighted=False, p3d=None):
@@ -184,9 +187,7 @@ def get_mean_var_hgt(var3d, hgt, hgt_bot, hgt_top, terrain, mass_weighted=False,
 	if mass_weighted:
 		try:
 			cond = ( (hgt-terrain) < hgt_bot) | ( (hgt-terrain) > hgt_top) | (np.isnan(hgt_bot)) | (np.isnan(hgt_top))
-			topp = get_var_hgt_lvl(p3d, hgt, hgt_top, terrain)
-			botp = get_var_hgt_lvl(p3d, hgt, hgt_bot, terrain)
-			result = trapz_int3d( var3d, p3d, ~cond, botp, topp)
+			result = trapz_int3d( var3d, p3d, ~cond)
 		except:
 			raise ValueError("FUNCTION get_mean_var_hgt() IS FAILING TO TAKE A PRESSURE WEIGHTED"+\
 				" AVERAGE. HAS A 3D PRESSURE FIELD BEEN PARSED?")
@@ -201,7 +202,7 @@ def get_mean_var_p(var3d, p3d, p_bot, p_top, ps, mass_weighted=False):
 
 	if mass_weighted:
 		cond = ( p3d > p_bot) | ( p3d < p_top) | (p3d > ps)
-		result = trapz_int3d( var3d, p3d, ~cond, p_bot, p_top)
+		result = trapz_int3d( var3d, p3d, ~cond)
 	else:
 		var3d_ma = np.ma.masked_where((p3d > p_bot) | (p3d < p_top) | (p3d > ps), var3d)
 		result = np.ma.mean(var3d_ma, axis=0)
@@ -1113,10 +1114,8 @@ if __name__ == "__main__":
 
 		#ml_ta_avg = np.ma.average( np.ma.masked_where(~ml_inds, sfc_ta), axis=0).data.astype(np.float32)
 		#ml_q_avg = np.ma.average( np.ma.masked_where(~ml_inds, sfc_q), axis=0).data.astype(np.float32)
-		ml_ta_avg = trapz_int3d(sfc_ta, sfc_p_3d, ml_inds, np.ma.masked_where(~ml_inds, sfc_p_3d).max(axis=0), \
-				np.ma.masked_where(~ml_inds, sfc_p_3d).min(axis=0) ).astype(np.float32)
-		ml_q_avg = trapz_int3d(sfc_q, sfc_p_3d, ml_inds, np.ma.masked_where(~ml_inds, sfc_p_3d).max(axis=0), \
-				np.ma.masked_where(~ml_inds, sfc_p_3d).min(axis=0) ).astype(np.float32)
+		ml_ta_avg = trapz_int3d(sfc_ta, sfc_p_3d, ml_inds ).astype(np.float32)
+		ml_q_avg = trapz_int3d(sfc_q, sfc_p_3d, ml_inds ).astype(np.float32)
 
 		#Insert the mean values into the bottom of the 3d arrays pressure-level arrays
 		ml_ta_arr = np.insert(sfc_ta,0,ml_ta_avg,axis=0)
@@ -1266,8 +1265,8 @@ if __name__ == "__main__":
 						np.array(p[p>=300]), ps[t])
 			sfc_thetae300 = sfc_thetae_unit[np.concatenate([[1100], p]) >= 300].data
 			sfc_p300 = sfc_p_3d[np.concatenate([[1100], p]) >= 300]
-			sfc_thetae300[(p_3d[t] - sfc_p300) > 400] = np.nan 
-			sfc_thetae300[(sfc_p300 > p_3d[t])] = np.nan 
+			sfc_thetae300[(ps[t] - sfc_p300) > 400] = np.nan 
+			sfc_thetae300[(sfc_p300 > ps[t])] = np.nan 
 			#Calculate for all levels (sfc to 400 hPa agl), and then mask based on height agl 
 			dcape = np.nanargmin(sfc_thetae300, axis=0).choose(dcape)
 			ddraft_temp = tas[t] - \
@@ -1282,7 +1281,6 @@ if __name__ == "__main__":
 					np.nanmax(eff_hgt,axis=0),0,False,sfc_p_3d)
 		vmeanwindinf = get_mean_var_hgt(sfc_va, np.copy(sfc_hgt), np.nanmin(eff_hgt,axis=0),\
 					np.nanmax(eff_hgt,axis=0),0,False,sfc_p_3d)
-		print(np.nanmax(eff_hgt,axis=0))
 		umean01 = get_mean_var_hgt(sfc_ua, np.copy(sfc_hgt), 0, 1000, terrain, mass_weighted=True, p3d=np.copy(sfc_p_3d))
 		vmean01 = get_mean_var_hgt(sfc_va, np.copy(sfc_hgt), 0, 1000, terrain, mass_weighted=True, p3d=np.copy(sfc_p_3d))
 		umean03 = get_mean_var_hgt(sfc_ua, np.copy(sfc_hgt), 0, 3000, terrain, mass_weighted=True, p3d=np.copy(sfc_p_3d))

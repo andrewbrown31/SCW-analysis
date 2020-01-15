@@ -1,9 +1,10 @@
+import sys
 import datetime as dt
 import itertools
 import os
 import matplotlib.pyplot as plt
 import matplotlib
-from plot_param import contour_properties
+#from plot_param import contour_properties
 #from plot_clim import *
 import pandas as pd
 import numpy as np
@@ -23,21 +24,21 @@ def compare_obs_soundings():
 	#Compare observed soundings (2005 - 2015) at Adelaide AP, Woomera, Darwin and Sydney to
 	# ERA-Interim (and later, ERA5 and BARRA-R)
 
-	barra = pd.read_pickle("/g/data/eg3/ab4502/ExtremeWind/points/barra_allvars_2005_2015.pkl")
-	era5 = pd.read_pickle("/g/data/eg3/ab4502/ExtremeWind/points/era5_allvars_2005_2015.pkl")
-	obs = pd.read_pickle("/g/data/eg3/ab4502/ExtremeWind/points/UA_wrf.pkl").\
+	barra = pd.read_pickle("/g/data/eg3/ab4502/ExtremeWind/points/barra_allvars_2005_2018.pkl")
+	era5 = pd.read_pickle("/g/data/eg3/ab4502/ExtremeWind/points/era5_allvars_2005_2018.pkl")
+	obs = pd.read_pickle("/g/data/eg3/ab4502/ExtremeWind/points/UA_wrfpython.pkl").\
 		reset_index().rename(columns={"index":"time"})
-	temp, barra_wg10 = optimise_pss("/g/data/eg3/ab4502/ExtremeWind/points/barra_allvars_2005_2015.pkl",
+	temp, barra_wg10, barra_sta = optimise_pss("/g/data/eg3/ab4502/ExtremeWind/points/barra_allvars_2005_2018.pkl",
 		T=1000, compute=False, l_thresh=2, is_pss="hss", model_name="barra_fc") 
-	temp, era5_wg10 = optimise_pss("/g/data/eg3/ab4502/ExtremeWind/points/era5_allvars_2005_2015.pkl",
+	temp, era5_wg10, barra_sta = optimise_pss("/g/data/eg3/ab4502/ExtremeWind/points/era5_allvars_2005_2018.pkl",
 		T=1000, compute=False, l_thresh=2, is_pss="hss", model_name="era5") 
 	stn_map = {14015:"Darwin",66037:"Sydney",16001:"Woomera",23034:"Adelaide"}
 	obs["stn_name"] = obs["stn_id"].map(stn_map)
 	mod_cols = ["k_index","t_totals","ml_cape","s06","ml_el","dcape","ml_cin","Umean800_600","time","loc_id"]
 	df = pd.merge(barra[mod_cols], era5[mod_cols], suffixes=("_barra", "_era5"), on=["time","loc_id"])
 	df = pd.merge(df, obs, left_on=["time","loc_id"], right_on=["time","stn_name"]).dropna()
-	df.loc[:,"s06"] = df.loc[:,"s06"] * 1.94384
-	df.loc[:,"Umean800_600"] = df.loc[:,"Umean800_600"] * 1.94384
+	#df.loc[:,"s06"] = df.loc[:,"s06"] * 1.94384
+	#df.loc[:,"Umean800_600"] = df.loc[:,"Umean800_600"] * 1.94384
 
 	locs = ["Adelaide", "Woomera", "Sydney", "Darwin"]
 	stn_id = [23034, 16001, 66037, 14015]
@@ -48,9 +49,9 @@ def compare_obs_soundings():
 	rename_params = {"ml_cape":"MLCAPE", "ml_el":"MLEL", "k_index":"K-index", "t_totals":"T-totals",\
 		"dcape":"DCAPE", "ml_cin":"MLCIN", "Umean800_600":"Umean800-600", "s06":"S06", "wg10":"WindGust10"}
 	pmax = {"ml_cape":10000, "ml_el":17000, "k_index":50, "t_totals":60,\
-		"dcape":4000, "ml_cin":1000, "Umean800_600":40, "s06":60, "wg10":45}
+		"dcape":2500, "ml_cin":1000, "Umean800_600":40, "s06":60, "wg10":45}
 	rename_mod = {"era5":"ERA5","barra":"BARRA"}
-	cnt=1
+	cnt=3
 	fig = ['a','b','c','d','e','f','g','h','i','j','k','l','m','n','o','p']
 	for i in itertools.product(params, ["_barra","_era5"]):
 
@@ -81,43 +82,43 @@ def compare_obs_soundings():
 		xb, xt = plt.gca().get_xlim()
 		yb, yt = plt.gca().get_ylim()
 		plt.text(xb, yt, \
-			" r = "+str(round(spr(df.loc[:, p], df.loc[:, col]).correlation, 3)), \
-			horizontalalignment="left", verticalalignment="top")
+			"\n r = "+str(round(spr(df.loc[:, p], df.loc[:, col]).correlation, 3)), \
+			horizontalalignment="left", va="center", fontsize=14)
 		plt.plot([min(xb, yb), max(xt,yt)], [min(xb, yb), max(xt,yt)], color="r")
 		plt.title(fig[cnt-1] + ") " + rename_mod[m] + " " + rename_params[p])
 		cnt = cnt+1
 
-	ax = plt.subplot(4,4,cnt)
+	ax = plt.subplot(4,4,1)
 	plt.hist2d(barra_wg10.loc[:, "wind_gust"], barra_wg10.loc[:, "wg10"], cmap=plt.get_cmap("Greys"), \
 		norm=matplotlib.colors.SymLogNorm(1),\
 		vmax=1000, bins=20, range = [[0,40],[0,40]])
 	xb, xt = plt.gca().get_xlim()
 	yb, yt = plt.gca().get_ylim()
 	plt.text(0, 40, \
-		" r = "+str(round(spr(barra_wg10.loc[:, "wg10"], barra_wg10.loc[:, "wind_gust"]).correlation, 3)), \
-		horizontalalignment="left", verticalalignment="top")
+		"\n r = "+str(round(spr(barra_wg10.loc[:, "wg10"], barra_wg10.loc[:, "wind_gust"]).correlation, 3)), \
+		horizontalalignment="left", verticalalignment="center", fontsize=14)
 	plt.plot(barra_wg10.loc[(barra_wg10["wind_gust"]>=25) & (barra_wg10["lightning"]>=2), "wind_gust"], \
 			barra_wg10.loc[(barra_wg10["wind_gust"]>=25) & (barra_wg10["lightning"]>=2), "wg10"], "o", \
 			markeredgecolor="r", markerfacecolor="r", markersize=2)
 	plt.plot([min(xb, yb), max(xt,yt)], [min(xb, yb), max(xt,yt)], color="r")
 	m = "barra"; p = "wg10"
-	plt.title(fig[cnt-1] + ") " + rename_mod[m] + " " + rename_params[p])
+	plt.title(fig[0] + ") " + rename_mod[m] + " " + rename_params[p])
 	cnt = cnt+1
-	ax = plt.subplot(4,4,cnt)
+	ax = plt.subplot(4,4,2)
 	plt.hist2d(era5_wg10.loc[:, "wind_gust"], era5_wg10.loc[:, "wg10"], cmap=plt.get_cmap("Greys"), \
 		norm=matplotlib.colors.SymLogNorm(1),\
 		vmax=1000, bins=20, range = [[0,40],[0,40]])
 	xb, xt = plt.gca().get_xlim()
 	yb, yt = plt.gca().get_ylim()
 	plt.text(0, 40, \
-		" r = "+str(round(spr(era5_wg10.loc[:, "wg10"], era5_wg10.loc[:, "wind_gust"]).correlation, 3)), \
-		horizontalalignment="left", verticalalignment="top")
+		"\n r = "+str(round(spr(era5_wg10.loc[:, "wg10"], era5_wg10.loc[:, "wind_gust"]).correlation, 3)), \
+		horizontalalignment="left", verticalalignment="center", fontsize=14)
 	plt.plot(era5_wg10.loc[(era5_wg10["wind_gust"]>=25) & (era5_wg10["lightning"]>=2), "wind_gust"], \
 			era5_wg10.loc[(era5_wg10["wind_gust"]>=25) & (era5_wg10["lightning"]>=2), "wg10"], "ro",\
 			markersize=2)
 	plt.plot([min(xb, yb), max(xt,yt)], [min(xb, yb), max(xt,yt)], color="r")
 	m = "era5"; p = "wg10"
-	plt.title(fig[cnt-1] + ") " + rename_mod[m] + " " + rename_params[p])
+	plt.title(fig[1] + ") " + rename_mod[m] + " " + rename_params[p])
 	
 	plt.subplots_adjust(hspace=0.4)
 	ax = plt.axes([0.2, 0.04, 0.6, 0.02])
@@ -265,29 +266,35 @@ def create_threshold_variable(variable, threshold, model, event=None, predictors
 	if variable == "logit":
 		from event_analysis import optimise_pss 
 		if model == "barra":
-			pss_df, mod = optimise_pss("/g/data/eg3/ab4502/ExtremeWind/points/"+\
-				"barra_allvars_2005_2015.pkl",\
+			pss_df, mod_aws, mod_sta = optimise_pss("/g/data/eg3/ab4502/ExtremeWind/points/"+\
+				"barra_allvars_2005_2018.pkl",\
 				T=1000, compute=False, l_thresh=2, is_pss="hss", model_name="barra_fc") 
 		elif model == "era5":
-			pss_df, mod = optimise_pss("/g/data/eg3/ab4502/ExtremeWind/points/"+\
-				"era5_allvars_2005_2015.pkl",\
+			pss_df, mod_aws, mod_sta = optimise_pss("/g/data/eg3/ab4502/ExtremeWind/points/"+\
+				"era5_allvars_2005_2018.pkl",\
 				T=1000, compute=False, l_thresh=2, is_pss="hss", model_name="era5") 
 		from sklearn.linear_model import LogisticRegression 
 		logit = LogisticRegression(class_weight="balanced", solver="liblinear",max_iter=1000)
 		try:
-			logit_mod = logit.fit(mod[predictors], mod[event])
+			if event == "is_conv_aws":
+				logit_mod = logit.fit(mod_aws[predictors], mod_aws[event])
+			elif event == "is_sta":
+				logit_mod = logit.fit(mod_sta[predictors], mod_sta[event])
+				
 		except:
 			raise ValueError("IF TRAINING LOGISTIC MODEL, EVENT AND PREDICTORS MUST BE SPECIFIED")
 
 	#Initialise output
 	ds = xr.open_dataset(files[0])
 	out = np.zeros((len(files),ds.lat.shape[0], ds.lon.shape[0]))	
-	out_mjo_active = np.zeros((ds.lat.shape[0], ds.lon.shape[0]))	
-	out_mjo_inactive = np.zeros((ds.lat.shape[0], ds.lon.shape[0]))	
+	out_mjo_active = []	
+	out_mjo_inactive = []	
 	mjo_active_days = 0
 	mjo_inactive_days = 0
 	out_daily = np.zeros((len(files),ds.lat.shape[0], ds.lon.shape[0]))	
 	times = []
+	mjo_active_times = []
+	mjo_inactive_times = []
 	steps = []
 
 	#For each file, apply the equation
@@ -305,6 +312,23 @@ def create_threshold_variable(variable, threshold, model, event=None, predictors
 					+ ds[predictors[4]] * logit_mod.coef_[0][4] \
 					+ ds[predictors[5]] * logit_mod.coef_[0][5] +\
 					logit_mod.intercept_) ) ) 
+			elif len(predictors) == 4:
+				logit = 1 / ( 1 + np.exp( -(\
+					ds[predictors[0]] * logit_mod.coef_[0][0] \
+					+ ds[predictors[1]] * logit_mod.coef_[0][1] \
+					+ ds[predictors[2]] * logit_mod.coef_[0][2] \
+					+ ds[predictors[3]] * logit_mod.coef_[0][3] +\
+					logit_mod.intercept_) ) ) 
+			elif len(predictors) == 7:
+				logit = 1 / ( 1 + np.exp( -(\
+					ds[predictors[0]] * logit_mod.coef_[0][0] \
+					+ ds[predictors[1]] * logit_mod.coef_[0][1] \
+					+ ds[predictors[2]] * logit_mod.coef_[0][2] \
+					+ ds[predictors[3]] * logit_mod.coef_[0][3] \
+					+ ds[predictors[4]] * logit_mod.coef_[0][4] \
+					+ ds[predictors[5]] * logit_mod.coef_[0][5] \
+					+ ds[predictors[6]] * logit_mod.coef_[0][6] +\
+					logit_mod.intercept_) ) ) 
 			elif len(predictors) == 8:
 				logit = 1 / ( 1 + np.exp( -(\
 					ds[predictors[0]] * logit_mod.coef_[0][0] \
@@ -312,8 +336,8 @@ def create_threshold_variable(variable, threshold, model, event=None, predictors
 					+ ds[predictors[2]] * logit_mod.coef_[0][2] \
 					+ ds[predictors[3]] * logit_mod.coef_[0][3] \
 					+ ds[predictors[4]] * logit_mod.coef_[0][4] \
-					+ ds[predictors[5]] * logit_mod.coef_[0][5] +\
-					+ ds[predictors[6]] * logit_mod.coef_[0][6] +\
+					+ ds[predictors[5]] * logit_mod.coef_[0][5] \
+					+ ds[predictors[6]] * logit_mod.coef_[0][6] \
 					+ ds[predictors[7]] * logit_mod.coef_[0][7] +\
 					logit_mod.intercept_) ) ) 
 			else:
@@ -321,22 +345,31 @@ def create_threshold_variable(variable, threshold, model, event=None, predictors
 			out[f] = ( (logit >= threshold).sum("time") ).values
 			daily_logit = (logit >= threshold).resample({"time":"1D"}).max("time")
 			out_daily[f] = daily_logit.sum("time").values
-			out_mjo_active = out_mjo_active + daily_logit.sel(\
-				{"time":np.in1d(daily_logit.time, mjo_active)}).sum("time").values
-			out_mjo_inactive = out_mjo_inactive + daily_logit.sel(\
-				{"time":np.in1d(daily_logit.time, mjo_inactive)}).sum("time").values
+			out_mjo_active.append(daily_logit.sel(\
+				{"time":np.in1d(daily_logit.time, mjo_active)}).values*1)
+			out_mjo_inactive.append(daily_logit.sel(\
+				{"time":np.in1d(daily_logit.time, mjo_inactive)}).values*1)
 			mjo_active_days = mjo_active_days + np.in1d(daily_logit.time, mjo_active).sum()
 			mjo_inactive_days = mjo_inactive_days + np.in1d(daily_logit.time, mjo_inactive).sum()
+			mjo_active_times.append(\
+				daily_logit.time[np.in1d(daily_logit.time,mjo_active)].values)
+			mjo_inactive_times.append(\
+				daily_logit.time[np.in1d(daily_logit.time,mjo_inactive)].values)
 		else:
 			out[f] = ( (ds[variable] >= threshold).sum("time") ).values
 			daily_var = (ds[variable] >= threshold).resample({"time":"1D"}).max("time")
 			out_daily[f] = daily_var.sum("time").values
-			out_mjo_active = out_mjo_active + daily_var.sel(\
-				{"time":np.in1d(daily_var.time, mjo_active)}).sum("time").values
-			out_mjo_inactive = out_mjo_inactive + daily_var.sel(\
-				{"time":np.in1d(daily_var.time, mjo_inactive)}).sum("time").values
+			out_mjo_active.append(daily_var.sel(\
+				{"time":np.in1d(daily_var.time, mjo_active)}).values*1)
+			out_mjo_inactive.append(daily_var.sel(\
+				{"time":np.in1d(daily_var.time, mjo_inactive)}).values*1)
 			mjo_active_days = mjo_active_days + np.in1d(daily_var.time, mjo_active).sum()
 			mjo_inactive_days = mjo_inactive_days + np.in1d(daily_var.time, mjo_inactive).sum()
+			mjo_active_times.append(\
+				daily_var.time[np.in1d(daily_var.time,mjo_active)].values)
+			mjo_inactive_times.append(\
+				daily_var.time[np.in1d(daily_var.time,mjo_inactive)].values)
+    
 		steps.append(ds.time.shape[0])
 		times.append(ds.time[0].values)
 		ds.close()
@@ -364,21 +397,29 @@ def create_threshold_variable(variable, threshold, model, event=None, predictors
 						model+"_logit_"+event+"_daily.nc",\
 					mode = "w",\
 					format = "NETCDF4")
-		mjo_active_da = xr.DataArray( dims = ("lat","lon"),\
-			data = out_mjo_active,\
-			coords = {"lat":ds.lat.values,"lon":ds.lon.values},\
+		mjo_active_da = xr.DataArray( dims = ("time","lat","lon"),\
+			data = np.concatenate(out_mjo_active),\
+			coords = {"lat":ds.lat.values,"lon":ds.lon.values,\
+				"time":np.concatenate(mjo_active_times)},\
 			name = "logit",\
-			attrs = {"mjo_days":mjo_active_days, "predictors":predictors, "coefs":logit_mod.coef_[0],\
-				"intercept":logit_mod.intercept_, "threshold":threshold} )
-		mjo_inactive_da = xr.DataArray( dims = ("lat","lon"),\
-			data = out_mjo_inactive,\
-			coords = {"lat":ds.lat.values,"lon":ds.lon.values},\
-			name = "logit",\
-			attrs = {"mjo_days":mjo_inactive_days, "predictors":predictors, "coefs":logit_mod.coef_[0],\
-				"intercept":logit_mod.intercept_, "threshold":threshold} )
-		xr.Dataset({"active":mjo_active_da,"inactive":mjo_inactive_da}).to_netcdf(\
+			attrs = {"mjo_days":mjo_active_days, "predictors":predictors,\
+				"coefs":logit_mod.coef_[0],\
+				"intercept":logit_mod.intercept_, "threshold":threshold} ).to_netcdf(\
 					path = "/g/data/eg3/ab4502/ExtremeWind/aus/"+\
-						model+"_logit_"+event+"_mjo.nc",\
+						model+"_logit_"+event+"_mjo_active.nc",\
+					mode = "w",\
+					format = "NETCDF4")
+
+		mjo_inactive_da = xr.DataArray( dims = ("time","lat","lon"),\
+			data = np.concatenate(out_mjo_inactive),\
+			coords = {"lat":ds.lat.values,"lon":ds.lon.values,\
+				"time":np.concatenate(mjo_inactive_times)},\
+			name = "logit",\
+			attrs = {"mjo_days":mjo_inactive_days, "predictors":predictors,\
+				"coefs":logit_mod.coef_[0],\
+				"intercept":logit_mod.intercept_, "threshold":threshold} ).to_netcdf(\
+					path = "/g/data/eg3/ab4502/ExtremeWind/aus/"+\
+						model+"_logit_"+event+"_mjo_inactive.nc",\
 					mode = "w",\
 					format = "NETCDF4")
 	else:
@@ -400,19 +441,25 @@ def create_threshold_variable(variable, threshold, model, event=None, predictors
 						model+"_"+variable+"_"+str(threshold)+"_daily.nc",\
 					mode = "w",\
 					format = "NETCDF4")
-		mjo_active_da = xr.DataArray( dims = ("lat","lon"),\
-			data = out_mjo_active,\
-			coords = {"lat":ds.lat.values,"lon":ds.lon.values},\
+		mjo_active_da = xr.DataArray( dims = ("time","lat","lon"),\
+			data = np.concatenate(out_mjo_active),\
+			coords = {"lat":ds.lat.values,"lon":ds.lon.values,\
+				"time":np.concatenate(mjo_active_times)},\
 			name = variable,\
-			attrs = {"mjo_days":mjo_active_days, "threshold":threshold} )
-		mjo_inactive_da = xr.DataArray( dims = ("lat","lon"),\
-			data = out_mjo_inactive,\
-			coords = {"lat":ds.lat.values,"lon":ds.lon.values},\
-			name = variable,\
-			attrs = {"mjo_days":mjo_inactive_days, "threshold":threshold} )
-		xr.Dataset({"active":mjo_active_da,"inactive":mjo_inactive_da}).to_netcdf(\
+			attrs = {"mjo_days":mjo_active_days, "threshold":threshold} ).to_netcdf(\
 					path = "/g/data/eg3/ab4502/ExtremeWind/aus/"+\
-						model+"_"+variable+"_"+str(threshold)+"_mjo.nc",\
+						model+"_"+variable+"_"+str(threshold)+"_mjo_active.nc",\
+					mode = "w",\
+					format = "NETCDF4")
+
+		mjo_inactive_da = xr.DataArray( dims = ("time","lat","lon"),\
+			data = np.concatenate(out_mjo_inactive),\
+			coords = {"lat":ds.lat.values,"lon":ds.lon.values,\
+				"time":np.concatenate(mjo_inactive_times)},\
+			name = variable,\
+			attrs = {"mjo_days":mjo_inactive_days, "threshold":threshold} ).to_netcdf(\
+					path = "/g/data/eg3/ab4502/ExtremeWind/aus/"+\
+						model+"_"+variable+"_"+str(threshold)+"_mjo_inactive.nc",\
 					mode = "w",\
 					format = "NETCDF4")
 		
@@ -867,11 +914,11 @@ def optimise_pss(model_fname,T=1000, compute=True, l_thresh=2, is_pss="pss", mod
 	#For barra: /g/data/eg3/ab4502/ExtremeWind/points/barra_allvars_2005_2015.pkl
 
 	model = pd.read_pickle(model_fname)
-	obs = pd.read_pickle("/g/data/eg3/ab4502/ExtremeWind/obs/aws/convective_wind_gust_aus_2005_2015_v2.pkl")
+	obs = pd.read_pickle("/g/data/eg3/ab4502/ExtremeWind/obs/aws/convective_wind_gust_aus_2005_2018.pkl")
 	#There is one missing entry for parameters needing mhgt
-	df = pd.merge(obs[["stn_name","wind_gust","hourly_floor_utc","tc_affected","lightning","is_sta"]],\
-		model, how="left",left_on=["stn_name","hourly_floor_utc"], right_on=["loc_id","time"]).\
-		dropna(subset=["wind_gust","ml_cape"])
+	df_sta = pd.merge(obs[["stn_name","wind_gust","hourly_floor_utc","tc_affected","lightning","is_sta"]],\
+		model, how="left",left_on=["stn_name","hourly_floor_utc"], right_on=["loc_id","time"]).dropna(subset=["ml_cape","mhgt"])
+	df_aws = df_sta.dropna(subset=["wind_gust"])
 
 	dmax=False
 	if dmax:
@@ -883,7 +930,8 @@ def optimise_pss(model_fname,T=1000, compute=True, l_thresh=2, is_pss="pss", mod
 		dmax_df = pd.merge(obs, dmax_df, how="inner", left_on=["daily_date_utc","loc_id"],\
 			right_on = ["time","loc_id"])
 
-	df = df[df.tc_affected==0]
+	df_sta = df_sta[df_sta.tc_affected==0]
+	df_aws = df_aws[df_aws.tc_affected==0]
 
 	if compute:
 
@@ -902,12 +950,12 @@ def optimise_pss(model_fname,T=1000, compute=True, l_thresh=2, is_pss="pss", mod
 
 		#Optimise for discriminating lightning and non-lightning
 		print("OPTIMISING "+is_pss+" FOR LIGHTNING...")
-		df.loc[:,"is_lightning"] = 0
-		df.loc[df.lightning >= l_thresh, "is_lightning"] = 1
+		df_sta.loc[:,"is_lightning"] = 0
+		df_sta.loc[df_sta.lightning >= l_thresh, "is_lightning"] = 1
 		for p in param_list:
 			print(p)
-			test_thresh = np.linspace(df.loc[:,p].min(), np.percentile(df.loc[:,p],99.95) , T)
-			temp_df = df.loc[:,["is_lightning",p]]
+			test_thresh = np.linspace(df_sta.loc[:,p].min(), np.percentile(df_sta.loc[:,p],99.95) , T)
+			temp_df = df_sta.loc[:,["is_lightning",p]]
 			iterable = itertools.product(test_thresh, [temp_df], [p], ["is_lightning"], [is_pss])
 			res = pool.map(pss, iterable)
 			thresh = [res[i][1] for i in np.arange(len(res))]
@@ -918,12 +966,12 @@ def optimise_pss(model_fname,T=1000, compute=True, l_thresh=2, is_pss="pss", mod
 
 		#Optimise for discriminating convective AWS and non-convective AWS
 		print("OPTIMISING "+is_pss+" FOR CONVECTIVE AWS EVENTS...")
-		df.loc[:,"is_conv_aws"] = 0
-		df.loc[(df.lightning >= l_thresh) & (df.wind_gust >= 25), "is_conv_aws"] = 1
+		df_aws.loc[:,"is_conv_aws"] = 0
+		df_aws.loc[(df_aws.lightning >= l_thresh) & (df_aws.wind_gust >= 25), "is_conv_aws"] = 1
 		for p in param_list:
 			print(p)
-			test_thresh = np.linspace(df.loc[:,p].min(), np.percentile(df.loc[:,p],99.95) , T)
-			temp_df = df.loc[:,["is_conv_aws",p]]
+			test_thresh = np.linspace(df_aws.loc[:,p].min(), np.percentile(df_aws.loc[:,p],99.95) , T)
+			temp_df = df_aws.loc[:,["is_conv_aws",p]]
 			iterable = itertools.product(test_thresh, [temp_df], [p], ["is_conv_aws"], [is_pss])
 			res = pool.map(pss, iterable)
 			thresh = [res[i][1] for i in np.arange(len(res))]
@@ -936,8 +984,8 @@ def optimise_pss(model_fname,T=1000, compute=True, l_thresh=2, is_pss="pss", mod
 		print("OPTIMISING "+is_pss+" FOR STA WIND REPORTS...")
 		for p in param_list:
 			print(p)
-			test_thresh = np.linspace(df.loc[:,p].min(), np.percentile(df.loc[:,p],99.95) , T)
-			temp_df = df.loc[:,["is_sta",p]]
+			test_thresh = np.linspace(df_sta.loc[:,p].min(), np.percentile(df_sta.loc[:,p],99.95) , T)
+			temp_df = df_sta.loc[:,["is_sta",p]]
 			iterable = itertools.product(test_thresh, [temp_df], [p], ["is_sta"], [is_pss])
 			res = pool.map(pss, iterable)
 			thresh = [res[i][1] for i in np.arange(len(res))]
@@ -948,13 +996,13 @@ def optimise_pss(model_fname,T=1000, compute=True, l_thresh=2, is_pss="pss", mod
 
 		#Optimise for discriminating convective AWS and lightning but non-convective AWS
 		print("OPTIMISING "+is_pss+" FOR CONVECTIVE WIND EVENTS VERSUS CONVECTIVE NON-WIND EVENTS...")
-		df.loc[:,"is_conv_aws_cond_light"] = np.nan
-		df.loc[(df.lightning >= l_thresh) & (df.wind_gust >= 25), "is_conv_aws_cond_light"] = 1
-		df.loc[(df.lightning >= l_thresh) & (df.wind_gust < 25), "is_conv_aws_cond_light"] = 0
+		df_aws.loc[:,"is_conv_aws_cond_light"] = np.nan
+		df_aws.loc[(df_aws.lightning >= l_thresh) & (df_aws.wind_gust >= 25), "is_conv_aws_cond_light"] = 1
+		df_aws.loc[(df_aws.lightning >= l_thresh) & (df_aws.wind_gust < 25), "is_conv_aws_cond_light"] = 0
 		for p in param_list:
 			print(p)
-			test_thresh = np.linspace(df.loc[:,p].min(), np.percentile(df.loc[:,p],99.95) , T)
-			temp_df = df.loc[:,["is_conv_aws_cond_light",p]]
+			test_thresh = np.linspace(df_aws.loc[:,p].min(), np.percentile(df_aws.loc[:,p],99.95) , T)
+			temp_df = df_aws.loc[:,["is_conv_aws_cond_light",p]]
 			iterable = itertools.product(test_thresh, [temp_df], [p], ["is_conv_aws_cond_light"], [is_pss])
 			res = pool.map(pss, iterable)
 			thresh = [res[i][1] for i in np.arange(len(res))]
@@ -971,15 +1019,15 @@ def optimise_pss(model_fname,T=1000, compute=True, l_thresh=2, is_pss="pss", mod
 		pss_df = pd.read_pickle("/g/data/eg3/ab4502/ExtremeWind/"+is_pss+"_df_lightning"+str(l_thresh)+\
 			"_"+model_name+".pkl")
 
-		df.loc[:,"is_lightning"] = 0
-		df.loc[df.lightning >= l_thresh, "is_lightning"] = 1
-		df.loc[:,"is_conv_aws"] = 0
-		df.loc[(df.lightning >= l_thresh) & (df.wind_gust >= 25), "is_conv_aws"] = 1
-		df.loc[:,"is_conv_aws_cond_light"] = np.nan
-		df.loc[(df.lightning >= l_thresh) & (df.wind_gust >= 25), "is_conv_aws_cond_light"] = 1
-		df.loc[(df.lightning >= l_thresh) & (df.wind_gust < 25), "is_conv_aws_cond_light"] = 0
+		df_sta.loc[:,"is_lightning"] = 0
+		df_sta.loc[df_sta.lightning >= l_thresh, "is_lightning"] = 1
+		df_aws.loc[:,"is_conv_aws"] = 0
+		df_aws.loc[(df_aws.lightning >= l_thresh) & (df_aws.wind_gust >= 25), "is_conv_aws"] = 1
+		df_aws.loc[:,"is_conv_aws_cond_light"] = np.nan
+		df_aws.loc[(df_aws.lightning >= l_thresh) & (df_aws.wind_gust >= 25), "is_conv_aws_cond_light"] = 1
+		df_sta.loc[(df_sta.lightning >= l_thresh) & (df_sta.wind_gust < 25), "is_conv_aws_cond_light"] = 0
 
-	return pss_df, df
+	return pss_df, df_aws, df_sta
 
 def pss(it):
 
@@ -1052,66 +1100,6 @@ def pss(it):
 			return [-1, t]
 		else:
 			return [0,t]
-
-def plot_pss_box(df, pss_df, param_list, score="PSS"):
-
-	#Visualise the optimial score as a boxplot for four different events. Default score is PSS,
-	# but can give any type (including CSI)
-
-	for p in param_list:
-
-		[cmap,mean_levels,extreme_levels,cb_lab,range,log_plot,threshold] = \
-			contour_properties(p)
-
-		plt.figure()
-		plt.subplot(221)
-		box = plt.boxplot( [df[(df.is_lightning==0)][p],\
-			df[(df.is_lightning==1)][p] ], whis=1e10, 
-			labels=["Non-lightning", \
-				"Lightning"])
-		if log_plot:
-			plt.yscale("symlog")
-		ax=plt.gca(); ax.axhline(pss_df.loc[p,"threshold_light"],color="k",linestyle="--")
-		plt.text(1.5,pss_df.loc[p,"threshold_light"],score+"="+str(round(pss_df.loc[p,"pss_light"],3)),\
-			horizontalalignment='center',verticalalignment="bottom")
-
-		plt.subplot(222)
-		box = plt.boxplot( [df[(df.is_conv_aws==0)][p],\
-			df[(df.is_conv_aws==1)][p] ], whis=1e10, 
-			labels=["Non-SCW", \
-				"SCW"])
-		if log_plot:
-			plt.yscale("symlog")
-		ax=plt.gca(); ax.axhline(pss_df.loc[p,"threshold_conv_aws"],color="k",linestyle="--")
-		plt.text(1.5,pss_df.loc[p,"threshold_conv_aws"],score+"="+\
-			str(round(pss_df.loc[p,"pss_conv_aws"],3)),horizontalalignment='center',\
-			verticalalignment="bottom")
-
-		plt.subplot(223)
-		box = plt.boxplot( [df[(df.is_conv_aws_cond_light==0)][p],\
-			df[(df.is_conv_aws_cond_light==1)][p] ], whis=1e10, 
-			labels=["Lightning", \
-				"SCW"])
-		if log_plot:
-			plt.yscale("symlog")
-		ax=plt.gca(); ax.axhline(pss_df.loc[p,"threshold_conv_aws_cond_light"],color="k",\
-				linestyle="--")
-		plt.text(1.5,pss_df.loc[p,"threshold_conv_aws_cond_light"],\
-			score+"="+str(round(pss_df.loc[p,"pss_conv_aws_cond_light"],3)),\
-			horizontalalignment='center',verticalalignment="bottom")
-
-		plt.subplot(224)
-		box = plt.boxplot( [df[(df.is_sta==0)][p],\
-			df[(df.is_sta==1)][p] ], whis=1e10, 
-			labels=["Non-report", \
-				"Report"])
-		if log_plot:
-			plt.yscale("symlog")
-		ax=plt.gca(); ax.axhline(pss_df.loc[p,"threshold_sta"],color="k",linestyle="--")
-		plt.text(1.5,pss_df.loc[p,"threshold_sta"],score+"="+str(round(pss_df.loc[p,"pss_sta"],3)),\
-			horizontalalignment='center',verticalalignment="bottom")
-
-		plt.suptitle(p)
 
 
 def load_array_points(param,param_out,lon,lat,times,points,loc_id,model,smooth,erai_fc=False,\
@@ -1297,6 +1285,7 @@ def hypothesis_test(a,b,B):
 		#Shift each dataset to have the same mean
 		a_shift = a - np.nanmean(a,axis=0) + tot_mean
 		b_shift = b - np.nanmean(b,axis=0) + tot_mean
+
 		#Sample from each shifted array B times
 		a_samples = [a_shift[np.random.randint(0,high=a.shape[0],size=a.shape[0])] for temp in np.arange(0,B)]
 		b_samples = [b_shift[np.random.randint(0,high=b.shape[0],size=b.shape[0])] for temp in np.arange(0,B)]
@@ -1304,6 +1293,13 @@ def hypothesis_test(a,b,B):
 		a_sample_means = np.array( [np.nanmean(a_samples[i],axis=0) for i in np.arange(0,B)] )
 		b_sample_means = np.array( [np.nanmean(b_samples[i],axis=0) for i in np.arange(0,B)] )
 		sample_diff = b_sample_means - a_sample_means
+		#sample_diff = []		
+		#for n in np.arange(B):
+		#	temp_a = np.nanmean(a_shift[np.random.randint(0,high=a.shape[0],size=a.shape[0])], axis=0)
+		#	temp_b = np.nanmean(b_shift[np.random.randint(0,high=b.shape[0],size=b.shape[0])], axis=0)
+		#	sample_diff.append(temp_b - temp_a)
+		#sample_diff = np.stack(sample_diff)
+
 		#Take the probability that the original mean difference is greater or less than the samples 
 		p_up = np.sum(sample_diff >= abs_diff,axis=0) / float(B)
 		p_low = np.sum(sample_diff <= abs_diff,axis=0) / float(B)
@@ -1693,170 +1689,29 @@ def logit_train(it):
 
 if __name__ == "__main__":
 
-	#pss_df, df = optimise_pss("/g/data/eg3/ab4502/ExtremeWind/points/era5_allvars_2005_2015.pkl",\
-	#		T=1000, compute=False, l_thresh=2, is_pss="hss", model_name="era5")
-	#compare_obs_soundings()
-	#create_threshold_variable("t_totals",48.6,"era5")
-	#create_threshold_variable("effcape*s06",14655,"era5")
-	#create_threshold_variable("logit",0.87,"era5","is_conv_aws",\
-	#		["ml_el","k_index","dcape","s06","Umean06","t_totals"])
-	#create_threshold_variable("logit",0.75,"era5","is_sta",\
-	#		["ml_el","mu_cape","dcape","s06","Umean06","ml_cin","t_totals","U1"])
-
-	create_mean_variable("d2m",native=True,native_dir="2D")
-
-	#create_mean_variable("ml_cape")
-	#create_mean_variable("lr36")
-
-	rfe=False
-	test_high_U = False
-	try_logit_cv = False
-	test_logit = False
+	if len(sys.argv) > 1:
+		variable = sys.argv[1]
+		threshold = sys.argv[2]
+		model = sys.argv[3]
+		if len(sys.argv) > 4:
+			event = sys.argv[4]
+			predictors = sys.argv[5].split(",")
+		else:
+			event = None
+			predictors = None
 
 
-	if try_logit_cv:
+		create_threshold_variable(variable,float(threshold),model,event=event,\
+			predictors=predictors)
 
-		#Train a logistic regression model N times, each time cross validating with 25% of the dataset
-		# using CSI and POD
+	create_mean_variable("lr36")
+	create_mean_variable("lr_freezing")
+	create_mean_variable("mhgt")
+	create_mean_variable("ml_cape")
+	create_mean_variable("ml_el")
+	create_mean_variable("qmean01")
+	create_mean_variable("qmeansubcloud")
+	create_mean_variable("s06")
+	create_mean_variable("srhe_left")
+	create_mean_variable("Umean06")
 
-		from sklearn.model_selection import train_test_split
-		from sklearn.linear_model import LogisticRegression
-		from sklearn.preprocessing import MinMaxScaler
-		import multiprocessing
-		import itertools
-		pool = multiprocessing.Pool()
-		
-		predictors = ["ml_el", "k_index", "t_totals", "Umean800_600", \
-				"dcape", "Umean01", "s06", "s03", "U6", "qmean01", "ml_cape"]
-		#predictors_logit = ["k_index", "Umean01", "Umean800_600", "t_totals", "s06", "dcape"]
-		predictors_logit = ["ml_cape", "Umean01", "Umean800_600", "t_totals", "s06", "dcape"]
-		test_cond = True
-		test_param = True
-		normalised = False
-		N = 1
-		iterable = itertools.product(np.arange(0,N), \
-				[df[np.append(predictors,"is_conv_aws")]], \
-				[predictors], [predictors_logit], [normalised], [test_cond], [test_param])
-		print("Training Logit...")
-		res = pool.map(run_logit, iterable)
-
-		csi_logit = [res[i][0] for i in np.arange(0,len(res))]
-		pod_logit = [res[i][1] for i in np.arange(0,len(res))]
-		far_logit = [res[i][2] for i in np.arange(0,len(res))]
-		csi_cond = [res[i][3] for i in np.arange(0,len(res))]
-		pod_cond = [res[i][4] for i in np.arange(0,len(res))]
-		far_cond = [res[i][5] for i in np.arange(0,len(res))]
-		csi_param = [res[i][6] for i in np.arange(0,len(res))]
-		pod_param = [res[i][7] for i in np.arange(0,len(res))]
-		far_param = [res[i][8] for i in np.arange(0,len(res))]
-
-		print(np.mean(csi_logit))
-		print(np.mean(pod_logit))
-		print(np.mean(far_logit))
-
-		plt.figure();plt.boxplot([csi_logit, csi_cond, csi_param],labels=["logit","cond","t_totals"])
-		plt.figure();plt.boxplot([pod_logit, pod_cond, pod_param],labels=["logit","cond","t_totals"])
-		plt.figure();plt.boxplot([far_logit, far_cond, far_param],labels=["logit","cond","t_totals"])
-
-	if rfe:
-		sorted_pss_light = pss_df["pss_light"].sort_values(ascending=False)
-		sorted_pss_conv_aws_cond_light = pss_df["pss_conv_aws_cond_light"].sort_values(ascending=False)
-
-		test_predictors = np.unique(np.concatenate([sorted_pss_conv_aws_cond_light.index[0:10], \
-			sorted_pss_light.index[0:10]]))
-		logit = LogisticRegression(class_weight="balanced", solver="liblinear",max_iter=1000) 
-		from sklearn.feature_selection import RFE, RFECV
-		selector = RFE(logit, 5, 1, verbose=True)
-		selector = selector.fit(\
-			(df[test_predictors]-df[test_predictors].mean()) / (df[test_predictors].std()), \
-			df["is_conv_aws"])
-
-	if test_logit:
-	
-		#Test the logistic fit of every combination of 10 variables (all_predictors) to a given event
-		#For each combination (N=1023), 16 logistic equations are fitted, and the mean statistics are
-		# saved (optimal HSS (requiring a HR of at least 0.66), PSS, as well as the optimal probabilistic
-		# thresholds
-
-		pool = multiprocessing.Pool()
-
-		plot = False
-
-		#Choose 10 variables which have the best skill in discriminating either lightning times or 
-		# wind gust times (given lightning)
-		#Iterate over all non-repeating combination of these 10 variables, from a list of two up to a list 
-		# of 10
-		all_predictors = ["ml_el","k_index","mu_cape","dcape","s06","U500","Umean06","ml_cin","t_totals","U1"]
-	
-		event = "is_sta"
-
-		#Split the dataframe into 16 different training/testing datasets
-		train_dfs = []
-		test_dfs = []
-		for i in np.arange(16):
-			t1, t2 = train_test_split(df, test_size=0.8)
-			train_dfs.append(t2)
-			test_dfs.append(t1)
-				
-		param_out = []
-		hss_thresh_out = []
-		pss_thresh_out = []
-		hss_out = []
-		pss_out = []
-		for r in np.arange(2,11):
-			params = itertools.combinations(all_predictors, r)
-	
-
-			for predictors in params:
-
-				print(predictors)
-				start = dt.datetime.now()
-
-				iterable = itertools.product(np.arange(16),\
-					[train_dfs], [test_dfs], [predictors], [event])
-				res = pool.map(logit_train, iterable)
-
-
-				param_out.append(" ".join(predictors))
-				hss_out.append(np.mean([res[i][0] for i in np.arange(16)]))
-				pss_out.append(np.mean([res[i][1] for i in np.arange(16)]))
-				hss_thresh_out.append(np.mean([res[i][2] for i in np.arange(16)]))
-				pss_thresh_out.append(np.mean([res[i][3] for i in np.arange(16)]))
-
-		pd.DataFrame({"predictors":param_out, "hss":hss_out, "pss":pss_out,\
-			"pss_thresh":pss_thresh_out, "hss_thresh":hss_thresh_out}).\
-			to_csv("/g/data/eg3/ab4502/ExtremeWind/points/logit_skill_era5_sta_actually_cv.csv",\
-			index=False)	
-
-
-		#df["cond"] = ( (df["ml_el"]>=6000) & (df["k_index"]>=30) & (df["Umean800_600"]>=5) & \
-		#		(df["t_totals"]>=46) ) | \
-		#	( (df["ml_el"]<6000) & (df["Umean800_600"]>=16) & (df["k_index"]>=20) & \
-		#		(df["Umean01"]>=10) & (df["s03"]>=10) )
-
-		if plot:
-			#Plot
-			month_df = pd.concat({"conv_aws":df[df["is_conv_aws"]==1]["month"].value_counts(), \
-						"sta":df[df["is_sta"]==1]["month"].value_counts(), \
-						"logit":df[df["logit"]==1]["month"].value_counts(), \
-						"cond":df[df["cond"]==1]["month"].value_counts()}, \
-					axis=1, sort=False)
-			bars = (month_df / month_df.sum())[["conv_aws","sta","cond","logit"]].\
-				reindex([7,8,9,10,11,12,1,2,3,4,5,6]).\
-				plot(kind="bar", color=["none", "none", "k", "grey"], edgecolor="k")
-			for i in np.arange(0,12):
-				bars.patches[i].set_hatch("///")
-			plt.legend()
-
-			wd_df = pd.concat({"conv_aws":df[df["is_conv_aws"]==1]["wind_dir"].value_counts(), \
-						"sta":df[df["is_sta"]==1]["wind_dir"].value_counts(), \
-						"logit":df[df["logit"]==1]["wind_dir"].value_counts(), \
-						"cond":df[df["cond"]==1]["wind_dir"].value_counts()}, \
-					axis=1, sort=False)
-			bars = (wd_df / wd_df.sum())[["conv_aws","sta","cond","logit"]].\
-				reindex(["N", "NNE", "NE", "ENE", "E", "ESE", "SE", "SSE", "S", "SSW","SW", "WSW", "W", \
-					"WNW", "NW", "NNW"]).\
-				plot(kind="bar", color=["none", "none", "k", "grey"], edgecolor="k")
-			for i in np.arange(0,16):
-				bars.patches[i].set_hatch("///")
-			plt.legend()

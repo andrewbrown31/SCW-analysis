@@ -847,11 +847,9 @@ def plot_aus_conv_wind_trends():
 	#Plotting function/driver for the above function
 
 	fnames = ["era5_logit_is_conv_aws_daily.nc","era5_logit_is_sta_daily.nc",\
-			"era5_effcape*s06_daily.nc","era5_t_totals_daily.nc",\
-			"era5_mlcape*s06_5000.nc", "era5_d2m_mean.nc"]
-	vmax = [[-50,50],[-50,50],[-50,50],[-50,50],[-50,50],[-1,1]]
-	titles = ["Logistic eq.\n (measured)","Logistic eq. \n(STA)","Eff-CS6","T-totals","ML-CS6",\
-			"Mean 2m Dew Point"]
+			"era5_dcp_0.03_daily.nc","era5_t_totals_48.16_daily.nc"]
+	vmax = [[-50,50],[-50,50],[-50,50],[-50,50]]
+	titles = ["Logistic eq.\n (measured)","Logistic eq. \n(STA)","DCP","T-totals"]
 	
 	datasets = [read_aus_conv_wind_clim(fnames[i], daily = True) for i in np.arange(len(fnames))]
 	n_boot = 1000
@@ -871,17 +869,18 @@ def plot_aus_conv_wind_trends():
 			temp = data[np.in1d(data["time.month"],s)]
 			temp_first = temp[temp["time.year"] < 1999]
 			temp_second = temp[temp["time.year"] >= 1999]
-			trend = ((temp_second.sum("time") - temp_first.sum("time")) / temp_first.sum("time")) * 100
+			trend = ((temp_second.sum("time") - temp_first.sum("time")) / \
+				temp_first.sum("time")) * 100
 			lat = temp.lat.data
 			lon = temp.lon.data
 			x,y = np.meshgrid(lon,lat)
 			lsm = get_era5_mask(lon,lat)
-			#trend = trend.where(lsm>=0.5, np.nan)
+			trend = trend.where(lsm>=0.5, np.nan)
 			c = trend.plot(cmap = plt.get_cmap("RdBu_r"), \
 				vmin=vmax[i][0], vmax=vmax[i][1], add_colorbar = False,\
 				add_labels=False)
 			sig = hypothesis_test(temp_first.to_masked_array(), temp_second.to_masked_array(), n_boot)
-			#sig = np.where(lsm>=0.5, sig, 1)
+			sig = np.where(lsm>=0.5, sig, 1)
 			m.contourf(x,y,np.where(sig<=0.05, 1, 0), levels=[.5,1.5], \
 				colors=["none", "grey"], hatches=["///////"], alpha=0)
 			matplotlib.rcParams['hatch.linewidth'] = 0.5
@@ -897,11 +896,10 @@ def plot_aus_conv_wind_trends():
 					plt.ylabel("JJA       ",rotation=0)
 				if s == [9,10,11]:
 					plt.ylabel("SON       ",rotation=0)
-			if s == [9,10,11]:
-				ax = plt.gca()
-				ax_pos = ax.get_position(False).extents
-				cax = plt.axes([ ax_pos[0], ax_pos[1]-0.05, ax_pos[2]-ax_pos[0], 0.025])
-				cb = plt.colorbar(c, cax=cax, orientation = "horizontal")
+			if (s == [9,10,11]) & (i == (len(datasets)-1) ):
+				cax = plt.axes([0.2, 0.075, 0.6, 0.01])
+				cb = plt.colorbar(c, cax=cax, orientation = "horizontal", \
+					extend="both")
 				cb.set_label("Trend (%)")
 			cnt = cnt+1
 	plt.subplots_adjust(wspace=0.2)
@@ -1025,11 +1023,11 @@ def plot_aus_conv_wind_corr():
 	dmi = read_clim_ind("dmi")
 	sam = read_clim_ind("sam")
 	fnames = ["era5_logit_is_conv_aws_daily.nc","era5_logit_is_sta_daily.nc",\
-			"era5_effcape*s06_daily.nc","era5_t_totals_daily.nc"]
+			"era5_dcp_0.03_daily.nc","era5_t_totals_48.16_daily.nc"]
 	datasets = [read_aus_conv_wind_clim(fnames[i], daily = True) for i in np.arange(len(fnames))]
 	vmax = [[-1,1],[-1,1],[-1,1],[-1,1]]
-	n_boot = 100
-	titles = ["Logistic eq. (measured)","Logistic eq. (STA)","Eff-CS6","T-totals"]
+	n_boot = 1000
+	titles = ["Logistic eq. (measured)","Logistic eq. (reported)","DCP","T-totals"]
 	seasons = [[12,1,2],[3,4,5],[6,7,8],[9,10,11]]
 	s_names = ["DJF","MAM","JJA","SON"]
 	a=ord("a"); alph=[chr(i) for i in range(a,a+26)]; alph = [alph[i]+")" for i in np.arange(len(alph))]
@@ -1084,8 +1082,6 @@ def plot_aus_conv_wind_corr():
 					colors=["none", "grey"], hatches=["///////"], alpha=0.05)
 				matplotlib.rcParams['hatch.linewidth'] = 0.5
 				plt.annotate(alph[cnt-1], xy=(0.05, 0.05), xycoords='axes fraction')
-				if cnt <= len(fnames):
-					plt.title(titles[i])
 				if i == 0:
 					if seasons[s] == [12,1,2]:
 						plt.ylabel("DJF       ",rotation=0)
@@ -1095,15 +1091,14 @@ def plot_aus_conv_wind_corr():
 						plt.ylabel("JJA       ",rotation=0)
 					if seasons[s] == [9,10,11]:
 						plt.ylabel("SON       ",rotation=0)
-				if seasons[s] == [9,10,11]:
-					ax = plt.gca()
-					ax_pos = ax.get_position(False).extents
-					cax = plt.axes([ ax_pos[0], ax_pos[1]-0.05, ax_pos[2]-ax_pos[0], 0.025])
+				if s == 0:
+					plt.title(titles[i])
+				if (s == 3) & (i == (len(datasets)-1) ):
+					cax = plt.axes([0.2, 0.075, 0.6, 0.01])
 					cb = plt.colorbar(c, cax=cax, orientation = "horizontal")
 					cb.set_label("Pearson's r")
 				cnt = cnt+1
 		plt.subplots_adjust(wspace=0.2)
-		plt.suptitle(clim_ind)
 		plt.savefig("/g/data/eg3/ab4502/figs/ExtremeWind/corr/"+clim_ind+"_era5.tiff",\
 			bbox_inches="tight")
 		
@@ -1111,94 +1106,241 @@ def plot_aus_mjo_corr():
 
 	#Plot the difference in the number of convective wind environment days between MJO active and in
 
-	var = ["logit_is_conv_aws","logit_is_sta","effcape*s06","t_totals"]
-	titles = ["Logistic eq. (measured)","Logistic eq. (STA)","Eff-CS6","T-totals"]
-	seasons = {"DJF":[12,1,2],"MAM":[3,4,5],"JJA":[6,7,8],"SON":[9,10,11]}
-	a=ord("a"); alph=[chr(i) for i in range(a,a+26)]; alph = [alph[i]+")" for i in np.arange(len(alph))]
+	#Define the number of bootstraps
+	n_boot = 100
+	#Define file and variable names for the four diagnostics of interest. 
+	# For each diagnostic, there are two daily netcdf files, one for active MJO days only, 
+	# the other for inactive MJO days
+	f = ["logit_is_conv_aws","logit_is_sta","dcp_0.03","t_totals_48.16"]
+	var = ["logit","logit","dcp","t_totals"]
+	seasons = [[12,1,2],[3,4,5],[6,7,8],[9,10,11]]
+	s_names = ["DJF","MAM","JJA","SON"]
+	#Plotting settings
+	titles = ["Logistic eq. (measured)","Logistic eq. (STA)","DCP","T-totals"]
+	a=ord("a"); alph=[chr(i) for i in range(a,a+26)]; alph = [alph[i]+")" \
+		for i in np.arange(len(alph))]
 	m = Basemap(llcrnrlon=110, llcrnrlat=-45, urcrnrlon=160, urcrnrlat=-10,projection="cyl")
-	plt.figure(figsize=[5,5])
+	plt.figure(figsize=[10,8])
 	cnt=1
-	for i in np.arange(len(var)):
-		plt.subplot(2,2,cnt)
-		m.drawcoastlines()
-		data = xr.open_dataset("/g/data/eg3/ab4502/ExtremeWind/aus/era5_"+\
-			var[i]+"_mjo.nc")
-		trend = ( (data["active"]/data["active"].mjo_days) - \
-				(data["inactive"]/data["inactive"].mjo_days) )
-		c = trend.plot(cmap = plt.get_cmap("RdBu_r"), \
-			add_colorbar = False, add_labels=False,\
-			vmax = 0.1, vmin=-0.1)
-		plt.annotate(alph[cnt-1], xy=(0.05, 0.05), xycoords='axes fraction')
-		if cnt <= len(var):
-			plt.title(titles[i])
-		if cnt == 3:
-			ax = plt.gca()
-			ax_pos = ax.get_position(False).extents
-			cax = plt.axes([ 0.3, 0.08, 0.4, 0.025])
-			cb = plt.colorbar(c, cax=cax, orientation = "horizontal")
-			cb.set_label("Difference (days per MJO day)")
-		cnt = cnt+1
+	for s in np.arange(len(seasons)):
+		#For each diagnostic
+		for i in np.arange(len(var)):
+			print(f[i])
+			#Draw the filled contour plot, which is the difference in the mean number of days where the diagnostic is above
+			# a set threshold between MJO active days and inactive days
+			plt.subplot(4,len(f),cnt)
+			m.drawcoastlines()
+			active_da = xr.open_dataset("/g/data/eg3/ab4502/ExtremeWind/aus/era5_"+\
+				f[i]+"_mjo_active.nc")[var[i]]
+			inactive_da = xr.open_dataset("/g/data/eg3/ab4502/ExtremeWind/aus/era5_"+\
+				f[i]+"_mjo_inactive.nc")[var[i]]
+			active_da = active_da[np.in1d(active_da["time.month"],seasons[s])]
+			inactive_da = inactive_da[np.in1d(inactive_da["time.month"],seasons[s])]
+			active_mean = active_da.mean("time")
+			inactive_mean = inactive_da.mean("time")
+			trend = ((active_mean - inactive_mean) / active_mean * 100)
+			lsm = get_era5_mask(active_da.lon.values,active_da.lat.values)
+			trend = trend.where(lsm>=0.5, np.nan)
+			c = trend.plot(cmap = plt.get_cmap("RdBu_r"), \
+				add_colorbar = False, add_labels=False,\
+				vmax = 50, vmin=-50)
+
+			#Perform bootstrapping
+			#stat = []
+			#combined_da = np.vstack([active_da.values, inactive_da.values])
+			#for n in np.arange(0,n_boot):
+			#	#Merge the active and inactive files into one, and randomly sample for active and inactive days
+			#	temp_active_mean = combined_da[np.random.randint(0, active_da.mjo_days-1, \
+			#			    active_da.mjo_days)].mean(axis=0)
+			#	temp_inactive_mean = combined_da[np.random.randint(0, inactive_da.mjo_days-1, \
+			#			    inactive_da.mjo_days)].mean(axis=0)
+				#Calculate the trend for the randomly sampled files
+			#	stat.append(\
+			#	    ((temp_active_mean - temp_inactive_mean) / temp_active_mean * 100))
+			#stat = np.stack(stat)
+			#p_up = np.sum(trend.values >= stat,axis=0) / n_boot
+			#p_low = np.sum(trend.values <= stat,axis=0) / n_boot
+			#sig = (2*np.min(np.stack((p_low,p_up)),axis=0))
+			from scipy.stats import ttest_ind
+			temp, sig = ttest_ind(active_da,inactive_da,equal_var=False,axis=0)
+
+			sig = np.where(lsm>=0.5, sig, 1)
+			plt.rcParams['hatch.linewidth'] = 0.5
+			x,y = np.meshgrid(active_da.lon.values,active_da.lat.values)
+			m.contourf(x,y,np.where(sig<=.5/100., 1, 0), levels=[.5,1.5], \
+				colors=["none", "grey"], hatches=["///////"], alpha=0)
+
+			plt.annotate(alph[cnt-1], xy=(0.05, 0.05), xycoords='axes fraction')
+			if cnt <= len(var):
+				plt.title(titles[i])
+			if cnt == 3:
+				ax = plt.gca()
+				ax_pos = ax.get_position(False).extents
+				cax = plt.axes([ 0.3, 0.08, 0.4, 0.025])
+				cb = plt.colorbar(c, cax=cax, orientation = "horizontal")
+				cb.set_label("Relative difference (%)")
+			cnt = cnt+1
+	plt.savefig("/g/data/eg3/ab4502/figs/ExtremeWind/corr/MJO_era5_"+\
+	    f[i]+".png")
 				
+def plot_aus_monthly_mjo_corr():
+
+	#Define the number of bootstraps
+	n_boot = 100
+	#Define file and variable names for the four diagnostics of interest. 
+	# For each diagnostic, there are two daily netcdf files, one for active MJO days only, 
+	# the other for inactive MJO days
+	f = ["logit_is_conv_aws","logit_is_sta","dcp_0.03","t_totals_48.16"]
+	var = ["logit","logit","dcp","t_totals"]
+	datasets = [read_aus_conv_wind_clim(fnames[i], daily = True) for i in np.arange(len(f))]
+	seasons = [[12,1,2],[3,4,5],[6,7,8],[9,10,11]]
+	s_names = ["DJF","MAM","JJA","SON"]
+	all_times = pd.date_range("1979-01-01","2018-12-31")
+	active_times = xr.open_dataset("/g/data/eg3/ab4502/ExtremeWind/aus/era5_t_totals_48.16_mjo_active.nc").time.values
+	inactive_times = xr.open_dataset("/g/data/eg3/ab4502/ExtremeWind/aus/era5_t_totals_48.16_mjo_inactive.nc").time.values
+	time_df = pd.DataFrame({"active":np.in1d(all_times,active_times) * 1,\
+		    "inactive":np.in1d(all_times,inactive_times) * 1} , index=all_times).\
+		resample("1M").sum()
+    
+	#Plotting settings
+	vmax = [[-0.5,0.5],[-0.5,0.5],[-0.5,0.5],[-0.5,0.5]]
+	titles = ["Logistic eq. (measured)","Logistic eq. (STA)","DCP","T-totals"]
+	a=ord("a"); alph=[chr(i) for i in range(a,a+26)]; alph = [alph[i]+")" \
+		for i in np.arange(len(alph))]
+	m = Basemap(llcrnrlon=110, llcrnrlat=-45, urcrnrlon=160, urcrnrlat=-10,projection="cyl")
+	plt.figure(figsize=[10,8])
+	cnt=1
+	for s in np.arange(len(seasons)):
+		#For each diagnostic
+		for i in np.arange(len(var)):
+			data = datasets[i]
+			plt.subplot(4,len(fnames),cnt)
+			m.drawcoastlines()
+			temp_seasonal = data[np.in1d(data["time.month"],seasons[s])]
+			lat = temp_seasonal.lat.data
+			lon = temp_seasonal.lon.data
+
+			temp_seasonal_reshaped = np.reshape(temp_seasonal.values, \
+				(temp_seasonal.time.shape[0],-1))
+			spr_out = [pearson(temp_seasonal_reshaped[:,j], \
+				np.squeeze(time_df.loc[np.in1d(time_df.index.month, \
+					seasons[s])].values)) \
+				for j in np.arange(temp_seasonal_reshaped.shape[1])]
+			r = np.array([spr_out[j][0] for j in np.arange(len(spr_out))])
+			p = np.array([spr_out[j][1] for j in np.arange(len(spr_out))])
+			r = r.reshape((lat.shape[0], lon.shape[0]))	
+			p = p.reshape((lat.shape[0], lon.shape[0]))	
+
+
+			x,y = np.meshgrid(lon,lat)
+			lsm = get_era5_mask(lon,lat)
+			r = np.where(lsm>=0.5, r, np.nan)
+			p = np.where(lsm>=0.5, p, np.nan)
+			c = m.pcolor(x, y, r, cmap = plt.get_cmap("RdBu_r"), \
+				vmin=vmax[i][0], vmax=vmax[i][1])
+			m.contourf(x,y,np.where(p<=0.05, 1, 0), levels=[.5,1.5], \
+				colors=["none", "grey"], hatches=["///////"], alpha=0.05)
+			m.drawcoastlines()
+			matplotlib.rcParams['hatch.linewidth'] = 0.5
+			plt.annotate(alph[cnt-1], xy=(0.05, 0.05), xycoords='axes fraction')
+			if s == 0:
+				plt.title(titles[i])
+			if (s == 3) & (i == (len(datasets)-1) ):
+				cax = plt.axes([0.2, 0.075, 0.6, 0.01])
+				cb = plt.colorbar(c, cax=cax, orientation = "horizontal")
+				cb.set_label("Pearson's r")
+			if i == 0:
+				if seasons[s] == [12,1,2]:
+					plt.ylabel("DJF       ",rotation=0)
+				if seasons[s] == [3,4,5]:
+					plt.ylabel("MAM       ",rotation=0)
+				if seasons[s] == [6,7,8]:
+					plt.ylabel("JJA       ",rotation=0)
+				if seasons[s] == [9,10,11]:
+					plt.ylabel("SON       ",rotation=0)
+			cnt=cnt+1
+	plt.subplots_adjust(wspace=0.2)   
+
 def plot_aus_mean_clim():
 
 	#Plot the difference in the mean of a variable at each ERA5 grid point, from the first half to 
 	# the second half of the study period
 
-	var = ["eff_cape","s06"]
-	seasons = {"DJF":[12,1,2],"MAM":[3,4,5],"JJA":[6,7,8],"SON":[9,10,11]}
+	matplotlib.rcParams['hatch.linewidth'] = 0.5
+	fnames = ["era5_lr36_mean.nc","era5_lr_freezing_mean.nc","era5_mhgt_mean.nc",\
+		    "era5_ml_cape_mean.nc","era5_ml_el_mean.nc","era5_qmean01_mean.nc",\
+			"era5_qmeansubcloud_mean.nc","era5_s06_mean.nc","era5_srhe_left_mean.nc",\
+			    "era5_Umean06_mean.nc",]
+	vmax = [None, None]
+	titles = ["LR36", "LR-Freezing", "MHGT", "MLCAPE", "MLEL", "Qmean01", "Qmean-Subcloud",\
+		"S06", "SRHE", "Umean06"]
+	
+	datasets = [read_aus_conv_wind_clim(fnames[i], daily = True) for i in np.arange(len(fnames))]
+	n_boot = 1000
 	a=ord("a"); alph=[chr(i) for i in range(a,a+26)]; alph = [alph[i]+")" for i in np.arange(len(alph))]
-	titles = ["Eff-CAPE","S06"]
-	vmax = [ [-1,1],[-.25,.25] ]
 	m = Basemap(llcrnrlon=110, llcrnrlat=-45, urcrnrlon=160, urcrnrlat=-10,projection="cyl")
-	plt.figure(figsize=[5,8])
+	plt.figure(figsize=[10,8])
 	cnt=1
-	for s in seasons: 
-		print(s)
-		for i in np.arange(len(var)):
-			plt.subplot(4,len(var),cnt)
-			m.drawcoastlines()
-			v1 = xr.open_dataset("/g/data/eg3/ab4502/ExtremeWind/aus/era5_mean_dmax_"+\
-				var[i]+"_1979_1998.nc")
-			v2 = xr.open_dataset("/g/data/eg3/ab4502/ExtremeWind/aus/era5_mean_dmax_"+\
-				var[i]+"_1999_2018.nc")
-			trend = (v2[s] - v1[s]) / v1[s]
-			c = trend.plot(cmap = plt.get_cmap("RdBu_r"), \
-				add_colorbar = False, vmin=vmax[i][0], vmax=vmax[i][1], add_labels=False)
-			plt.annotate(alph[cnt-1], xy=(0.05, 0.05), xycoords='axes fraction')
-			if cnt <= len(var):
-				plt.title(titles[i])
-			if i == 0:
-				plt.ylabel(s+"       ",rotation=0)
-				plt.ylabel(s+"       ",rotation=0)
-				plt.ylabel(s+"       ",rotation=0)
-				plt.ylabel(s+"       ",rotation=0)
-			if s == "SON":
-				ax = plt.gca()
-				ax_pos = ax.get_position(False).extents
-				cax = plt.axes([ ax_pos[0], ax_pos[1]-0.05, ax_pos[2]-ax_pos[0], 0.025])
-				cb = plt.colorbar(c, cax=cax, orientation = "horizontal")
-				cb.set_label("Trend (%)")
-			cnt = cnt+1
+	for i in np.arange(len(fnames)):
+		print(fnames[i])
+		temp = datasets[i]
+		plt.subplot(5,2,cnt)
+		m.drawcoastlines()
+		temp_first = temp[temp["time.year"] < 1999]
+		temp_second = temp[temp["time.year"] >= 1999]
+		if titles[i] == "LR-Freezing":
+			temp_first = np.where((temp_first > 50) | (temp_first < -50), np.nan, temp_first)
+			temp_second = np.where((temp_second > 50) | (temp_second < -50), np.nan, temp_second)
+			trend = ((np.nanmean(temp_second, axis=0) - np.nanmean(temp_first,axis=0)) /\
+				np.nanmean(temp_first, axis=0)) * 100
+		else:
+			trend = ((temp_second.mean("time") - temp_first.mean("time")) / \
+				temp_first.mean("time")) * 100
+			temp_first = temp_first.to_masked_array()
+			temp_second = temp_second.to_masked_array()
+		lat = temp.lat.data
+		lon = temp.lon.data
+		x,y = np.meshgrid(lon,lat)
+		lsm = get_era5_mask(lon,lat)
+		trend = np.where(lsm>=0.5, trend, np.nan)
+		c = m.contourf(x,y,trend,cmap = plt.get_cmap("RdBu_r"), \
+			vmin=vmax[0], vmax=vmax[1],\
+			locator=matplotlib.ticker.MaxNLocator(symmetric=True))
+		plt.colorbar()
+		sig = hypothesis_test(temp_first, \
+			temp_second, n_boot)
+		sig = np.where(lsm>=0.5, sig, 1)
+		m.contourf(x,y,np.where(sig<=0.05, 1, 0), levels=[.5,1.5], \
+			colors=["none", "grey"], hatches=["///////"], alpha=0)
+		plt.annotate(alph[cnt-1], xy=(0.05, 0.05), xycoords='axes fraction')
+		plt.title(titles[i])
+		#if (i == (len(datasets)-1) ):
+		#	cax = plt.axes([0.2, 0.075, 0.6, 0.01])
+		#	cb = plt.colorbar(c, cax=cax, orientation = "horizontal", \
+		#		extend="both")
+		#	cb.set_label("Trend (%)")
+
+		cnt = cnt+1
 				
 
 def plot_aus_conv_wind_clim():
 
 	#Plotting function/driver for the above function
 
-	#fnames = ["barra_logit_daily.nc","barra_logit_is_sta_daily.nc",\
-	#	"barra_effcape*s06_daily.nc","barra_t_totals_daily.nc"]
-	fnames = ["era5_logit_is_conv_aws_daily.nc","era5_logit_is_sta_daily.nc",\
-			"era5_effcape*s06_daily.nc","era5_t_totals_daily.nc"]
-	#models = ["barra","barra","barra","barra"]
+	#fnames = ["barra_logit_is_conv_aws_daily.nc","barra_logit_is_sta_daily.nc",\
+	#	"barra_dcp_0.03_daily.nc","barra_t_totals_49.2_daily.nc"]
+	fnames = ["era5_logit_is_conv_aws_daily.nc", "era5_logit_is_sta_daily.nc",\
+		"era5_dcp_0.03_daily.nc", "era5_t_totals_48.16_daily.nc"]
 	models = ["era5","era5","era5","era5"]
 	datasets = [read_aus_conv_wind_clim(fnames[i], daily = True) for i in np.arange(len(fnames))]
-	vmax = [0.25,0.4,0.6, 0.5]
-	titles = ["Logistic eq. (measured)", "Logistic eq. (STA)", "Eff-CS6", "T-totals"]
+	vmax = [0.5,0.5,0.5, 0.5]
+	titles = ["Logistic eq. (measured)", "Logistic eq. (reported)", "DCP", "T-totals"]
 	a=ord("a"); alph=[chr(i) for i in range(a,a+26)]; alph = [alph[i]+")" for i in np.arange(len(alph))]
 	m = Basemap(llcrnrlon=110, llcrnrlat=-45, urcrnrlon=160, urcrnrlat=-10,projection="cyl")
 	plt.figure(figsize=[10,8])
 	cnt=1
 	for s in [[12,1,2],[3,4,5],[6,7,8],[9,10,11]]: 
+		print(s)
 		for i in np.arange(len(datasets)):
 			data = datasets[i]
 			plt.subplot(4,len(fnames),cnt)
@@ -1216,7 +1358,7 @@ def plot_aus_conv_wind_clim():
 				temp = temp.where(lsm>=0.5, np.nan)
 			c = temp.plot(cmap = plt.get_cmap("Reds"), \
 				vmax=vmax[i], vmin=0, add_colorbar = False,\
-				add_labels=False)
+				add_labels=False, extend="max")
 			plt.annotate(alph[cnt-1], xy=(0.05, 0.05), xycoords='axes fraction')
 			if cnt <= len(fnames):
 				plt.title(titles[i])
@@ -1229,11 +1371,9 @@ def plot_aus_conv_wind_clim():
 					plt.ylabel("JJA       ",rotation=0)
 				if s == [9,10,11]:
 					plt.ylabel("SON       ",rotation=0)
-			if s == [9,10,11]:
-				ax = plt.gca()
-				ax_pos = ax.get_position(False).extents
-				cax = plt.axes([ ax_pos[0], ax_pos[1]-0.05, ax_pos[2]-ax_pos[0], 0.025])
-				cb = plt.colorbar(c, cax=cax, orientation = "horizontal")
+			if (s == [9,10,11]) & (i == (len(datasets)-1) ):
+				cax = plt.axes([0.2, 0.075, 0.6, 0.01])
+				cb = plt.colorbar(c, cax=cax, orientation = "horizontal", extend="max")
 				cb.set_label("Daily frequency")
 			cnt = cnt+1
 	plt.subplots_adjust(wspace=0.2)
@@ -1290,6 +1430,6 @@ if __name__ == "__main__":
 			#n_boot=1000,\
 			#seasons=[np.arange(1,13,1)])
 
-	plot_aus_conv_wind_trends()
+	#plot_aus_conv_wind_trends()
 	#plot_aus_conv_wind_corr()
-	#plot_aus_conv_wind_clim()
+	plot_aus_mjo_corr()

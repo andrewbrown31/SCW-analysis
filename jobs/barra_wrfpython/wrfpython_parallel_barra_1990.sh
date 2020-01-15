@@ -1,11 +1,12 @@
 #!/bin/bash
 
 #PBS -P eg3 
-#PBS -q express
-#PBS -l walltime=24:00:00,mem=256GB 
+#PBS -q normal
+#PBS -l walltime=48:00:00,mem=256GB 
 #PBS -l ncpus=32
 #PBS -o /home/548/ab4502/working/ExtremeWind/jobs/messages/barra_fc_wrf_python_1990.o 
 #PBS -e /home/548/ab4502/working/ExtremeWind/jobs/messages/barra_fc_wrf_python_1990.e 
+#PBS -l other=gdata<x>
  
 #Set up conda/shell environments 
 conda activate wrfpython3.6 
@@ -22,8 +23,20 @@ while [ "$d" != 1991-01-01 ]; do
   echo "INFO: RUNNING WRFPYTHON ON DATA FROM" $start_time "to" $end_time
   mpiexec python -m mpi4py /home/548/ab4502/working/ExtremeWind/wrf_parallel.py "barra_fc" "aus" $start_time $end_time "True" "barra_fc" 1
 
+  #REMOVE OLD MONTHLY FILES (done every day, but will only work the first day each month for one of the potential "month_end_date"s)
+  month_start_date=$(date -d "$d" +%Y%m)"01"
+  month_end_date1=$(date -d "$d" +%Y%m)"28"
+  month_end_date2=$(date -d "$d" +%Y%m)"29"
+  month_end_date3=$(date -d "$d" +%Y%m)"30"
+  month_end_date4=$(date -d "$d" +%Y%m)"31"
+  rm -f "/g/data/eg3/ab4502/ExtremeWind/aus/barra_fc/barra_fc_${month_start_date}_${month_end_date1}.nc"
+  rm -f "/g/data/eg3/ab4502/ExtremeWind/aus/barra_fc/barra_fc_${month_start_date}_${month_end_date2}.nc"
+  rm -f "/g/data/eg3/ab4502/ExtremeWind/aus/barra_fc/barra_fc_${month_start_date}_${month_end_date3}.nc"
+  rm -f "/g/data/eg3/ab4502/ExtremeWind/aus/barra_fc/barra_fc_${month_start_date}_${month_end_date4}.nc"
+
   #Advance date
   d=$(date -I -d "$d + 1 day")
+
 done
 
 

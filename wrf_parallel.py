@@ -1,3 +1,4 @@
+import argparse
 from SkewT import get_dcape
 import gc
 import warnings
@@ -25,6 +26,7 @@ from erai_read import get_mask as  get_erai_mask
 from barra_read import read_barra, read_barra_fc
 from barra_ad_read import read_barra_ad
 from barra_read import get_mask as  get_barra_mask
+from read_cmip import read_cmip5
 
 #-------------------------------------------------------------------------------------------------
 
@@ -77,6 +79,7 @@ def get_point(point,lon,lat,ta,dp,hgt,ua,va,uas,vas,hur):
 
 def get_eff_cape(cape, cin, sfc_p_3d, sfc_ta, sfc_hgt, sfc_q, ps, terrain):
 
+	#Define the effective layer cape condition for the 3d grid
 	cape_cond = (cape >= 100) & (cin <= 250) & (sfc_p_3d <= ps)
 	eff_cape_cond = np.zeros(cape_cond.shape, dtype=bool)
 	is_first = np.ones((cape_cond.shape[1], cape_cond.shape[2]), dtype=bool)
@@ -86,42 +89,46 @@ def get_eff_cape(cape, cin, sfc_p_3d, sfc_ta, sfc_hgt, sfc_q, ps, terrain):
 		is_first[is_first & (~cape_cond[i] & cape_cond[i-1])]=False
 		eff_cape_cond[i, ~is_first] = False
 
+	#Extract pressure and height for effective levels
 	eff_p = np.where(eff_cape_cond,\
 		sfc_p_3d, np.nan)
 	eff_hgt = np.where(eff_cape_cond,\
 		sfc_hgt, np.nan)
-	#eff_ta = np.ma.masked_where(~eff_cape_cond, sfc_ta)
-	#eff_q = np.ma.masked_where(~eff_cape_cond, sfc_q)
 
+	#Define "average" conditions over the effective layer. For air temp and water vapour,
+	# the pressure-weighted average is used. For height and pressure, use the halfway point. 
+	#If the layer is of one-level depth, use that layer's conditions
 	eff_avg_p = (np.nanmin(eff_p,axis=0) + np.nanmax(eff_p,axis=0)) / 2
 	eff_avg_hgt = (np.nanmin(eff_hgt,axis=0) + np.nanmax(eff_hgt,axis=0)) / 2
-	#eff_avg_ta = np.ma.average(eff_ta, weights=sfc_p_3d,axis=0)
-	#eff_avg_q = np.ma.average(eff_q, weights=sfc_p_3d,axis=0)
 	eff_avg_ta = trapz_int3d(sfc_ta, sfc_p_3d, eff_cape_cond)
 	eff_avg_q = trapz_int3d(sfc_q, sfc_p_3d, eff_cape_cond)
-
+	
+	#If no effective layer is defined at a lat/lon point, assign the surface conditions as 
+	# effective conditions, for use in the CAPE routine (these points are not used later anyway)
 	eff_avg_p = np.where(np.isnan(eff_avg_p),\
 		np.ma.masked_where(~((sfc_p_3d==ps)),\
 		sfc_p_3d).max(axis=0).filled(0)\
-		,eff_avg_p)
+		,eff_avg_p).astype(np.float32)
 	eff_avg_hgt = np.where(np.isnan(eff_avg_p),\
 		np.ma.masked_where(~((sfc_p_3d==ps)),\
 		sfc_hgt).max(axis=0).filled(0)\
-		,eff_avg_hgt)
+		,eff_avg_hgt).astype(np.float32)
 	eff_avg_ta = np.where(np.isnan(eff_avg_p),\
 		np.ma.masked_where(~((sfc_p_3d==ps)),\
 		sfc_ta).max(axis=0).filled(0)\
-		,eff_avg_ta)
+		,eff_avg_ta).astype(np.float32)
 	eff_avg_q = np.where(np.isnan(eff_avg_p),\
 		np.ma.masked_where(~((sfc_p_3d==ps)),\
 		sfc_q).max(axis=0).filled(0)\
-		,eff_avg_q)
-	#Insert the pressure-weighted mean values into the bottom of the 3d arrays pressure-level arrays
+		,eff_avg_q).astype(np.float32)
+
+	#Insert the effective layer conditions into the bottom of the 3d arrays pressure-level arrays
 	eff_ta_arr = np.insert(sfc_ta,0,eff_avg_ta,axis=0)
 	eff_q_arr = np.insert(sfc_q,0,eff_avg_q,axis=0)
 	eff_hgt_arr = np.insert(sfc_hgt,0,eff_avg_hgt,axis=0)
 	eff_p3d_arr = np.insert(sfc_p_3d,0,eff_avg_p,axis=0)
-	#Sort by ascending p
+
+	#Sort arrays by ascending pressure
 	a,temp1,temp2 = np.meshgrid(np.arange(eff_p3d_arr.shape[0]) ,\
 		 np.arange(eff_p3d_arr.shape[1]), np.arange(eff_p3d_arr.shape[2]))
 	sort_inds = np.flipud(np.lexsort([np.swapaxes(a,1,0),eff_p3d_arr],axis=0))
@@ -129,25 +136,38 @@ def get_eff_cape(cape, cin, sfc_p_3d, sfc_ta, sfc_hgt, sfc_q, ps, terrain):
 	eff_p3d_arr = np.take_along_axis(eff_p3d_arr, sort_inds, axis=0)
 	eff_hgt_arr = np.take_along_axis(eff_hgt_arr, sort_inds, axis=0)
 	eff_q_arr = np.take_along_axis(eff_q_arr, sort_inds, axis=0)
+
 	#Calculate CAPE using wrf-python. 
 	cape3d_effavg = wrf.cape_3d(eff_p3d_arr,eff_ta_arr + 273.15,\
 		eff_q_arr,eff_hgt_arr,terrain,ps,False,meta=False, missing=0)
+
+	#From the 3d CAPE array, return just the effective layer vaues
 	eff_cape = np.ma.masked_where(~((eff_ta_arr==eff_avg_ta) & \
-		(eff_p3d_arr==eff_avg_p)),cape3d_effavg.data[0]).max(axis=0).filled(np.nan)
+		(eff_p3d_arr==eff_avg_p)),cape3d_effavg.data[0]).max(axis=0).filled(0)
 	eff_cin = np.ma.masked_where(~((eff_ta_arr==eff_avg_ta) & \
-		(eff_p3d_arr==eff_avg_p)),cape3d_effavg.data[1]).max(axis=0).filled(np.nan)
+		(eff_p3d_arr==eff_avg_p)),cape3d_effavg.data[1]).max(axis=0).filled(0)
 	eff_lfc = np.ma.masked_where(~((eff_ta_arr==eff_avg_ta) & \
-		(eff_p3d_arr==eff_avg_p)),cape3d_effavg.data[2]).max(axis=0).filled(np.nan)
+		(eff_p3d_arr==eff_avg_p)),cape3d_effavg.data[2]).max(axis=0).filled(0)
 	eff_lcl = np.ma.masked_where(~((eff_ta_arr==eff_avg_ta) & \
-		(eff_p3d_arr==eff_avg_p)),cape3d_effavg.data[3]).max(axis=0).filled(np.nan)
+		(eff_p3d_arr==eff_avg_p)),cape3d_effavg.data[3]).max(axis=0).filled(0)
 	eff_el = np.ma.masked_where(~((eff_ta_arr==eff_avg_ta) & \
-		(eff_p3d_arr==eff_avg_p)),cape3d_effavg.data[4]).max(axis=0).filled(np.nan)
+		(eff_p3d_arr==eff_avg_p)),cape3d_effavg.data[4]).max(axis=0).filled(0)
+
+	#Finally, mask points where there is no effective layer
+	eff_cape[eff_cape_cond.sum(axis=0) == 0] = 0
+	eff_cin[eff_cape_cond.sum(axis=0) == 0] = 0
+	eff_lfc[eff_cape_cond.sum(axis=0) == 0] = 0
+	eff_lcl[eff_cape_cond.sum(axis=0) == 0] = 0
+	eff_el[eff_cape_cond.sum(axis=0) == 0] = 0
 
 	return eff_cape, eff_cin, eff_lfc, eff_lcl, eff_el, eff_hgt, eff_avg_hgt
 
-def get_pwat(q, p, sfcp3d, p3d):
+def get_pwat(q, p, sfcp3d):
 
-	p_ind = np.argmin(abs(p - 400)) + 1
+	#p_ind = np.argmin(abs(p - 400)) + 1
+	#pwat = (((q[:p_ind]+q[1:p_ind+1])*1000/2 * (sfcp3d[:p_ind]-sfcp3d[1:p_ind+1])) * 0.00040173)\
+	#	.sum(axis=0)	#From SHARPpy
+	sfcp3d[sfcp3d < 400] = 0
 	pwat = (((q[:p_ind]+q[1:p_ind+1])*1000/2 * (sfcp3d[:p_ind]-sfcp3d[1:p_ind+1])) * 0.00040173)\
 		.sum(axis=0)	#From SHARPpy
 	return pwat
@@ -168,6 +188,10 @@ def trapz_int3d(var3d, p3d, cond):
 	
 	#Cond is a boolean array which gives the layers of interest
 
+	#If cond is false for the whole first dimension, then NaN is returned at that point
+
+	#If there is only one level of interest, then var3d at that level is returned
+
 	#See Dean S. documentation for more info.
 
 	x,j,k = var3d.shape
@@ -178,9 +202,11 @@ def trapz_int3d(var3d, p3d, cond):
 		layer = np.where( (cond[i+1] & cond[i]), v_layer*p_layer, 0)
 		result = result + layer
 	p_masked = np.ma.masked_where(~cond, p3d)
+	var3d_masked = np.ma.masked_where(~cond, var3d)
 	ptop = p_masked.min(axis=0)
 	pbot = p_masked.max(axis=0)
-	return ( 1 / (2 * (ptop - pbot) ) ) * result
+	return np.where( (cond.sum(axis=0) == 1), var3d_masked.max(axis=0),\
+		    np.ma.filled(( 1 / (2 * (ptop - pbot) ) ) * result, np.nan) )
 
 def get_mean_var_hgt(var3d, hgt, hgt_bot, hgt_top, terrain, mass_weighted=False, p3d=None):
 
@@ -747,23 +773,36 @@ if __name__ == "__main__":
 	warnings.simplefilter("ignore")
 
 	#Get MPI communicator info
-	comm = MPI.COMM_WORLD
-	size = comm.Get_size()
-	rank = comm.Get_rank()
+	#comm = MPI.COMM_WORLD
+	#size = comm.Get_size()
+	#rank = comm.Get_rank()
+
+	#Try parsing arguments using argparse
+	parser = argparse.ArgumentParser(description='wrf_parallel convective diagnostics processer')
+	parser.add_argument("-m",help="Model name",required=True)
+	parser.add_argument("-r",help="Region name",default="aus")
+	parser.add_argument("-t1",help="Time start YYYYMMDDHH",required=True)
+	parser.add_argument("-t2",help="Time end YYYYMMDDHH",required=True)
+	parser.add_argument("-e", help="CMIP5 experiment name", default="")
+	parser.add_argument("--ens", help="CMIP5 ensemble name", default="r1i1p1")
+	parser.add_argument("--issave",help="Save output (1 or 0)", default=0)
+	parser.add_argument("--outname",help="Name of saved output. In the form *outname*_*t1*_*t2*.nc",default=None)
+	parser.add_argument("--is_dcape",help="Should DCAPE be calculated? (1 or 0)",default=1)
+	args = parser.parse_args()
 
 	if rank == 0:
 
 		#Parse arguments from cmd line and set up inputs (date region model)
-		model = sys.argv[1]
-		region = sys.argv[2]
-		t1 = sys.argv[3]
-		t2 = sys.argv[4]
-		issave = sys.argv[5]
-		out_name = sys.argv[6]
-		if len(sys.argv) > 7:
-			is_dcape = sys.argv[7]
-		else:
-			is_dcape = 1
+		model = args.m
+		region = args.r
+		t1 = args.t1
+		t2 = args.t2
+		issave = args.issave
+		if args.outname==None:
+			out_name = model
+		is_dcape = args.is_dcape
+		experiment = args.e
+		ensemble = args.ens
 		if region == "sa_small":
 			start_lat = -38; end_lat = -26; start_lon = 132; end_lon = 142
 		elif region == "aus":
@@ -806,6 +845,10 @@ if __name__ == "__main__":
 		elif model == "barra_ad":
 			wg10,temp2,ta,temp1,hur,hgt,terrain,p,ps,wap,ua,va,uas,vas,tas,ta2d,lon,lat,date_list = \
 				read_barra_ad(domain, time, False)
+		elif model in ["ACCESS1-0","ACCESS1-3"]:
+			#Check that t1 and t2 are in the same year
+			ta, hur, hgt, terrain, p3d, ps, ua, va, uas, vas, tas, ta2d, lon, lat, \
+			    date_list = read_cmip5(model, experiment, ensemble, t1[0:4], domain)
 		del temp1
 		ta = ta.astype("float32", order="C")
 		hur = hur.astype("float32", order="C")
@@ -939,7 +982,7 @@ if __name__ == "__main__":
 		print("SENDING TO OTHER NODES...")
 
 	else:
-		model = sys.argv[1]
+		model = args.m
 		split_sizes_input = None; displacements_input = None; split_sizes_output = None;\
 			displacements_output = None; split_sizes_input_2d = None; displacements_input_2d = None;\
 			split_sizes_sfc_input = None; displacements_sfc_input = None
@@ -1065,6 +1108,10 @@ if __name__ == "__main__":
 	output = np.zeros((ta_chunk.shape[0]*ps_chunk.shape[1],len(param)))
 	for t in np.arange(0,ta_chunk.shape[0]):
 		cape_start = dt.datetime.now()
+	
+		#t = 1
+		#print(date_list[t])
+		#p_3d = pres[t]
 
 		dp = get_dp(hur=hur[t], ta=ta[t], dp_mask = False)
 
@@ -1075,7 +1122,7 @@ if __name__ == "__main__":
 		sfc_p_3d = np.insert(p_3d, 0, ps[t], axis=0) 
 		sfc_ua = np.insert(ua[t], 0, uas[t], axis=0) 
 		sfc_va = np.insert(va[t], 0, vas[t], axis=0) 
-		sfc_wap = np.insert(wap[t], 0, np.zeros(vas[t].shape), axis=0) 
+		#sfc_wap = np.insert(wap[t], 0, np.zeros(vas[t].shape), axis=0) 
 
 		#Sort by ascending p
 		a,temp1,temp2 = np.meshgrid(np.arange(sfc_p_3d.shape[0]) , np.arange(sfc_p_3d.shape[1]),\
@@ -1186,17 +1233,24 @@ if __name__ == "__main__":
 			el).max(axis=0).filled(0)
 
 		#Now get the effective-inflow layer parcel CAPE. Layer defined as a parcel with
-		# the mass-wegithted average conditions of the inflow layer; the layer between when the profile
-		# has CAPE > 100 and cin < 250.
+		# the mass-wegithted average conditions of the inflow layer; the layer 
+		# between when the profile has CAPE > 100 and cin < 250.
 		#If no effective layer, effective layer CAPE is zero.
 		#Only levels below 500 hPa AGL are considered
+
+		#EDITS (23/01/2020)
+		#Do not get surface-based values when eff_cape is not defined. Just leave as zero.
+		#If an effective layer is only one level, the pacel is defined with quantities at 
+		# that level. Previously, quantites were defined as zero, becuase of the averaging 
+		# routine (i.e. bc pressure difference between the top of the effective layer and the 
+		# bottom is zero). I assume this would result in zero CAPE (given q would be zero)
 		eff_cape, eff_cin, eff_lfc, eff_lcl, eff_el, eff_hgt, eff_avg_hgt = get_eff_cape(\
 			cape, cin, sfc_p_3d, sfc_ta, sfc_hgt, sfc_q, ps[t], terrain)
-		eff_cape = np.where(np.isnan(eff_cape), sb_cape, eff_cape)
-		eff_cin = np.where(np.isnan(eff_cin), sb_cin, eff_cin)
-		eff_lfc = np.where(np.isnan(eff_lfc), sb_lfc, eff_lfc)
-		eff_lcl = np.where(np.isnan(eff_lcl), sb_lcl, eff_lcl)
-		eff_el = np.where(np.isnan(eff_el), sb_el, eff_el)
+		eff_cape = np.where(np.isnan(eff_cape), 0, eff_cape)
+		eff_cin = np.where(np.isnan(eff_cin), 0, eff_cin)
+		eff_lfc = np.where(np.isnan(eff_lfc), 0, eff_lfc)
+		eff_lcl = np.where(np.isnan(eff_lcl), 0, eff_lcl)
+		eff_el = np.where(np.isnan(eff_el), 0, eff_el)
 
 		#Calculate other parameters
 		#Thermo

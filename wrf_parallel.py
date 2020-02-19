@@ -39,8 +39,9 @@ from read_cmip import read_cmip5
 #
 #	- CIN is only non-zero where CAPE is non-zero. CIN did not behave nicely otherwise.
 #		Although, CIN is only relevant when CAPE is non-zero anyway
-#	- Effective layer parcel is defined by mass-weighted effective layer properties. This is 
-#		calculated using np.trapz, although I'm not sure this is correct.
+#	- There has recently been a change to the effective layer CAPE routine, which allows for 
+#		a single level layer. Also, has been changed to output zero if there is no effective
+#		layer, rather than SBCAPE.
 #-------------------------------------------------------------------------------------------------
 
 
@@ -162,13 +163,13 @@ def get_eff_cape(cape, cin, sfc_p_3d, sfc_ta, sfc_hgt, sfc_q, ps, terrain):
 
 	return eff_cape, eff_cin, eff_lfc, eff_lcl, eff_el, eff_hgt, eff_avg_hgt
 
-def get_pwat(q, p, sfcp3d):
+def get_pwat(q, sfcp3d):
 
 	#p_ind = np.argmin(abs(p - 400)) + 1
 	#pwat = (((q[:p_ind]+q[1:p_ind+1])*1000/2 * (sfcp3d[:p_ind]-sfcp3d[1:p_ind+1])) * 0.00040173)\
 	#	.sum(axis=0)	#From SHARPpy
 	sfcp3d[sfcp3d < 400] = 0
-	pwat = (((q[:p_ind]+q[1:p_ind+1])*1000/2 * (sfcp3d[:p_ind]-sfcp3d[1:p_ind+1])) * 0.00040173)\
+	pwat = (((q[:-1]+q[1:])*1000/2 * (sfcp3d[:-1]-sfcp3d[1:])) * 0.00040173)\
 		.sum(axis=0)	#From SHARPpy
 	return pwat
 
@@ -773,9 +774,9 @@ if __name__ == "__main__":
 	warnings.simplefilter("ignore")
 
 	#Get MPI communicator info
-	#comm = MPI.COMM_WORLD
-	#size = comm.Get_size()
-	#rank = comm.Get_rank()
+	comm = MPI.COMM_WORLD
+	size = comm.Get_size()
+	rank = comm.Get_rank()
 
 	#Try parsing arguments using argparse
 	parser = argparse.ArgumentParser(description='wrf_parallel convective diagnostics processer')
@@ -847,8 +848,16 @@ if __name__ == "__main__":
 				read_barra_ad(domain, time, False)
 		elif model in ["ACCESS1-0","ACCESS1-3"]:
 			#Check that t1 and t2 are in the same year
-			ta, hur, hgt, terrain, p3d, ps, ua, va, uas, vas, tas, ta2d, lon, lat, \
-			    date_list = read_cmip5(model, experiment, ensemble, t1[0:4], domain)
+			if not t1[0:4] == t2[0:4]:
+				raise AssertionError("For CMIP5 data, t1 and t2 must be within the" +\
+					" same year") 
+			ta, hur, hgt, terrain, p_3d, ps, ua, va, uas, vas, tas, ta2d, lon, lat, \
+			    date_list = read_cmip5(model, experiment,\
+			    ensemble, int(t1[0:4]), domain)
+			wap = np.zeros(hgt.shape)
+			wg10 = np.zeros(hgt.shape)
+			p = np.zeros(p3d[0,:,0,0].shape)
+			temp = None
 		del temp1
 		ta = ta.astype("float32", order="C")
 		hur = hur.astype("float32", order="C")
@@ -1102,16 +1111,25 @@ if __name__ == "__main__":
 		mod_cape = mod_cape_chunk.reshape((mod_cape_chunk.shape[0],orig_shape[2], orig_shape[3]))
 
 	#Assign p levels to a 3d array, with same dimensions as input variables (ta, hgt, etc.)
-	p_3d = np.moveaxis(np.tile(p,[ta.shape[2],ta.shape[3],1]),[0,1,2],[1,2,0]).astype(np.float32)
+	#If the 3d p-lvl array already exists, then declare the variable "mdl_lvl" as true. 
+	try:
+		p_3d;
+		mdl_lvl = True
+		full_p3d = p_3d
+	except:
+		mdl_lvl = False
+		p_3d = np.moveaxis(np.tile(p,[ta.shape[2],ta.shape[3],1]),[0,1,2],[1,2,0]).\
+			astype(np.float32)
 
 	tot_start = dt.datetime.now()
 	output = np.zeros((ta_chunk.shape[0]*ps_chunk.shape[1],len(param)))
 	for t in np.arange(0,ta_chunk.shape[0]):
 		cape_start = dt.datetime.now()
 	
-		#t = 1
-		#print(date_list[t])
-		#p_3d = pres[t]
+		print(date_list[t])
+
+		if mdl_lvl:
+			p_3d = full_p3d[t]
 
 		dp = get_dp(hur=hur[t], ta=ta[t], dp_mask = False)
 
@@ -1122,7 +1140,7 @@ if __name__ == "__main__":
 		sfc_p_3d = np.insert(p_3d, 0, ps[t], axis=0) 
 		sfc_ua = np.insert(ua[t], 0, uas[t], axis=0) 
 		sfc_va = np.insert(va[t], 0, vas[t], axis=0) 
-		#sfc_wap = np.insert(wap[t], 0, np.zeros(vas[t].shape), axis=0) 
+		sfc_wap = np.insert(wap[t], 0, np.zeros(vas[t].shape), axis=0) 
 
 		#Sort by ascending p
 		a,temp1,temp2 = np.meshgrid(np.arange(sfc_p_3d.shape[0]) , np.arange(sfc_p_3d.shape[1]),\
@@ -1154,13 +1172,8 @@ if __name__ == "__main__":
 		#First, find avg values for ta, p, hgt and q for ML (between the surface
 		# and 100 hPa AGL)
 		ml_inds = ((sfc_p_3d <= ps[t]) & (sfc_p_3d >= (ps[t] - 100)))
-		#ml_p3d_avg = ps[t] - 50
-		#ml_hgt_avg = get_var_p_lvl(sfc_hgt, sfc_p_3d, ml_p3d_avg)
 		ml_p3d_avg = ( np.ma.masked_where(~ml_inds, sfc_p_3d).min(axis=0) + np.ma.masked_where(~ml_inds, sfc_p_3d).max(axis=0) ) / 2.
 		ml_hgt_avg = ( np.ma.masked_where(~ml_inds, sfc_hgt).min(axis=0) + np.ma.masked_where(~ml_inds, sfc_hgt).max(axis=0) ) / 2.
-
-		#ml_ta_avg = np.ma.average( np.ma.masked_where(~ml_inds, sfc_ta), axis=0).data.astype(np.float32)
-		#ml_q_avg = np.ma.average( np.ma.masked_where(~ml_inds, sfc_q), axis=0).data.astype(np.float32)
 		ml_ta_avg = trapz_int3d(sfc_ta, sfc_p_3d, ml_inds ).astype(np.float32)
 		ml_q_avg = trapz_int3d(sfc_q, sfc_p_3d, ml_inds ).astype(np.float32)
 
@@ -1211,13 +1224,20 @@ if __name__ == "__main__":
 		lcl[(sfc_p_3d > ps[t]) | (sfc_p_3d<(ps[t]-500))] = np.nan
 		el[(sfc_p_3d > ps[t]) | (sfc_p_3d<(ps[t]-500))] = np.nan
 		#Get maximum (in the vertical), and get cin, lfc, lcl for the same parcel
-		mu_cape_inds = np.nanargmax(cape,axis=0)
-		mu_cape = mu_cape_inds.choose(cape)
-		mu_cin = mu_cape_inds.choose(cin)
-		mu_lfc = mu_cape_inds.choose(lfc)
-		mu_lcl = mu_cape_inds.choose(lcl)
-		mu_el = mu_cape_inds.choose(el)
-		muq = mu_cape_inds.choose(sfc_q)
+		#mu_cape_inds = np.nanargmax(cape,axis=0)
+		#mu_cape = mu_cape_inds.choose(cape)
+		#mu_cin = mu_cape_inds.choose(cin)
+		#mu_lfc = mu_cape_inds.choose(lfc)
+		#mu_lcl = mu_cape_inds.choose(lcl)
+		#mu_el = mu_cape_inds.choose(el)
+		#muq = mu_cape_inds.choose(sfc_q)
+		mu_cape_inds = np.tile(np.nanargmax(cape,axis=0), (cape.shape[0],1,1))
+		mu_cape = np.take_along_axis(cape, mu_cape_inds, 0)[0]
+		mu_cin = np.take_along_axis(cin, mu_cape_inds, 0)[0]
+		mu_lfc = np.take_along_axis(lfc, mu_cape_inds, 0)[0]
+		mu_lcl = np.take_along_axis(lcl, mu_cape_inds, 0)[0]
+		mu_el = np.take_along_axis(el, mu_cape_inds, 0)[0]
+		mu_q = np.take_along_axis(sfc_q, mu_cape_inds, 0)[0]
 
 		#Now get surface based CAPE. Simply the CAPE defined by parcel 
 		#with surface properties
@@ -1295,7 +1315,7 @@ if __name__ == "__main__":
 		c_totals = get_var_p_lvl(np.copy(sfc_dp), sfc_p_3d, 850) - \
 				get_var_p_lvl(np.copy(sfc_ta), sfc_p_3d, 500)
 		t_totals = v_totals + c_totals
-		pwat = get_pwat(sfc_q, p, sfc_p_3d, p_3d)
+		pwat = get_pwat(sfc_q, np.copy(sfc_p_3d))
 		if model != "era5":
 			maxtevv = maxtevv_fn(np.array(sfc_thetae_unit), np.copy(sfc_wap), np.copy(sfc_hgt), terrain)
 		te_diff = thetae_diff(np.array(sfc_thetae_unit), np.copy(sfc_hgt), terrain)
@@ -1309,23 +1329,39 @@ if __name__ == "__main__":
 		dpd500 = get_var_p_lvl(np.copy(sfc_ta), sfc_p_3d, 500) - \
 				get_var_p_lvl(np.copy(sfc_dp), sfc_p_3d, 500)
 		if (int(is_dcape) == 1) & (ps[t].max() > 0):
-			#Define DCAPE as the area between the moist adiabat of a descending parcel and the 
-			# environmental temperature (w/o virtual temperature correction). Starting parcel 
-			# chosen by the pressure level with minimum thetae
-			dcape, ddraft_temp = get_dcape(np.array(sfc_p_3d[np.concatenate([[1100], p]) >= 300]), \
-						sfc_ta[np.concatenate([[1100], p]) >= 300], \
-						sfc_q[np.concatenate([[1100], p]) >= 300], \
-						sfc_hgt[np.concatenate([[1100], p]) >= 300], \
-						np.array(p[p>=300]), ps[t])
-			sfc_thetae300 = sfc_thetae_unit[np.concatenate([[1100], p]) >= 300].data
-			sfc_p300 = sfc_p_3d[np.concatenate([[1100], p]) >= 300]
-			sfc_thetae300[(ps[t] - sfc_p300) > 400] = np.nan 
-			sfc_thetae300[(sfc_p300 > ps[t])] = np.nan 
-			#Calculate for all levels (sfc to 400 hPa agl), and then mask based on height agl 
-			dcape = np.nanargmin(sfc_thetae300, axis=0).choose(dcape)
-			ddraft_temp = tas[t] - \
-				np.nanargmin(sfc_thetae300, axis=0).choose(ddraft_temp)
-			ddraft_temp[(ddraft_temp<0) | (np.isnan(ddraft_temp))] = 0
+			#Define DCAPE as the area between the moist adiabat of a descending parcel 
+			# and the environmental temperature (w/o virtual temperature correction). 
+			#Starting parcel chosen by the pressure level with minimum thetae below 
+			# 300 hPa
+
+			if mdl_lvl:
+				sfc_thetae300 = np.copy(sfc_thetae_unit)
+				sfc_thetae300[(ps[t] - sfc_p_3d) > 400] = np.nan 
+				sfc_thetae300[(sfc_p_3d > ps[t])] = np.nan 
+				dcape, ddraft_temp = get_dcape( sfc_p_3d, sfc_ta, sfc_q, sfc_hgt,\
+					ps[t], p_lvl=False, \
+					minthetae_inds=np.argmin(sfc_thetae300, axis=0))
+
+			else:
+				#Get 3d DCAPE for every point below 300 hPa
+				#For each lat/lon point, calculate the minimum thetae, and use
+				# DCAPE for that point
+				dcape, ddraft_temp = get_dcape(\
+							np.array(sfc_p_3d[np.concatenate([[1100], \
+								p]) >= 300]), \
+							sfc_ta[np.concatenate([[1100], p]) >= 300], \
+							sfc_q[np.concatenate([[1100], p]) >= 300], \
+							sfc_hgt[np.concatenate([[1100], p]) >= 300], \
+							ps[t], p=np.array(p[p>=300]))
+				sfc_thetae300 = sfc_thetae_unit[np.concatenate([[1100], \
+					p]) >= 300].data
+				sfc_p300 = sfc_p_3d[np.concatenate([[1100], p]) >= 300]
+				sfc_thetae300[(ps[t] - sfc_p300) > 400] = np.nan 
+				sfc_thetae300[(sfc_p300 > ps[t])] = np.nan 
+				dcape = np.nanargmin(sfc_thetae300, axis=0).choose(dcape)
+				ddraft_temp = tas[t] - \
+					np.nanargmin(sfc_thetae300, axis=0).choose(ddraft_temp)
+				ddraft_temp[(ddraft_temp<0) | (np.isnan(ddraft_temp))] = 0
 		else:
 			ddraft_temp = np.zeros(dpd500.shape)
 			dcape = np.zeros(dpd500.shape)

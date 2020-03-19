@@ -347,6 +347,75 @@ def to_points_loop(loc_id,points,fname,start_year,end_year,variables=False):
 
 	df.sort_values(["loc_id","time"]).to_pickle("/g/data/eg3/ab4502/ExtremeWind/points/"+fname+".pkl")
 
+def to_points_loop_wind_dir(loc_id,points,fname,start_year,end_year):
+
+	#As in to_points_loop(), but just for 10 m wind direction, from the ma07 directory
+	from dask.diagnostics import ProgressBar
+	import gc
+	#ProgressBar().register()
+
+	dates = []
+	for y in np.arange(start_year,end_year+1):
+		for m in np.arange(1,13):
+			dates.append(dt.datetime(y,m,1,0,0,0))
+
+	df = pd.DataFrame()
+
+	#lsm = get_lsm()[0]
+	start_lat = -44.525; end_lat = -9.975; start_lon = 111.975; end_lon = 156.275 
+
+	#Read netcdf data
+	for t in np.arange(len(dates)):
+		print(dates[t])
+		year = dt.datetime.strftime(dates[t],"%Y")
+		month =	dt.datetime.strftime(dates[t],"%m")
+		u_file = xr.open_mfdataset("/g/data/ub4/era5/netcdf/surface/10U/"+\
+			year+"/10U_era5_global_"+year+month+"*.nc", concat_dim="time").\
+			sel({"latitude":slice(end_lat,start_lat), \
+			    "longitude":slice(start_lon,end_lon)})
+		v_file = xr.open_mfdataset("/g/data/ub4/era5/netcdf/surface/10V/"+\
+			year+"/10V_era5_global_"+year+month+"*.nc", concat_dim="time").\
+			sel({"latitude":slice(end_lat,start_lat), \
+			    "longitude":slice(start_lon,end_lon)})
+		wd = 180 + ( 180/np.pi ) * \
+			(np.arctan2(u_file["u10"], v_file["v10"]))
+
+		#Setup lsm
+		lat = u_file.coords.get("latitude").values
+		lon = u_file.coords.get("longitude").values
+		lsm = get_mask(lon,lat)
+		x,y = np.meshgrid(lon,lat)
+		x[lsm<0.5] = np.nan
+		y[lsm<0.5] = np.nan
+
+		dist_lon = []
+		dist_lat = []
+		for i in np.arange(len(loc_id)):
+
+			dist = np.sqrt(np.square(x-points[i][0]) + \
+				np.square(y-points[i][1]))
+			temp_lat,temp_lon = np.unravel_index(np.nanargmin(dist),dist.shape)
+			dist_lon.append(temp_lon)
+			dist_lat.append(temp_lat)
+
+		temp_df = wd.isel(latitude = xr.DataArray(dist_lat, dims="points"), \
+			longitude = xr.DataArray(dist_lon, dims="points")).persist().\
+			to_dataframe("wd")
+
+		temp_df = temp_df.reset_index()
+
+		for p in np.arange(len(loc_id)):
+			temp_df.loc[temp_df.points==p,"loc_id"] = loc_id[p]
+
+		temp_df = temp_df.drop(["points"],axis=1)
+		df = pd.concat([df, temp_df])
+		u_file.close()
+		v_file.close()
+		gc.collect()
+
+	df.sort_values(["loc_id","time"]).to_pickle("/g/data/eg3/ab4502/ExtremeWind/points/"+fname+".pkl")
+
+
 def get_aus_stn_info():
 	names = ["id", "stn_no", "district", "stn_name", "1", "2", "lat", "lon", "3", "4", "5", "6", "7", "8", \
 			"9", "10", "11", "12", "13", "14", "15", "16"]	
@@ -405,5 +474,5 @@ if __name__ == "__main__":
 
 	loc_id, points = get_aus_stn_info()
 
-	to_points_loop(loc_id, points, "era5_allvars_"+str(start_time)+"_"+str(end_time), \
+	to_points_loop(loc_id, points, "era5_allvars_v2_"+str(start_time)+"_"+str(end_time), \
 			start_time, end_time)

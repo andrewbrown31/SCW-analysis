@@ -22,9 +22,10 @@ from event_analysis import optimise_pss
 def plot_candidate_variable_kde():
 
 	#For a list of "candidate variables", defined below, plot kde functions for all times, measured events, and reported events
+	matplotlib.rcParams.update({'font.size': 14})
 	pss_df, barra_df_aws, barra_df_sta = optimise_pss("/g/data/eg3/ab4502/ExtremeWind/points/"+\
 		"barra_allvars_2005_2018.pkl", T=1000, compute=False, l_thresh=2,\
-		is_pss="hss", model_name="barra") 
+		is_pss="hss", model_name="barra_fc") 
 	pss_df, era5_df_aws, era5_df_sta = optimise_pss("/g/data/eg3/ab4502/ExtremeWind/points/"+\
 		"era5_allvars_2005_2018.pkl", T=1000, compute=False, l_thresh=2,\
 		is_pss="hss", model_name="era5") 
@@ -33,30 +34,34 @@ def plot_candidate_variable_kde():
 		    "qmean01":[0,25], "qmeansubcloud":[0,25], "s06":[0,60], "srhe_left":[0,200], "Umean06":[0,45] }
 	titles = {"lr36":"LR36","lr_freezing":"LR-Freezing","mhgt":"MHGT","ml_cape":"MLCAPE","ml_el":"MLEL","qmean01":"Qmean01",\
 		    "qmeansubcloud":"Qmean-Subcloud","s06":"S06","srhe_left":"SRHE","Umean06":"Umean06"}
+	units = {"lr36":"deg km$^{-1}$","lr_freezing":"deg km$^{-1}$","mhgt":"m","ml_cape":"J kg$^{-1}$","ml_el":"m","qmean01":"g kg$^{-1}$",\
+		    "qmeansubcloud":"g kg$^{-1}$","s06":"m s$^{-1}$","srhe_left":"m$^{2}$ s$^{-1}$","Umean06":"m s$^{-1}$"}
 	#Fix lr_freezing in era5
 	era5_df_sta.loc[era5_df_sta["lr_freezing"]>barra_df_sta["lr_freezing"].max(),"lr_freezing"] = barra_df_sta["lr_freezing"].max()
 	era5_df_aws.loc[era5_df_aws["lr_freezing"]>barra_df_aws["lr_freezing"].max(),"lr_freezing"] = barra_df_aws["lr_freezing"].max()
 
 	cnt=1
-	plt.figure(figsize=[12,9])
-	plt.subplots_adjust(top=0.97, bottom=0.15, hspace=0.7, wspace=0.3, right=0.95)
+	plt.figure(figsize=[12,9.5])
+	plt.subplots_adjust(top=0.97, bottom=0.15, hspace=0.85, wspace=0.3, right=0.95)
 	matplotlib.rcParams.update({'font.size': 14})
 	for v in variables:
 		print(v)
 
-		#Plot diff between event and non event times
+		#Plot dist for 1) Non-convective gusts 2) Non-severe convective gusts and 3) SCW
 
 		ax1 = plt.subplot(5,2,cnt)
-		barra_df_sta[v].plot(kind="kde", color="k", linestyle="-", ind=np.linspace(xlims[v][0], xlims[v][1], 1000),\
-			label="All times (BARRA)")
-		era5_df_sta[v].plot(kind="kde", color="k", linestyle="--", ind=np.linspace(xlims[v][0], xlims[v][1], 1000),\
-			label="All times (ERA5)")
-		barra_df_aws[barra_df_aws["is_conv_aws"]==1][v].plot(kind="kde", color="r", linestyle="-", ind=np.linspace(xlims[v][0], xlims[v][1], 1000), label="Measured SCW (BARRA)")
-		era5_df_aws[era5_df_aws["is_conv_aws"]==1][v].plot(kind="kde", color="r", linestyle="--", ind=np.linspace(xlims[v][0], xlims[v][1], 1000), label="Measured SCW (ERA5)") 
-		barra_df_sta[barra_df_sta["is_sta"]==1][v].plot(kind="kde", color="b", linestyle="-", ind=np.linspace(xlims[v][0], xlims[v][1], 1000), label="Reported SCW (BARRA)")
-		era5_df_sta[era5_df_sta["is_sta"]==1][v].plot(kind="kde", color="b", linestyle="--", ind=np.linspace(xlims[v][0], xlims[v][1], 1000), label="Reported SCW (ERA5)") 
+		barra_df_aws[barra_df_aws["lightning"]<2][v].plot(kind="kde", color="r", linestyle=":", ind=np.linspace(xlims[v][0], xlims[v][1], 1000),\
+			label="Non-convective gusts (BARRA)")
+		barra_df_aws[(barra_df_aws["lightning"]>=2) & (barra_df_aws["wind_gust"]<25)][v].plot(kind="kde", color="r", linestyle="--", ind=np.linspace(xlims[v][0], xlims[v][1], 1000), label="Non-severe convective gust (BARRA)")
+		barra_df_aws[barra_df_aws["is_conv_aws"]==1][v].plot(kind="kde", color="r", linestyle="-", ind=np.linspace(xlims[v][0], xlims[v][1], 1000), label="Severe convective gust (BARRA)")
+
+		era5_df_aws[era5_df_aws["lightning"]<2][v].plot(kind="kde", color="b", linestyle=":", ind=np.linspace(xlims[v][0], xlims[v][1], 1000),\
+			label="Non-convective gusts (ERA5)")
+		era5_df_aws[(era5_df_aws["lightning"]>=2) & (era5_df_aws["wind_gust"]<25)][v].plot(kind="kde", color="b", linestyle="--", ind=np.linspace(xlims[v][0], xlims[v][1], 1000), label="Non-severe convective gust (ERA5)")
+		era5_df_aws[era5_df_aws["is_conv_aws"]==1][v].plot(kind="kde", color="b", linestyle="-", ind=np.linspace(xlims[v][0], xlims[v][1], 1000), label="Severe convective gust (ERA5)")
+
+
 		plt.xlim(xlims[v][0], xlims[v][1])
-		ax1.locator_params(axis='y', nbins=3)
 		if v in ["ml_cape","srhe_left"]:
 			plt.yscale("log")
 
@@ -65,10 +70,18 @@ def plot_candidate_variable_kde():
 		if (cnt % 2) == 0:
 			ax1.set_ylabel("")
 		if cnt == 10:
-			ax1.legend(loc="lower center", bbox_to_anchor=(-0.2,-1.2), fancybox=True, ncol=3, edgecolor="k")
-		plt.title(titles[v])
+			ax1.legend(loc="lower center", bbox_to_anchor=(-0.2,-1.6), fancybox=True, ncol=2, edgecolor="k")
+		plt.title(titles[v], size=14)
 		ax1.tick_params(labelsize=12)
 
+		if v in ["ml_cape"]:
+			ax1.set_yticks([1e-5, 1e-4, 1e-3, 1e-2])
+		elif v in ["srhe_left"]:
+			ax1.set_yticks([1e-6, 1e-4, 1e-2, 1e-0])
+		else:
+			ax1.locator_params(axis='y', nbins=6)
+
+		plt.xlabel(units[v]+"\n", size=10)
 
 		cnt = cnt + 1
  
@@ -170,9 +183,11 @@ def plot_ranked_hss():
 	ver=2
 
 	era5, df_aws, df_sta = optimise_pss("/g/data/eg3/ab4502/ExtremeWind/points/era5_allvars_2005_2018.pkl",\
-			T=1000, compute=False, l_thresh=2, is_pss="hss", model_name="era5")
+			T=1000, compute=False, l_thresh=2, is_pss="hss", model_name="era5",\
+			time="floor")
 	barra, df_aws, df_sta = optimise_pss("/g/data/eg3/ab4502/ExtremeWind/points/barra_allvars_2005_2018.pkl",\
-			T=1000, compute=False, l_thresh=2, is_pss="hss", model_name="barra")
+			T=1000, compute=False, l_thresh=2, is_pss="hss", model_name="barra_fc",\
+			time="floor")
 	hss = pd.merge(era5, barra, how="outer", suffixes=("_era5","_barra"), left_index=True, right_index=True)
 	hss = hss.rename(index={"ship":"SHIP", "k_index":"K-index", "ml_cape":"MLCAPE", "srhe_left":"SRHE", \
 		"ml_el":"MLEL", "mu_cape":"MUCAPE", "eff_cape":"Eff-CAPE", "sb_cape":"SBCAPE", \
@@ -222,20 +237,33 @@ def plot_ranked_hss():
 	elif ver == 2:
 		ms = 10		
 
+
+		#Rank skill for event versus non-event
+		plt.figure(figsize=[6,9])
 		cnt=0
 		cols=['#e41a1c','#377eb8','#4daf4a','#984ea3']
-		plt.figure(figsize=[10,9])
-		ax = plt.subplot(1,3,1)
+		legend = [ ["Measured ERA5","Measured BARRA"] , ["Reported ERA5","Reported BARRA"] ]
+		sorted_vars = hss["pss_conv_aws_era5"].sort_values(ascending=False).iloc[0:10].\
+				index.values
 		for event in ["pss_conv_aws_era5", "pss_sta_era5"]:
-			temp_hss = hss[event].sort_values(ascending=False).iloc[0:20]
-			temp_hss = hss.loc[list(temp_hss.index.values)+["WindGust10"],event]
+			ax = plt.subplot(1,2,cnt+1)
+			temp_hss = hss.loc[list(sorted_vars)+["WindGust10"],event]
 
 			plt.plot(temp_hss, \
 				np.arange(temp_hss.shape[0],0,-1),linestyle="none",\
 				marker="x", color=cols[cnt], markerfacecolor="none"\
 				,markersize=ms,mew=2)
 
-			temp_hss = hss[event.replace("era5","barra")].loc[temp_hss.index.values]
+			plt.yticks(np.arange(temp_hss.shape[0],0,-1))
+			if cnt == 0:
+				plt.gca().set_yticklabels(temp_hss.index.values.astype(str))
+			else:
+				plt.gca().set_yticklabels("")
+			plt.gca().grid(True)
+			plt.gca().tick_params(axis="y",labelrotation=45)
+
+			temp_hss = hss[event.replace("era5","barra")].\
+				loc[list(sorted_vars)+["WindGust10"]]
 
 			plt.plot(temp_hss, \
 				np.arange(temp_hss.shape[0],0,-1),linestyle="none",\
@@ -243,17 +271,19 @@ def plot_ranked_hss():
 				,markersize=ms,mew=2)
 
 			plt.yticks(np.arange(temp_hss.shape[0],0,-1))
-			plt.gca().set_yticklabels(temp_hss.index.values.astype(str))
 			plt.gca().grid(True)
-			plt.gca().tick_params(axis="y",labelrotation=45)
+			plt.axhline(1.5,color="k")
+			plt.text(plt.xlim()[0],21.5,[" a)", " b)"][cnt],va="center",ha="left")
+			ax.legend(legend[cnt],\
+			    bbox_to_anchor=(0.5,-0.25),loc=8,fancybox=True,edgecolor="k")
+			plt.xlabel("HSS")
 			cnt=cnt+1
-		ax.legend(["Measured ERA5","Measured BARRA","Reported ERA5","Reported BARRA"],\
-			bbox_to_anchor=(0.3,-0.26),loc=8,fancybox=True,edgecolor="k")
-		plt.axhline(1.5,color="k")
-		plt.xlabel("HSS")
-		plt.text(plt.xlim()[0],21.5," a)",va="center",ha="left")
+		plt.subplots_adjust(wspace=0.1,top=0.99,bottom=0.2,left=0.2,right=0.95)
 
-		ax=plt.subplot(1,3,2)
+		#Rank skill for lightning versus non-lightning
+		plt.figure(figsize=[6,9])
+		ax=plt.subplot(1,2,2)
+		cnt=2
 		for event in ["pss_light_era5"]:
 			temp_hss = hss.loc[\
 				["MLCAPE","SRHE","MLEL","Eff-CAPE","MUCAPE","PWAT","SBCAPE","Qmean06",\
@@ -261,7 +291,7 @@ def plot_ranked_hss():
 				"Q3","Qmean03","WBZ","Sfc-ThetaE","Q1","EBWD",\
 				"Uwindinf","Qmean01","DPD700","Qmeansubcloud"],\
 				event].sort_values(ascending=False)
-			temp_hss = hss.loc[list(temp_hss.index.values)+["WindGust10"],event]
+			temp_hss = hss.loc[temp_hss.index.values,event]
 
 			plt.plot(temp_hss, \
 				np.arange(temp_hss.shape[0],0,-1),linestyle="none",\
@@ -280,47 +310,80 @@ def plot_ranked_hss():
 			plt.gca().grid()
 			plt.gca().tick_params(axis="y",labelrotation=45)
 			cnt=cnt+1
-		ax.legend(["Lightning ERA5","Lightning BARRA"],\
+		ax.legend(["Convective versus \nnon-convective gusts ERA5",\
+			"Convective versus \nnon-convective gusts BARRA"],\
 			bbox_to_anchor=(0.3,-0.18),loc=8,fancybox=True,edgecolor="k")
-		plt.axhline(1.5,color="k")
 		plt.xlabel("HSS")
-		plt.text(plt.xlim()[0],21.5," b)",va="center",ha="left")
+		plt.subplots_adjust(wspace=0.1,top=0.99,bottom=0.2,left=0.2,right=0.95)
 
-		ax=plt.subplot(1,3,3)
-		for event in ["pss_conv_aws_cond_light_era5"]:
-			temp_hss = hss.loc[\
-				["Umean06","Umean800-600","U3","U500","U6","Umean03","S03","S06",\
-				"U1","Ust",\
-				"LR36","LR-Freezing","MHGT","Qmeansubcloud","Qmean01","TED",\
-				"V-Totals","WBZ","Sfc-ThetaE","Q1"],\
-				event].sort_values(ascending=False)
-			temp_hss = hss.loc[list(temp_hss.index.values)+["WindGust10"],event]
+		#Rank skill for SCW versus lightning
+		plt.figure(figsize=[7,9])
+		cnt = 2
+		event = "pss_conv_aws_cond_light_era5"
 
-			plt.plot(temp_hss, \
-				np.arange(temp_hss.shape[0],0,-1),linestyle="none",\
-				marker="x", color=cols[cnt], markerfacecolor="none"\
-				,markersize=ms,mew=2)
+		ax=plt.subplot(1,2,1)
+		temp_hss = hss.loc[\
+			["Umean06","Umean800-600","U3","U500","U6","Umean03","S03","S06",\
+			"U1","Ust"],\
+			event].sort_values(ascending=False)
+		temp_hss = hss.loc[temp_hss.index.values,event]
 
-			temp_hss = hss[event.replace("era5","barra")].loc[temp_hss.index.values]
+		plt.plot(temp_hss, \
+			np.arange(temp_hss.shape[0],0,-1),linestyle="none",\
+			marker="x", color=cols[cnt], markerfacecolor="none"\
+			,markersize=ms,mew=2)
 
-			plt.plot(temp_hss, \
-				np.arange(temp_hss.shape[0],0,-1),linestyle="none",\
-				marker="o", color=cols[cnt], markerfacecolor="none"\
-				,markersize=ms,mew=2)
-			plt.yticks(np.arange(temp_hss.shape[0],0,-1))
-			plt.gca().set_yticklabels(temp_hss.index.values.astype(str))
-			plt.gca().grid()
-			plt.gca().tick_params(axis="y",labelrotation=45)
-			plt.axhline(11.5,color=cols[cnt])
-			plt.axhline(1.5,color="k")
-			cnt=cnt+1
-		ax.legend(["SCW (given lightning) ERA5","SCW (given lightning) BARRA"],\
-			bbox_to_anchor=(0.35,-0.18),loc=8,fancybox=True,edgecolor="k")
-		plt.axhline(1.5,color="k")
+		temp_hss = hss[event.replace("era5","barra")].loc[temp_hss.index.values]
+
+		plt.plot(temp_hss, \
+			np.arange(temp_hss.shape[0],0,-1),linestyle="none",\
+			marker="o", color=cols[cnt], markerfacecolor="none"\
+			,markersize=ms,mew=2)
+		plt.text(plt.xlim()[0],10," a)",va="bottom",ha="left")
+
+		plt.yticks(np.arange(temp_hss.shape[0],0,-1))
+		plt.gca().set_yticklabels(temp_hss.index.values.astype(str))
+		plt.gca().grid()
+		plt.gca().tick_params(axis="y",labelrotation=45)
+		ax.legend(["SCW ERA5\n(wind variables)",\
+			"SCW BARRA\n(wind variables)"],\
+			bbox_to_anchor=(0.4,-0.35),loc=8,fancybox=True,edgecolor="k")
+		plt.title("Wind variables")
 		plt.xlabel("HSS")
-		plt.text(plt.xlim()[0],21.5," c)",va="center",ha="left")
+		cnt = cnt+1
 
-		plt.subplots_adjust(wspace=0.8,top=0.99,bottom=0.2)
+		ax=plt.subplot(1,2,2)
+		temp_hss = hss.loc[\
+			["LR36","LR-Freezing","MHGT","Qmeansubcloud","Qmean01","TED",\
+			"V-Totals","WBZ","Sfc-ThetaE","Q1"],\
+			event].sort_values(ascending=False)
+		temp_hss = hss.loc[temp_hss.index.values,event]
+
+		plt.plot(temp_hss, \
+			np.arange(temp_hss.shape[0],0,-1),linestyle="none",\
+			marker="x", color=cols[cnt], markerfacecolor="none"\
+			,markersize=ms,mew=2)
+
+		temp_hss = hss[event.replace("era5","barra")].loc[temp_hss.index.values]
+
+		plt.plot(temp_hss, \
+			np.arange(temp_hss.shape[0],0,-1),linestyle="none",\
+			marker="o", color=cols[cnt], markerfacecolor="none"\
+			,markersize=ms,mew=2)
+
+		plt.yticks(np.arange(temp_hss.shape[0],0,-1))
+		plt.gca().set_yticklabels(temp_hss.index.values.astype(str))
+		plt.gca().grid()
+		plt.gca().tick_params(axis="y",labelrotation=45)
+		plt.text(plt.xlim()[0],10," b)",va="bottom",ha="left")
+		plt.title("Thermodynmaic variables")
+		cnt=cnt+1
+		ax.legend(["SCW ERA5\n(thermo. variables)",\
+			"SCW BARRA\n(thermo. variables)"],\
+			bbox_to_anchor=(0.4,-0.35),loc=8,fancybox=True,edgecolor="k")
+		plt.xlabel("HSS")
+		plt.subplots_adjust(wspace=0.75,top=0.9,bottom=0.3,left=0.2,right=0.9)
+
 		plt.show()
 
 def plot_roc_curve():
@@ -544,6 +607,313 @@ def three_month_average(a):
 			rolling[i] = (a[i-1] + a[i] + a[i+1]) / 3.
 	return rolling
 
+def obs_versus_mod(model):
+
+	#This function plots figures of historical SCW occurrence. Namely, a comparison between
+	# the modelled and observed seasonal cycle, diurnal cycle, and wind direction frequency
+	# distribution
+
+	#Load extra modules
+	from event_analysis import optimise_pss
+	from sklearn.linear_model import LogisticRegression
+	from obs_read import read_aws_half_hourly as read_aws
+
+	#MPL settings
+	matplotlib.rcParams.update({'font.size': 14})
+	cols = ["k","grey",'#e41a1c','#377eb8','#4daf4a','#984ea3']
+
+	#Other settings
+	dir_data = "model"  #or "obs"
+	names = {"is_conv_aws":"Measured", "is_sta":"Reported", "t_totals":"T-Totals",\
+		"dcp":"DCP", "model_aws":"logistic eq. (measured)",\
+		"model_sta":"logistic eq. (reported)"}
+	data = "hourly"
+
+	#Load daily max obs
+	l_thresh = 2
+	df = pd.read_pickle("/g/data/eg3/ab4502/ExtremeWind/obs/aws/"+\
+		    "convective_wind_gust_aus_2005_2018.pkl")
+	df.loc[:, "is_conv_aws"] = np.where((df.wind_gust >= 25) & (df.lightning >= l_thresh) &\
+		    (df.tc_affected==0), 1, 0)
+	df.loc[:, "is_sta"] = np.where((df.is_sta == 1) & (df.tc_affected==0), 1, 0)
+
+	#Load reanalysis diagnostics, fit logistic regression to daily data, and apply to daily and 
+	# hourly diagnostics
+	if model == "ERA5":
+	    pss_df, mod_aws, mod_sta = optimise_pss("/g/data/eg3/ab4502/ExtremeWind/"+\
+		    "points/era5_allvars_2005_2018.pkl",\
+		    T=1000, compute=False, l_thresh=2, is_pss="hss", model_name="era5")
+	    #CONV AWS
+	    aws_predictors = ["lr36","mhgt","ml_el","qmean01","srhe_left","Umean06"]
+	    logit = LogisticRegression(class_weight="balanced", solver="liblinear",\
+		max_iter=1000)
+	    logit_mod_aws = logit.fit(mod_aws[aws_predictors], mod_aws["is_conv_aws"])
+	    p = logit_mod_aws.predict_proba(mod_aws[aws_predictors])[:,1]
+	    mod_aws.loc[:, "model"] = ((p >= 0.72)) * 1
+	    mod_aws["month"] = pd.DatetimeIndex(mod_aws["time"]).month
+	    #STA
+	    sta_predictors = ["lr36","ml_cape","srhe_left","Umean06"]
+	    logit = LogisticRegression(class_weight="balanced", solver="liblinear",\
+		max_iter=1000)
+	    logit_mod_sta = logit.fit(mod_sta[sta_predictors], mod_sta["is_sta"])
+	    p = logit_mod_sta.predict_proba(mod_sta[sta_predictors])[:,1]
+	    mod_sta.loc[:, "model_sta"] = ((p >= 0.65)) * 1
+	    mod_sta["month"] = pd.DatetimeIndex(mod_sta["time"]).month
+	    #Hourly data
+	    mod_hourly = pd.read_pickle("/g/data/eg3/ab4502/ExtremeWind/points/"+\
+	    "era5_allvars_2005_2018.pkl")
+	    #wind direction data
+	    if dir_data == "model":
+		    mod_dir = pd.read_pickle("/g/data/eg3/ab4502/ExtremeWind/points/era5_wind_dir_2005_2018.pkl")
+		    mod_hourly = pd.concat([mod_hourly.reset_index(),\
+				    mod_dir["wd"].reset_index()], axis=1).\
+				    rename(columns={"wd":"wind_dir"})
+		    mod_hourly = mod_hourly.dropna()
+	    p_aws = logit_mod_aws.predict_proba(mod_hourly[aws_predictors])[:,1]
+	    p_sta = logit_mod_sta.predict_proba(mod_hourly[sta_predictors])[:,1]
+	    p_thresh_aws = 0.72
+	    p_thresh_sta = 0.65
+	    thresh_t_totals = 48.02
+	    thresh_dcp = 0.03
+	    mod_hourly["model_aws"] = p_aws
+	    mod_hourly["model_sta"] = p_sta
+	    label = ["d)","e)","f)"]
+	elif model == "BARRA":
+	    pss_df, mod_aws, mod_sta = optimise_pss("/g/data/eg3/ab4502/ExtremeWind/"+\
+		    "points/barra_allvars_2005_2018.pkl",\
+		    T=1000, compute=False, l_thresh=2, is_pss="hss", model_name="barra_fc")
+	    #CONV AWS
+	    aws_predictors = ["lr36","lr_freezing","ml_el","s06","srhe_left","Umean06"]
+	    logit = LogisticRegression(class_weight="balanced", solver="liblinear",\
+		max_iter=1000)
+	    logit_mod_aws = logit.fit(mod_aws[aws_predictors], mod_aws["is_conv_aws"])
+	    p = logit_mod_aws.predict_proba(mod_aws[aws_predictors])[:,1]
+	    mod_aws.loc[:, "model"] = ((p >= 0.82)) * 1
+	    mod_aws["month"] = pd.DatetimeIndex(mod_aws["time"]).month
+	    #STA
+	    sta_predictors = ["lr36","lr_freezing","mhgt","ml_el","s06","srhe_left","Umean06"]
+	    logit = LogisticRegression(class_weight="balanced", solver="liblinear",\
+		max_iter=1000)
+	    logit_mod_sta = logit.fit(mod_sta[sta_predictors], mod_sta["is_sta"])
+	    p = logit_mod_sta.predict_proba(mod_sta[sta_predictors])[:,1]
+	    mod_sta.loc[:, "model_sta"] = ((p >= 0.72)) * 1
+	    mod_sta["month"] = pd.DatetimeIndex(mod_sta["time"]).month
+	    #Hourly data
+	    mod_hourly = pd.read_pickle("/g/data/eg3/ab4502/ExtremeWind/points/barra_allvars_2005_2018.pkl").dropna()
+	    #wind direction data
+	    if dir_data == "model":
+		    mod_dir = pd.read_pickle("/g/data/eg3/ab4502/ExtremeWind/points/barra_wind_dir_2005_2018.pkl")
+		    mod_hourly = pd.concat([mod_hourly.reset_index(),\
+				    mod_dir["wd"].reset_index()], axis=1).\
+				    rename(columns={"wd":"wind_dir"})
+		    mod_hourly = mod_hourly.dropna()
+	    p_aws = logit_mod_aws.predict_proba(mod_hourly[aws_predictors])[:,1]
+	    p_sta = logit_mod_sta.predict_proba(mod_hourly[sta_predictors])[:,1]
+	    p_thresh_aws = 0.82
+	    p_thresh_sta = 0.72
+	    thresh_t_totals = 48.91
+	    thresh_dcp = 0.03
+	    mod_hourly["model_aws"] = p_aws
+	    mod_hourly["model_sta"] = p_sta
+	    label = ["a)","b)","c)"]
+
+	thresh = {"model_aws":p_thresh_aws, "model_sta":p_thresh_sta, "t_totals":thresh_t_totals,\
+		"dcp":thresh_dcp, "is_conv_aws":1, "is_sta":1}
+
+	if data == "dmax":
+
+		#Resample hourly model diagnostics to daily max, conserving the hour and day of the dmax
+		# for each diagnostic. Split the hourly data up into daily chunks from 06:00 UTC to 05:00 UTC
+		# the next day
+		locs = np.unique(mod_hourly.loc_id)
+		mod_hourly["hour"] = pd.DatetimeIndex(mod_hourly.time).hour
+		mod_hourly["month"] = pd.DatetimeIndex(mod_hourly.time).month
+		mod_dmax = pd.DataFrame()
+		print("Finding daily max values of diagnostics from hourly data...")
+		for l in locs:
+			print(l)
+			l_dmax = pd.DataFrame()
+			for p in ["model_aws","model_sta","t_totals","dcp"]:
+				temp_df = mod_hourly.loc[mod_hourly.loc_id==l, [p]+["time","hour","month"]].\
+					rename(columns={"hour":p+"_"+"hour","month":p+"_"+"month"})
+				temp_dmax = temp_df.groupby(pd.Grouper(key="time",freq="24H",base=0)).\
+					agg(lambda temp_df: temp_df.loc[temp_df[p].idxmax(), :])
+				l_dmax = pd.concat([l_dmax, temp_dmax], axis=1)
+			l_dmax.loc[:,"loc_id"] = l
+			mod_dmax = pd.concat([mod_dmax, l_dmax], axis=0)
+
+		#Merge daily maximum data with daily maximum observations
+		df["is_conv_aws_hour"] = pd.DatetimeIndex(df["gust_time_utc"]).hour
+		df["is_sta_hour"] = pd.DatetimeIndex(df["sta_date"]).hour
+		df["is_conv_aws_month"] = df["month"]
+		df["is_sta_month"] = df["month"]
+		mod_dmax = pd.merge(mod_dmax, \
+			    df[["stn_name","daily_date_utc","is_conv_aws","is_sta","is_conv_aws_month",\
+				"is_conv_aws_hour","is_sta_month","is_sta_hour"]],\
+			    left_on=["loc_id","time"],right_on=["stn_name","daily_date_utc"],how="left").\
+			    dropna(subset=["is_conv_aws"])
+
+		#Plot seasonal and diurnal cycle using daily max reanalysis data
+		month_df = pd.DataFrame()
+		diurnal_df = pd.DataFrame()
+		for p in ["is_conv_aws","is_sta","model_aws","model_sta","dcp","t_totals"]:
+			month_df = pd.concat([month_df,\
+				pd.DataFrame({model+" "+names[p]:\
+			    mod_dmax.loc[mod_dmax[p] >= thresh[p]][p+"_month"].value_counts().\
+				sort_index()})],\
+				axis=1)
+			diurnal_df = pd.concat([diurnal_df,\
+				pd.DataFrame({model+" "+names[p]:\
+			    mod_dmax.loc[mod_dmax[p] >= thresh[p]][p+"_hour"].value_counts().sort_index()})],\
+				axis=1)
+		diurnal_df.loc[:,model+" Measured"] = \
+			diurnal_df.loc[:,model+" Measured"].rolling(3,min_periods=1).mean()
+		diurnal_df.loc[:,model+" Reported"] = \
+			diurnal_df.loc[:,model+" Reported"].rolling(3,min_periods=1).mean()
+		plt.figure(figsize=[12,6])
+		ax=plt.subplot(121)
+		month_data = (month_df / month_df.sum()).reindex([7,8,9,10,11,12,1,2,3,4,5,6])
+		month_data["x"] = np.arange(0,12)
+		month_data.plot(x="x", kind="line", color=cols, marker="o",legend=False,\
+		    xticks=np.arange(0,12),ax=ax)
+		ax.grid()
+		ax.set_xticklabels(["J", "A", "S", "O", "N", "D", "J", "F", "M", "A", "M", "J"]) 
+		plt.xlabel("Month")
+		ax=plt.subplot(122)
+		(diurnal_df/diurnal_df.sum()).plot(kind="line",color=cols,ax=ax,marker="o")
+		ax.grid()
+		ax.legend(\
+			bbox_to_anchor=(-0.1,-0.4),loc=8,fancybox=True,edgecolor="k",\
+			ncol=3)
+		plt.xlabel("Time (UTC)")
+		plt.subplots_adjust(bottom=0.3)
+
+	elif data=="hourly":
+
+		#Plot seasonal and diurnal cycle using hourly reanalysis data, overwriting the "diurnal_df"
+		# and "monthly_df" dataframes
+		df["aws_hour"] = pd.DatetimeIndex(df.gust_time_utc).hour
+		df["sta_hour"] = pd.DatetimeIndex(df.sta_date).hour
+		df["month"] = pd.DatetimeIndex(df.gust_time_utc).month
+		aws_hr = pd.DataFrame(np.unique(df[df["is_conv_aws"]==1]["aws_hour"], \
+			    return_counts=True)).T.set_index(0).\
+			    rename(columns={1:"Measured"})
+		sta_hr = pd.DataFrame(np.unique(df[df["is_sta"]==1]["sta_hour"], \
+			    return_counts=True)).T.set_index(0).\
+			    rename(columns={1:"Reported"})
+		aws_month = pd.DataFrame(np.unique(df[df["is_conv_aws"]==1]["month"], \
+			    return_counts=True)).T.set_index(0).\
+			    rename(columns={1:"Measured"})
+		sta_month = pd.DataFrame(np.unique(df[df["is_sta"]==1]["month"], \
+			    return_counts=True)).T.set_index(0).\
+			    rename(columns={1:"Reported"})
+		month_df = pd.concat([aws_month, sta_month], axis=1)
+		diurnal_df = pd.concat([aws_hr, sta_hr], axis=1)
+		mod_hourly["month"] = pd.DatetimeIndex(mod_hourly.time).month
+		mod_hourly["hour"] = pd.DatetimeIndex(mod_hourly.time).hour
+		for p in ["model_aws","model_sta","dcp","t_totals"]:
+			month_df.loc[:, model+" "+names[p]] = \
+			    mod_hourly.loc[mod_hourly[p] >= thresh[p]]["month"].value_counts().sort_index()
+			diurnal_df.loc[:, model+" "+names[p]] = \
+			    mod_hourly.loc[mod_hourly[p] >= thresh[p]]["hour"].value_counts().sort_index()
+
+		#Distributions of wind direction
+		if dir_data == "obs":
+			aws = read_aws()
+			aws["time"] = pd.DatetimeIndex(aws["time"]) + dt.timedelta(hours=-1)
+			mod_hourly = pd.merge(mod_hourly, aws, left_on=["loc_id","time"], \
+				right_on=["stn_name","time"], how="right").dropna()
+		arr = ["N","NNE","NE","ENE","E","ESE", "SE", "SSE","S","SSW","SW","WSW","W","WNW","NW","NNW"]
+		temp = (df[df["is_conv_aws"]==1]["wind_dir"] / 22.5 + 0.5).mod(16).astype(int) 
+		aws_wd = [arr[temp.iloc[i]] for i in np.arange(temp.shape[0])]
+		aws_wd = pd.DataFrame(np.unique(aws_wd, return_counts=True)).T.set_index(0).\
+			    rename(columns={1:"Measured"}).reindex(arr)
+		temp = (df[df["is_sta"]==1]["wind_dir"].dropna() / 22.5 + 0.5).mod(16).astype(int) 
+		sta_wd = [arr[temp.iloc[i]] for i in np.arange(temp.shape[0])]
+		sta_wd = pd.DataFrame(np.unique(sta_wd, return_counts=True)).T.set_index(0).\
+			    rename(columns={1:"Reported"}).reindex(arr)
+		wind_dir_df = pd.concat([aws_wd, sta_wd], axis=1)
+		for p in ["model_aws","model_sta","dcp","t_totals"]:
+			temp = (mod_hourly[mod_hourly[p]>=thresh[p]]["wind_dir"] / 22.5 + 0.5).mod(16).\
+				dropna().astype(int)
+			temp_wd = [arr[temp.iloc[i]] for i in np.arange(temp.shape[0])]
+			temp_wd = pd.DataFrame(np.unique(temp_wd, return_counts=True)).T.set_index(0).\
+			    rename(columns={1:model+" "+names[p]}).reindex(arr)
+			wind_dir_df = pd.concat([wind_dir_df, temp_wd], axis=1)
+		temp = (mod_hourly["wind_dir"].dropna() / 22.5 + 0.5).mod(16).astype(int) 
+		all_wd = [arr[temp.iloc[i]] for i in np.arange(temp.shape[0])]
+		all_wd = pd.DataFrame(np.unique(all_wd, return_counts=True)).T.set_index(0).\
+			    rename(columns={1:"All hourly data"}).reindex(arr)
+		wind_dir_df = pd.concat([wind_dir_df, all_wd], axis=1)
+		wind_dir_data = (wind_dir_df / wind_dir_df.sum())
+
+		#Plot hourly distributions
+		plt.figure(figsize=[14,6])
+		ax=plt.subplot(131)
+		month_data = (month_df / month_df.sum()).reindex([7,8,9,10,11,12,1,2,3,4,5,6])
+		month_data["x"] = np.arange(0,12)
+		month_data.plot(x="x", kind="line", color=cols, marker="o",legend=False,\
+		    xticks=np.arange(0,12),ax=ax)
+		ax.grid()
+		ax.set_xticklabels(["J", "A", "S", "O", "N", "D", "J", "F", "M", "A", "M", "J"]) 
+		plt.xlabel("Month")
+		plt.text(0.05,0.9,label[0],transform=plt.gca().transAxes,fontsize=14)
+		ax=plt.subplot(132)
+		(diurnal_df/diurnal_df.sum()).plot(kind="line",color=cols,ax=ax,marker="o",legend=False)
+		ax.grid()
+		plt.xlabel("Time (UTC)")
+		plt.subplots_adjust(bottom=0.3)
+		plt.text(0.05,0.9,label[1],transform=plt.gca().transAxes,fontsize=14)
+		ax=plt.subplot(133)
+		wind_dir_data.plot(kind="line", color=cols+["k"], \
+			ax=ax, legend=False,xticks=np.arange(0,len(arr),2))
+		ax.set_xticklabels(arr[0::2]) 
+		ax.tick_params("x",rotation=0)
+		ax.set_xlabel("Measured wind direction")
+		mss = ["o","o","o","o","o","o","^"]
+		for i, l in enumerate(ax.lines):
+			plt.setp(l, marker=mss[i])
+		ax.legend(\
+			bbox_to_anchor=(-0.7,-0.4),loc=8,fancybox=True,edgecolor="k",\
+			ncol=4)
+		ax.grid()
+		plt.text(0.05,0.9,label[2],transform=plt.gca().transAxes,fontsize=14)
+
+		#Compare modelled wind direction with daily max and hourly obs for SCW events
+		#aws = read_aws().rename(columns={"wind_dir":"obs_dir", "wind_gust":"obs_gust"})
+		#mod_aws_combined = pd.merge(mod_hourly, aws, left_on=["loc_id","time"], \
+		#	right_on=["stn_name","time"], how="right").dropna().\
+		#	rename(columns={"wind_dir":"mod_dir"})
+		#conv_gust_df = pd.merge(df[df.is_conv_aws==1],\
+		#	mod_aws_combined[["mod_dir","obs_dir","obs_gust","time","loc_id"]],\
+		#	how="left",left_on=["hourly_floor_utc","stn_name"],\
+		#	right_on=["time","loc_id"]).dropna(subset=["obs_dir"])
+		all_gust_df = pd.merge(df,\
+			mod_hourly.rename(columns={"wind_dir":"mod_dir"})\
+			    [["mod_dir","time","loc_id"]],\
+			how="left",left_on=["hourly_floor_utc","stn_name"],\
+			right_on=["time","loc_id"]).dropna(subset=["wind_dir","mod_dir"])
+		conv_gust_df = pd.merge(df[df.is_conv_aws==1],\
+			mod_hourly.rename(columns={"wind_dir":"mod_dir"})\
+			    [["mod_dir","time","loc_id"]],\
+			how="left",left_on=["hourly_floor_utc","stn_name"],\
+			right_on=["time","loc_id"])
+		#temp = (conv_gust_df[["wind_dir","obs_dir","mod_dir"]]/22.5+0.5).mod(16).astype(int) 
+		temp = (conv_gust_df[["wind_dir","mod_dir"]]/22.5+0.5).mod(16).astype(int) 
+		temp["wind_dir"] = [arr[temp["wind_dir"].iloc[i]] for i in np.arange(temp.shape[0])]
+		#temp["obs_dir"] = [arr[temp["obs_dir"].iloc[i]] for i in np.arange(temp.shape[0])]
+		temp["mod_dir"] = [arr[temp["mod_dir"].iloc[i]] for i in np.arange(temp.shape[0])]
+		ax=plt.subplot(212)
+		temp.apply(pd.value_counts).reindex(arr).plot(ax=ax)
+		plt.title("SCW events")
+
+		ax=plt.subplot(211)
+		plt.title("All daily maximum wind gusts") 
+		temp = (all_gust_df[["wind_dir","mod_dir"]]/22.5+0.5).mod(16).astype(int) 
+		temp["wind_dir"] = [arr[temp["wind_dir"].iloc[i]] for i in np.arange(temp.shape[0])]
+		temp["mod_dir"] = [arr[temp["mod_dir"].iloc[i]] for i in np.arange(temp.shape[0])]
+		temp.apply(pd.value_counts).reindex(arr).plot(ax=ax)
+
 def sta_versus_aws():
 
 	#Plot spatially smoothed maps of STA wind reports and AWS + lightning, as well as distributions of 
@@ -561,60 +931,6 @@ def sta_versus_aws():
 	df.loc[:, "is_sta"] = np.where((df.is_sta == 1) & (df.tc_affected==0), 1, 0)
 	df.loc[:, "is_light"] = np.where((df.lightning >= l_thresh) & (df.tc_affected==0), 1, 0)
 	df.loc[:, "is_windy"] = np.where((df.wind_gust >= 25) & (df.tc_affected==0), 1, 0)
-
-	fit_model = True
-	model = "era5"
-	if fit_model:
-		
-		#This code repeats the analysis for STA and convective AWS events but with using 
-		# environmental variables from a reanalyis model
-		#Load from "optimise_pss()" as data has already been matched with observations 
-		# and saved
-		#This code will be edited a lot based on how environmental variables 
-		# will be combined (e.g. logistic equation, thresholds, etc)
-
-		from event_analysis import optimise_pss
-		from sklearn.linear_model import LogisticRegression
-		if model == "era5":
-		    pss_df, mod_aws, mod_sta = optimise_pss("/g/data/eg3/ab4502/ExtremeWind/"+\
-			    "points/era5_allvars_2005_2018.pkl",\
-			    T=1000, compute=False, l_thresh=2, is_pss="hss", model_name="era5")
-		    #CONV AWS
-		    predictors = ["lr36","mhgt","ml_el","qmean01","srhe_left","Umean06"]
-		    logit = LogisticRegression(class_weight="balanced", solver="liblinear",\
-			max_iter=1000)
-		    logit_mod = logit.fit(mod_aws[predictors], mod_aws["is_conv_aws"])
-		    p = logit_mod.predict_proba(mod_aws[predictors])[:,1]
-		    mod_aws.loc[:, "model"] = ((p >= 0.72)) * 1
-		    mod_aws["month"] = pd.DatetimeIndex(mod_aws["time"]).month
-		    #STA
-		    predictors = ["lr36","ml_cape","srhe_left","Umean06"]
-		    logit = LogisticRegression(class_weight="balanced", solver="liblinear",\
-			max_iter=1000)
-		    logit_mod = logit.fit(mod_sta[predictors], mod_sta["is_sta"])
-		    p = logit_mod.predict_proba(mod_sta[predictors])[:,1]
-		    mod_sta.loc[:, "model_sta"] = ((p >= 0.65)) * 1
-		    mod_sta["month"] = pd.DatetimeIndex(mod_sta["time"]).month
-		elif model == "barra":
-		    pss_df, mod_aws, mod_sta = optimise_pss("/g/data/eg3/ab4502/ExtremeWind/"+\
-			    "points/barra_allvars_2005_2018.pkl",\
-			    T=1000, compute=False, l_thresh=2, is_pss="hss", model_name="barra")
-		    #CONV AWS
-		    predictors = ["lr36","lr_freezing","ml_el","s06","srhe_left","Umean06"]
-		    logit = LogisticRegression(class_weight="balanced", solver="liblinear",\
-			max_iter=1000)
-		    logit_mod = logit.fit(mod_aws[predictors], mod_aws["is_conv_aws"])
-		    p = logit_mod.predict_proba(mod_aws[predictors])[:,1]
-		    mod_aws.loc[:, "model"] = ((p >= 0.82)) * 1
-		    mod_aws["month"] = pd.DatetimeIndex(mod_aws["time"]).month
-		    #STA
-		    predictors = ["lr36","lr_freezing","mhgt","ml_el","s06","srhe_left","Umean06"]
-		    logit = LogisticRegression(class_weight="balanced", solver="liblinear",\
-			max_iter=1000)
-		    logit_mod = logit.fit(mod_sta[predictors], mod_sta["is_sta"])
-		    p = logit_mod.predict_proba(mod_sta[predictors])[:,1]
-		    mod_sta.loc[:, "model_sta"] = ((p >= 0.72)) * 1
-		    mod_sta["month"] = pd.DatetimeIndex(mod_sta["time"]).month
 
 	#SPATIAL DISTRIBUTION
 	m = Basemap(llcrnrlon=110, llcrnrlat=-45, urcrnrlon=160, urcrnrlat=-10,projection="cyl");\
@@ -682,114 +998,6 @@ def sta_versus_aws():
 	plt.gcf().text(0.5, 0.01, "Events per year", fontsize=14, va="bottom", ha="center")
 	plt.subplots_adjust(bottom=0.2, wspace=0.3, hspace=0.3, top=0.95)
 
-	ax = plt.subplot(221)
-	month_df = pd.concat({"aws":df[df["is_conv_aws"]==1]["month"].value_counts(),
-	"sta":df[df["is_sta"]==1]["month"].value_counts()},
-	axis=1, sort=False) 
-	month_data = (month_df / month_df.sum()).reindex([7,8,9,10,11,12,1,2,3,4,5,6])
-	month_data["x"] = np.arange(0,12)
-	month_data.plot(x="x",kind="line", color=["k","grey"], ax=ax, legend=False, marker="o",\
-		xticks = np.arange(0,12)) 
-	ax = plt.gca() 
-	ax.set_xticklabels(["J", "A", "S", "O", "N", "D", "J", "F", "M", "A", "M", "J"]) 
-	ax.tick_params("x",rotation=0)
-	plt.text(0,0.9," a)",transform=plt.gca().transAxes,fontsize=14)
-	ax.set_xlabel("")
-	ax.grid(ls=":")
-	ax = plt.subplot(222)
-	wind_dir_df = pd.concat({"Measured":\
-			pd.DataFrame([degToCompass(df[df["is_conv_aws"]==1]["wind_dir"].iloc[i]) \
-			for i in np.arange(df[df["is_conv_aws"]==1]["wind_dir"].shape[0])])[0]\
-			.value_counts(),\
-			"Reported":\
-			pd.DataFrame([degToCompass(df[df["is_sta"]==1]["wind_dir"].iloc[i]) \
-				for i in np.arange(df[df["is_sta"]==1]["wind_dir"].shape[0])])[0]\
-			.value_counts()},
-		axis=1, sort=False) 
-	(wind_dir_df / wind_dir_df.sum()).reindex(["N", "NNE", "NE", "ENE", "E", "ESE", "SE",
-	"SSE", "S", "SSW","SW", "WSW", "W", "WNW", "NW", "NNW"]).plot(kind="line", color=["k","grey"],ax=ax, marker="o",xticks=np.arange(0,18,2)) 
-	plt.text(1,0," b) ",transform=plt.gca().transAxes,fontsize=14,ha="right",va="bottom")
-	ax.grid(ls=":")
-	#cb=plt.colorbar(sm, orientation="horizontal", pad=0.25) 
-	#cb=plt.colorbar(sm, orientation="horizontal", pad=0.25) 
-
-	if fit_model:
-		plt.figure(figsize=[14.5,6])
-		#Add AWS wind directions to the model dataframe
-		mod_aws = pd.merge(mod_aws, df[["stn_name","hourly_floor_utc","wind_dir"]], \
-			on=["stn_name","hourly_floor_utc"], how="left")
-		mod_sta = pd.merge(mod_sta, df[["stn_name","hourly_floor_utc","wind_dir"]], \
-			on=["stn_name","hourly_floor_utc"], how="left")
-		#cols = ["k","grey","#bd0026","#f03b20","#fd8d3c","#fecc5c"]
-		#cols = ["k","grey","#006837","#31a354","#78c679","#c2e699"]
-		cols = ["k","grey",'#e41a1c','#377eb8','#4daf4a','#984ea3']
-		#SEASONAL DISTRIBUTION
-		ax = plt.subplot(121)
-		if model == "barra":
-			month_df = pd.concat({"aws":df[df["is_conv_aws"]==1]["month"].value_counts(), \
-			"sta":df[df["is_sta"]==1]["month"].value_counts(),\
-			"BARRA logit AWS":mod_aws[(mod_aws["model"]==1)]["month"].value_counts(), \
-			"BARRA logit STA":mod_sta[(mod_sta["model_sta"]==1)]["month"].value_counts(), \
-			"BARRA DCP":mod_sta[(mod_sta["dcp"]>=0.03)]["month"].value_counts(), \
-			"BARRA T-Totals":mod_sta[(mod_sta["t_totals"]>=48.91)]["month"].value_counts()}, \
-			axis=1, sort=False)
-			plt.text(0.05,0.9,"a)",transform=plt.gca().transAxes,fontsize=14)
-		elif model == "era5":
-			month_df = pd.concat({"aws":df[df["is_conv_aws"]==1]["month"].value_counts(), \
-			"sta":df[df["is_sta"]==1]["month"].value_counts(),\
-			"ERA5 logit Measured":mod_aws[(mod_aws["model"]==1)]["month"].value_counts(), \
-			"ERA5 logit STA":mod_sta[(mod_sta["model_sta"]==1)]["month"].value_counts(), \
-			"ERA5 DCP":mod_sta[(mod_sta["t_totals"]>=0.03)]["month"].value_counts(), \
-			"ERA5 T-Totals":mod_sta[(mod_sta["t_totals"]>=48.02)]["month"].value_counts()}, \
-			axis=1, sort=False)
-			plt.text(0.05,0.9,"c)",transform=plt.gca().transAxes,fontsize=14)
-		month_data = (month_df / month_df.sum()).reindex([7,8,9,10,11,12,1,2,3,4,5,6])
-		month_data["x"] = np.arange(0,12)
-		month_data.plot(x="x", kind="line", color=cols, ax=ax, legend=False, marker="o",\
-			xticks=np.arange(0,12))
-		ax.set_xticklabels(["J", "A", "S", "O", "N", "D", "J", "F", "M", "A", "M", "J"]) 
-		ax.tick_params("x",rotation=0)
-		ax.set_xlabel("")
-		ax.grid()
-		#WIND DIRECTION DISTRIBUTION
-		ax = plt.subplot(122)
-		df = df.dropna(subset=["wind_dir"])
-		mod_aws = mod_aws.dropna(subset=["wind_dir"])
-		mod_sta = mod_sta.dropna(subset=["wind_dir"])
-		arr = ["N","NNE","NE","ENE","E","ESE", "SE", "SSE","S","SSW","SW","WSW","W","WNW","NW","NNW"]
-		temp = (df["wind_dir"] / 22.5 + 0.5).mod(16).astype(int) 
-		df.loc[:,"wind_dir"] = [arr[temp.iloc[i]] for i in np.arange(temp.shape[0])]
-		temp = (mod_aws["wind_dir"] / 22.5 + 0.5).mod(16).astype(int) 
-		mod_aws.loc[:,"wind_dir"] = [arr[temp.iloc[i]] for i in np.arange(temp.shape[0])]
-		temp = (mod_sta["wind_dir"] / 22.5 + 0.5).mod(16).astype(int) 
-		mod_sta.loc[:,"wind_dir"] = [arr[temp.iloc[i]] for i in np.arange(temp.shape[0])]
-		if model == "barra":
-			wind_dir_df = pd.concat({"AWS":\
-			    df[df["is_conv_aws"]==1]["wind_dir"].value_counts(),\
-			"STA":df[df["is_sta"]==1]["wind_dir"].value_counts(),\
-			"BARRA logistic eq. (measured)":\
-			    mod_aws[mod_aws["model"]==1]["wind_dir"].value_counts(),\
-			"BARRA logistic eq. (reported)":\
-			    mod_sta[mod_sta["model_sta"]==1]["wind_dir"].value_counts(),\
-			"BARRA DCP":mod_sta[(mod_sta["dcp"]>=0.03)]["wind_dir"].value_counts(), \
-			"BARRA T-Totals":mod_sta[(mod_sta["t_totals"]>=48.91)]["wind_dir"].value_counts()}, \
-			axis=1, sort=False)
-			plt.text(0.9,0.9,"b)",transform=plt.gca().transAxes,fontsize=14)
-		else:
-			wind_dir_df = pd.concat({"AWS":df[df["is_conv_aws"]==1]["wind_dir"].value_counts(), \
-			"STA":df[df["is_sta"]==1]["wind_dir"].value_counts(), \
-			"ERA5 logistic eq. (measured)":mod_aws[(mod_aws["model"]==1)]["wind_dir"]\
-				.value_counts(),\
-			"ERA5 logistic eq. (reported)":mod_sta[(mod_sta["model_sta"]==1)]["wind_dir"].value_counts(),\
-			"ERA5 DCP":mod_sta[(mod_sta["t_totals"]>=0.03)]["wind_dir"].value_counts(), \
-			"ERA5 T-Totals":mod_sta[(mod_sta["t_totals"]>=48.02)]["wind_dir"].value_counts()}, \
-			axis=1, sort=False)
-			plt.text(0.9,0.9,"d)",transform=plt.gca().transAxes,fontsize=14)
-		(wind_dir_df / wind_dir_df.sum()).reindex(["N", "NNE", "NE", "ENE", "E", "ESE", "SE", \
-			"SSE", "S", "SSW","SW", "WSW", "W", "WNW", "NW", "NNW"]).plot(kind="line", \
-			color=cols, ax=ax, marker="o")
-		ax.grid()
-	
 	plt.show()
  
 def temporal_dist_plots():

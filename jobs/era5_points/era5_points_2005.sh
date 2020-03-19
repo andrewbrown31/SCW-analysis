@@ -6,9 +6,10 @@
 #PBS -l ncpus=1
 #PBS -o /home/548/ab4502/working/ExtremeWind/jobs/messages/era5_points_2005.o 
 #PBS -e /home/548/ab4502/working/ExtremeWind/jobs/messages/era5_points_2005.e 
+#PBS -l storage=gdata/eg3+gdata/ub4+gdata/ma05
  
 #Set up conda/shell environments 
-conda activate wrfpython3.6 
+source activate wrfpython3.6 
 
 python /home/548/ab4502/working/ExtremeWind/era5_read.py 2005 2005
 

@@ -26,7 +26,7 @@ from erai_read import get_mask as  get_erai_mask
 from barra_read import read_barra, read_barra_fc
 from barra_ad_read import read_barra_ad
 from barra_read import get_mask as  get_barra_mask
-from read_cmip import read_cmip5
+from read_cmip import read_cmip
 
 #-------------------------------------------------------------------------------------------------
 
@@ -168,9 +168,8 @@ def get_pwat(q, sfcp3d):
 	#p_ind = np.argmin(abs(p - 400)) + 1
 	#pwat = (((q[:p_ind]+q[1:p_ind+1])*1000/2 * (sfcp3d[:p_ind]-sfcp3d[1:p_ind+1])) * 0.00040173)\
 	#	.sum(axis=0)	#From SHARPpy
-	sfcp3d[sfcp3d < 400] = 0
-	pwat = (((q[:-1]+q[1:])*1000/2 * (sfcp3d[:-1]-sfcp3d[1:])) * 0.00040173)\
-		.sum(axis=0)	#From SHARPpy
+	sfcp3d[(sfcp3d < 400)] = 0
+	pwat = np.nansum( (((q[:-1]+q[1:])*1000/2 * (sfcp3d[:-1]-sfcp3d[1:])) * 0.00040173), axis=0)	#From SHARPpy
 	return pwat
 
 
@@ -213,7 +212,7 @@ def get_mean_var_hgt(var3d, hgt, hgt_bot, hgt_top, terrain, mass_weighted=False,
 
 	if mass_weighted:
 		try:
-			cond = ( (hgt-terrain) < hgt_bot) | ( (hgt-terrain) > hgt_top) | (np.isnan(hgt_bot)) | (np.isnan(hgt_top))
+			cond = ( (hgt-terrain) < hgt_bot) | ( (hgt-terrain) > hgt_top) | (np.isnan(hgt)) | (np.isnan(hgt_bot)) | (np.isnan(hgt_top))
 			result = trapz_int3d( var3d, p3d, ~cond)
 		except:
 			raise ValueError("FUNCTION get_mean_var_hgt() IS FAILING TO TAKE A PRESSURE WEIGHTED"+\
@@ -221,7 +220,7 @@ def get_mean_var_hgt(var3d, hgt, hgt_bot, hgt_top, terrain, mass_weighted=False,
 	else:
 		hgt = hgt - terrain
 		var3d_ma = np.ma.masked_where((hgt < hgt_bot) | (hgt > hgt_top) | \
-			(np.isnan(hgt_bot)) | (np.isnan(hgt_top)) , var3d)
+			(np.isnan(hgt_bot)) | (np.isnan(hgt_top)) | (np.isnan(hgt)) , var3d)
 		result = np.ma.mean(var3d_ma, axis=0)
 	return result
 
@@ -347,9 +346,9 @@ def get_srh(u,v,hgt,hgt_bot,hgt_top,terrain):
 
 	hgt = hgt - terrain
 	u_ma = np.ma.masked_where((hgt < hgt_bot) | (hgt > hgt_top) | \
-			(np.isnan(hgt_bot)) | (np.isnan(hgt_top)) , u)
+			(np.isnan(hgt_bot)) | (np.isnan(hgt_top)) | (np.isnan(hgt)), u)
 	v_ma = np.ma.masked_where((hgt < hgt_bot) | (hgt > hgt_top) | \
-			(np.isnan(hgt_bot)) | (np.isnan(hgt_top)) , v)
+			(np.isnan(hgt_bot)) | (np.isnan(hgt_top)) | (np.isnan(hgt)) , v)
 	sru_left = u_ma - u_storm_left
 	srv_left = v_ma - v_storm_left
 	layers_left = (sru_left[1:] * srv_left[:-1]) - (sru_left[:-1] * srv_left[1:])
@@ -582,7 +581,7 @@ def get_lr_hgt(t,hgt,hgt_bot,hgt_top,terrain):
 			t_bot[hgt[0] >= hgt_bot] = t[0,hgt[0] >= hgt_bot]
 			t_bot[(np.where(hgt==hgt_bot))[1],(np.where(hgt==hgt_bot))[2]] = t[hgt==hgt_bot]
 			t_top = wrf.interplevel(t,hgt,hgt_top,meta=False)
-			t_top[hgt[-1] <= hgt_top] = t[-1,hgt[-1] <= hgt_bot]
+			t_top[hgt[-1] <= hgt_top] = t[-1,hgt[-1] <= hgt_top]
 			t_top[(np.where(hgt==hgt_top))[1],(np.where(hgt==hgt_top))[2]] = t[hgt==hgt_top]
 
 	return np.squeeze(- (t_top - t_bot) / ((hgt_top - hgt_bot)/1000))
@@ -595,7 +594,7 @@ def get_t_hgt(t,hgt,t_value,terrain):
 	if t.ndim == 1:
 		t_hgt = np.interp(t_value,np.flipud(t),np.flipud(hgt))
 	else:
-		t_hgt = np.array(wrf.interplevel(hgt, t, t_value))
+		t_hgt = np.array(wrf.interplevel(np.flipud(hgt), np.flipud(t), t_value))
 
 	return t_hgt
 
@@ -696,16 +695,20 @@ def thetae_diff(te, hgt, terrain):
 
 	hgt = hgt-terrain
 
-	te_ma = np.ma.masked_where((hgt<0) | (hgt>3000), te)
+	te_ma = np.ma.masked_where((hgt<0) | (hgt>3000) | (np.isnan(hgt)), te)
 
-	min_idx = np.ma.argmin(te_ma, axis=0)
-	max_idx = np.ma.argmax(te_ma, axis=0)
+	#min_idx = np.ma.argmin(te_ma, axis=0)
+	#max_idx = np.ma.argmax(te_ma, axis=0)
+	min_idx = np.tile( np.ma.argmin(te_ma, axis=0), (te_ma.shape[0],1,1) )
+	max_idx = np.tile( np.ma.argmax(te_ma, axis=0), (te_ma.shape[0],1,1) )
 
-	min_te = min_idx.choose(te_ma)
-	max_te = max_idx.choose(te_ma)
+	min_te = np.take_along_axis( te_ma, min_idx, 0 )[0]
+	max_te = np.take_along_axis( te_ma, max_idx, 0 )[0]
+	#min_te = min_idx.choose(te_ma)
+	#max_te = max_idx.choose(te_ma)
 	te_diff = (max_te - min_te)
 	te_diff[te_diff<0] = 0
-	te_diff[min_idx < max_idx] = 0
+	te_diff[min_idx[0] < max_idx[0]] = 0
 
 	return te_diff
 
@@ -779,16 +782,17 @@ if __name__ == "__main__":
 	rank = comm.Get_rank()
 
 	#Try parsing arguments using argparse
-	parser = argparse.ArgumentParser(description='wrf_parallel convective diagnostics processer')
+	parser = argparse.ArgumentParser(description='wrf non-parallel convective diagnostics processer')
 	parser.add_argument("-m",help="Model name",required=True)
-	parser.add_argument("-r",help="Region name",default="aus")
+	parser.add_argument("-r",help="Region name (default is aus)",default="aus")
 	parser.add_argument("-t1",help="Time start YYYYMMDDHH",required=True)
 	parser.add_argument("-t2",help="Time end YYYYMMDDHH",required=True)
-	parser.add_argument("-e", help="CMIP5 experiment name", default="")
-	parser.add_argument("--ens", help="CMIP5 ensemble name", default="r1i1p1")
-	parser.add_argument("--issave",help="Save output (1 or 0)", default=0)
-	parser.add_argument("--outname",help="Name of saved output. In the form *outname*_*t1*_*t2*.nc",default=None)
-	parser.add_argument("--is_dcape",help="Should DCAPE be calculated? (1 or 0)",default=1)
+	parser.add_argument("-e", help="CMIP5 experiment name (not required if using era5, erai or barra)", default="")
+	parser.add_argument("--ens", help="CMIP5 ensemble name (not required if using era5, erai or barra)", default="r1i1p1")
+	parser.add_argument("--group", help="CMIP6 modelling group name", default="")
+	parser.add_argument("--issave",help="Save output (True or False, default is False)", default="False")
+	parser.add_argument("--outname",help="Name of saved output. In the form *outname*_*t1*_*t2*.nc. Default behaviour is the model name",default=None)
+	parser.add_argument("--is_dcape",help="Should DCAPE be calculated? (1 or 0. Default is 1)",default=1)
 	args = parser.parse_args()
 
 	if rank == 0:
@@ -801,9 +805,12 @@ if __name__ == "__main__":
 		issave = args.issave
 		if args.outname==None:
 			out_name = model
+		else:
+			out_name = args.outname
 		is_dcape = args.is_dcape
 		experiment = args.e
 		ensemble = args.ens
+		group = args.group
 		if region == "sa_small":
 			start_lat = -38; end_lat = -26; start_lon = 132; end_lon = 142
 		elif region == "aus":
@@ -846,18 +853,33 @@ if __name__ == "__main__":
 		elif model == "barra_ad":
 			wg10,temp2,ta,temp1,hur,hgt,terrain,p,ps,wap,ua,va,uas,vas,tas,ta2d,lon,lat,date_list = \
 				read_barra_ad(domain, time, False)
-		elif model in ["ACCESS1-0","ACCESS1-3"]:
+		elif model in ["ACCESS1-0","ACCESS1-3","CSIRO-Mk3-6-0"]:
 			#Check that t1 and t2 are in the same year
 			if not t1[0:4] == t2[0:4]:
 				raise AssertionError("For CMIP5 data, t1 and t2 must be within the" +\
 					" same year") 
 			ta, hur, hgt, terrain, p_3d, ps, ua, va, uas, vas, tas, ta2d, lon, lat, \
-			    date_list = read_cmip5(model, experiment,\
-			    ensemble, int(t1[0:4]), domain)
+			    date_list = read_cmip(model, experiment,\
+			    ensemble, int(t1[0:4]), domain, cmip_ver=5)
 			wap = np.zeros(hgt.shape)
 			wg10 = np.zeros(hgt.shape)
-			p = np.zeros(p3d[0,:,0,0].shape)
-			temp = None
+			p = np.zeros(p_3d[0,:,0,0].shape)
+			#date_list = pd.to_datetime(date_list).to_pydatetime()
+			temp1 = None
+		elif model in ["ACCESS-ESM1-5"]:
+			if not t1[0:4] == t2[0:4]:
+				raise AssertionError("For CMIP6 data, t1 and t2 must be within the" +\
+				" same year") 
+			ta, hur, hgt, terrain, p_3d, ps, ua, va, uas, vas, tas, ta2d, lon, lat, \
+			    date_list = read_cmip(model, experiment,\
+			    ensemble, int(t1[0:4]), domain, cmip_ver=6, group=group)
+			wap = np.zeros(hgt.shape)
+			wg10 = np.zeros(ps.shape)
+			p = np.zeros(p_3d[0,:,0,0].shape)
+			#date_list = pd.to_datetime(date_list).to_pydatetime()
+			temp1 = None
+		else:
+			raise ValueError("Model not recognised")
 		del temp1
 		ta = ta.astype("float32", order="C")
 		hur = hur.astype("float32", order="C")
@@ -1237,7 +1259,7 @@ if __name__ == "__main__":
 		mu_lfc = np.take_along_axis(lfc, mu_cape_inds, 0)[0]
 		mu_lcl = np.take_along_axis(lcl, mu_cape_inds, 0)[0]
 		mu_el = np.take_along_axis(el, mu_cape_inds, 0)[0]
-		mu_q = np.take_along_axis(sfc_q, mu_cape_inds, 0)[0]
+		muq = np.take_along_axis(sfc_q, mu_cape_inds, 0)[0]
 
 		#Now get surface based CAPE. Simply the CAPE defined by parcel 
 		#with surface properties
@@ -1286,7 +1308,8 @@ if __name__ == "__main__":
 		lr750_500 = get_lr_p(ta[t], p_3d, hgt[t], 750, 500)
 		lr700_500 = get_lr_p(ta[t], p_3d, hgt[t], 700, 500)
 		melting_hgt = get_t_hgt(sfc_ta,np.copy(sfc_hgt),0,terrain)
-		hwb0 = get_var_hgt(sfc_wb,np.copy(sfc_hgt),0,terrain)
+		#hwb0 = get_var_hgt(sfc_wb,np.copy(sfc_hgt),0,terrain)
+		hwb0 = get_var_hgt(np.flipud(sfc_wb),np.flipud(np.copy(sfc_hgt)),0,terrain)
 		rhmean01 = get_mean_var_hgt(np.copy(sfc_hur),np.copy(sfc_hgt),0,1000,terrain,True,np.copy(sfc_p_3d))
 		rhmean03 = get_mean_var_hgt(np.copy(sfc_hur),np.copy(sfc_hgt),0,3000,terrain,True,np.copy(sfc_p_3d))
 		rhmean06 = get_mean_var_hgt(np.copy(sfc_hur),np.copy(sfc_hgt),0,6000,terrain,True,np.copy(sfc_p_3d))
@@ -1358,9 +1381,15 @@ if __name__ == "__main__":
 				sfc_p300 = sfc_p_3d[np.concatenate([[1100], p]) >= 300]
 				sfc_thetae300[(ps[t] - sfc_p300) > 400] = np.nan 
 				sfc_thetae300[(sfc_p300 > ps[t])] = np.nan 
-				dcape = np.nanargmin(sfc_thetae300, axis=0).choose(dcape)
+				#dcape = np.nanargmin(sfc_thetae300, axis=0).choose(dcape)
+				#ddraft_temp = tas[t] - \
+				#	np.nanargmin(sfc_thetae300, axis=0).choose(ddraft_temp)
+				dcape_inds = np.tile(np.nanargmin(sfc_thetae300, axis=0), \
+					    (sfc_thetae300.shape[0],1,1) )
+				dcape = np.take_along_axis(dcape, dcape_inds, 0)[0]
 				ddraft_temp = tas[t] - \
-					np.nanargmin(sfc_thetae300, axis=0).choose(ddraft_temp)
+					np.take_along_axis(ddraft_temp, dcape_inds, 0)[0]
+
 				ddraft_temp[(ddraft_temp<0) | (np.isnan(ddraft_temp))] = 0
 		else:
 			ddraft_temp = np.zeros(dpd500.shape)

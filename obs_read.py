@@ -590,7 +590,8 @@ def read_convective_wind_gusts():
 	df["an_date"] = pd.DatetimeIndex(temp_time.round("6H"))
 	df["hourly_time_utc"] = pd.DatetimeIndex(temp_time.round("1H"))
 	df["hourly_floor_utc"] = pd.DatetimeIndex(temp_time.floor("1H"))
-
+	df["hourly_ceil_utc"] = pd.DatetimeIndex(temp_time.ceil("1H"))
+    
 	#Drop duplicates which are formed by the same gust being recorded at the end of one day (e.g. 23:50 LT)
 	# and the start of the next day (e.g. 02:00 LT), which then are given the same time when 
 	# converted to UTC and placed at the most recent analysis time (e.g. 12:00 UTC)
@@ -628,14 +629,80 @@ def read_convective_wind_gusts():
 	#Save as pickle
 	df[["stn_name","an_date","state","lat","lon","height","wind_gust","wind_dir","year","month",\
 		"day_lt","hour_lt","min_lt","daily_date_utc","gust_time_lt","gust_time_utc", "hourly_time_utc",\
-		"hourly_floor_utc","tc_affected","lightning","incomplete_month",\
+		"hourly_floor_utc","hourly_ceil_utc","tc_affected","lightning","incomplete_month",\
 		"sta_wind","sta_wind_id","sta_date","sta_daily_date","is_sta"]].\
 		to_pickle("/g/data/eg3/ab4502/ExtremeWind/obs/aws/convective_wind_gust_aus_2005_2018.pkl")
 
 	return df
 
-def read_aws_half_hourly(loc,resample=False):
-	#Read half-hourly AWS data which has been downloaded for 2005-2015
+def read_aws_half_hourly():
+
+	#Read AWS half hourly data
+
+	#Set csv column names
+	names = ["record_id","stn_no","stn_name","locality", "state","lat","lon","height","date_str",\
+		"wind_dir","wind_dir_quality","wind_gust","quality","aws_flag","eof"]
+
+	#Dict to map station names to
+	renames = {'ALICE SPRINGS AIRPORT                   ':"Alice Springs",\
+			'GILES METEOROLOGICAL OFFICE             ':"Giles",\
+			'COBAR MO                                ':"Cobar",\
+			'AMBERLEY AMO                            ':"Amberley",\
+			'SYDNEY AIRPORT AMO                      ':"Sydney",\
+			'MELBOURNE AIRPORT                       ':"Melbourne",\
+			'MACKAY M.O                              ':"Mackay",\
+			'WEIPA AERO                              ':"Weipa",\
+			'MOUNT ISA AERO                          ':"Mount Isa",\
+			'ESPERANCE                               ':"Esperance",\
+			'ADELAIDE AIRPORT                        ':"Adelaide",\
+			'CHARLEVILLE AERO                        ':"Charleville",\
+			'CEDUNA AMO                              ':"Ceduna",\
+			'OAKEY AERO                              ':"Oakey",\
+			'WOOMERA AERODROME                       ':"Woomera",\
+			'TENNANT CREEK AIRPORT                   ':"Tennant Creek",\
+			'GOVE AIRPORT                            ':"Gove",\
+			'COFFS HARBOUR MO                        ':"Coffs Harbour",\
+			'MEEKATHARRA AIRPORT                     ':"Meekatharra",\
+			'HALLS CREEK METEOROLOGICAL OFFICE       ':"Halls Creek",\
+			'ROCKHAMPTON AERO                        ':"Rockhampton",\
+			'MOUNT GAMBIER AERO                      ':"Mount Gambier",\
+			'PERTH AIRPORT                           ':"Perth",\
+			'WILLIAMTOWN RAAF                        ':"Williamtown",\
+			'CARNARVON AIRPORT                       ':"Carnarvon",\
+			'KALGOORLIE-BOULDER AIRPORT              ':"Kalgoorlie",\
+			'DARWIN AIRPORT                          ':"Darwin",\
+			'CAIRNS AERO                             ':"Cairns",\
+			'MILDURA AIRPORT                         ':"Mildura",\
+			'WAGGA WAGGA AMO                         ':"Wagga Wagga",\
+			'BROOME AIRPORT                          ':"Broome",\
+			'EAST SALE                               ':"East Sale",\
+			'TOWNSVILLE AERO                         ':"Townsville",\
+			'HOBART (ELLERSLIE ROAD)                 ':"Hobart",\
+			'PORT HEDLAND AIRPORT                    ':"Port Hedland"}
+
+	#Set csv read data types
+	data_types = dict(record_id=str, stn_no=int, stn_name=str, locality=str, state=str, lat=float, lon=float,\
+				district=str, height=str, date_str=str, closest_date_str=str,\
+				wind_gust=float, quality=str, \
+				wind_dir=str, wind_dir_quality=str, max_gust_str_lt=str, max_gust_time_quality=str,\
+				eof=str,aws_flag=str)
+
+	#Read csv
+	fname = "/g/data/eg3/ab4502/ExtremeWind/obs/aws/aws_half_hour_aus_2005_2015/HM01X_Data_999999999678486.txt"
+	aws = pd.read_csv(fname,header=0,names=names)
+	aws.loc[:,"wind_gust"] = pd.to_numeric(aws["wind_gust"], errors="coerce")
+	aws["wind_dir"] = pd.to_numeric(aws.wind_dir, errors="coerce")
+	aws["time"] =pd.to_datetime(aws.date_str, format="%d/%m/%Y %H:%M")
+	aws = aws[["stn_name","time","wind_dir","wind_gust"]]
+	aws = aws.replace({"stn_name":renames})
+	aws["wind_gust"] = aws["wind_gust"] / 3.6
+
+	return aws
+	
+
+def half_hourly_conv_events(loc,resample=False):
+	#Read half-hourly AWS data which has been downloaded for 2005-2015, and construct a dataset
+	# of convective events
 
 	#Set csv column names
 	names = ["record_id","stn_no","stn_name","locality", "state","lat","lon","district","height","date_str",\

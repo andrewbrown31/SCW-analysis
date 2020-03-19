@@ -1,7 +1,0 @@
-
-HOMOGEN() APPLICATION OUTPUT  (From R's contributed package 'climatol' 3.1.1)
-
-=========== Homogenization of wg, 1979-2017. (Tue Feb 19 16:15:45 2019)
-
-Parameters: varcli=wg anyi=1979 anyf=2017 suf=NA nm=NA nref=10,10,4 std=3 swa=NA ndec=1 dz.max=5 dz.min=-5 wd=0,0,100 snht1=30 snht2=30 tol=0.02 maxdif=0.05 mxdif=0.05 maxite=50 force=FALSE wz=0.001 trf=0 mndat=NA gp=3 ini=NA na.strings=NA vmin=NA vmax=NA nclust=100 cutlev=NA grdcol=#666666 mapcol=#666666 hires=TRUE expl=FALSE metad=FALSE sufbrk=m tinc=NA tz=UTC cex=1.2 verb=TRUE
-

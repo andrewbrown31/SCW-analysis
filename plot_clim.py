@@ -761,10 +761,10 @@ def plot_clim(f,m,lat,lon,mean,var,model,domain,year_range,season,levels=False,t
 	#	terrain_lon,terrain_lat = get_barra_ad_lat_lon()
 	#	terrain_lon,terrain_lat = np.meshgrid(terrain_lon,terrain_lat)
 	#if model == "barra_r_fc":
-	terrain = nc.Dataset("/g/data/ma05/BARRA_R/v1/static/topog-an-slv-PT0H-BARRA_R-v1.nc").\
-			variables["topog"][:]
-	terrain_lon,terrain_lat = get_barra_r_lat_lon()
-	terrain_lon,terrain_lat = np.meshgrid(terrain_lon,terrain_lat)
+	#terrain = nc.Dataset("/g/data/ma05/BARRA_R/v1/static/topog-an-slv-PT0H-BARRA_R-v1.nc").\
+	#		variables["topog"][:]
+	#terrain_lon,terrain_lat = get_barra_r_lat_lon()
+	#terrain_lon,terrain_lat = np.meshgrid(terrain_lon,terrain_lat)
 	#elif model == "erai":
 		#terrain = np.squeeze(nc.Dataset("/short/eg3/ab4502/erai_sfc_geopt.nc").\
 		#		variables["z"][:] / 9.8)
@@ -780,7 +780,7 @@ def plot_clim(f,m,lat,lon,mean,var,model,domain,year_range,season,levels=False,t
 		#	"_"+str(season[0])+"_"+str(season[-1])+"_"+str(threshold)+"_"+str(year_range[0])+"_"+\
 		#	str(year_range[-1])+".png",bbox_inches="tight")
 	else:
-		plt.savefig("/short/eg3/ab4502/figs/ExtremeWind/clim/"+model+"_"+var+\
+		plt.savefig("/g/data/eg3/ab4502/figs/ExtremeWind/clim/"+model+"_"+var+\
 			"_"+domain+"_"+str(season[0])+"_"+str(season[-1])+"_"+str(threshold)+"_"+\
 			str(year_range[0])+"_"+str(year_range[-1])+".png",bbox_inches="tight")
 		
@@ -846,24 +846,24 @@ def plot_aus_conv_wind_trends():
 
 	#Plotting function/driver for the above function
 
-	fnames = ["era5_logit_is_conv_aws_daily.nc","era5_logit_is_sta_daily.nc",\
+	fnames = ["era5_logit_is_conv_aws_daily.nc",\
 			"era5_dcp_0.03_daily.nc","era5_t_totals_48.16_daily.nc"]
-	vmax = [[-50,50],[-50,50],[-50,50],[-50,50]]
-	titles = ["Logistic eq.\n (measured)","Logistic eq. \n(STA)","DCP","T-totals"]
+	vmax = [[-50,50],[-50,50],[-50,50]]
+	titles = ["Logistic eq.\n (measured)","DCP","T-totals"]
 	
 	datasets = [read_aus_conv_wind_clim(fnames[i], daily = True) for i in np.arange(len(fnames))]
 	n_boot = 1000
 	a=ord("a"); alph=[chr(i) for i in range(a,a+26)]; alph = [alph[i]+")" for i in np.arange(len(alph))]
-	#m = Basemap(llcrnrlon=110, llcrnrlat=-45, urcrnrlon=160, urcrnrlat=-10,projection="cyl")
-	m = Basemap(llcrnrlon=132, llcrnrlat=-38, urcrnrlon=142, urcrnrlat=-26,projection="cyl",resolution="h")
+	m = Basemap(llcrnrlon=110, llcrnrlat=-45, urcrnrlon=160, urcrnrlat=-10,projection="cyl")
+	#m = Basemap(llcrnrlon=132, llcrnrlat=-38, urcrnrlon=142, urcrnrlat=-26,projection="cyl",resolution="h")
 	plt.figure(figsize=[10,8])
 	cnt=1
 	for s in [[12,1,2],[3,4,5],[6,7,8],[9,10,11]]: 
 		print(s)
 		for i in np.arange(len(datasets)):
 			data = datasets[i]
-			data = data.sel(lon = ((data.lon>=132) & (data.lon<=142)),\
-				lat = ((data.lat>=-38) & (data.lat<=-26)))
+			#data = data.sel(lon = ((data.lon>=132) & (data.lon<=142)),\
+			#	lat = ((data.lat>=-38) & (data.lat<=-26)))
 			plt.subplot(4,len(fnames),cnt)
 			m.drawcoastlines()
 			temp = data[np.in1d(data["time.month"],s)]
@@ -1022,18 +1022,18 @@ def plot_aus_conv_wind_corr():
 	nino34 = read_clim_ind("nino34")
 	dmi = read_clim_ind("dmi")
 	sam = read_clim_ind("sam")
-	fnames = ["era5_logit_is_conv_aws_daily.nc","era5_logit_is_sta_daily.nc",\
+	fnames = ["era5_logit_is_conv_aws_daily.nc",\
 			"era5_dcp_0.03_daily.nc","era5_t_totals_48.16_daily.nc"]
 	datasets = [read_aus_conv_wind_clim(fnames[i], daily = True) for i in np.arange(len(fnames))]
 	vmax = [[-1,1],[-1,1],[-1,1],[-1,1]]
 	n_boot = 1000
-	titles = ["Logistic eq. (measured)","Logistic eq. (reported)","DCP","T-totals"]
+	titles = ["Logistic eq. (measured)","DCP","T-totals"]
 	seasons = [[12,1,2],[3,4,5],[6,7,8],[9,10,11]]
 	s_names = ["DJF","MAM","JJA","SON"]
 	a=ord("a"); alph=[chr(i) for i in range(a,a+26)]; alph = [alph[i]+")" for i in np.arange(len(alph))]
 	m = Basemap(llcrnrlon=110, llcrnrlat=-45, urcrnrlon=160, urcrnrlat=-10,projection="cyl")
 	clim_inds = {"NINO3.4":nino34,"SAM":sam,"DMI":dmi}
-	for clim_ind in ["DMI","NINO3.4","SAM"]:
+	for clim_ind in ["NINO3.4"]:
 		print("PLOTTING "+clim_ind)
 		plt.figure(figsize=[10,8])
 		cnt=1
@@ -1183,6 +1183,68 @@ def plot_aus_mjo_corr():
 	plt.savefig("/g/data/eg3/ab4502/figs/ExtremeWind/corr/MJO_era5_"+\
 	    f[i]+".png")
 				
+def plot_aus_daily_mjo_by_phase():
+	from scipy.stats import ttest_ind
+
+	f = "/g/data/eg3/ab4502/ExtremeWind/aus/mjo_full_phases_era5_mlcape*s06.nc"
+	data = xr.open_dataset(f)
+	lsm = get_era5_mask(data.lon.values,data.lat.values)
+	x,y = np.meshgrid(data.lon, data.lat)
+	m = Basemap(llcrnrlon=110, llcrnrlat=-45, urcrnrlon=160, urcrnrlat=-10,projection="cyl")
+	plt.figure(figsize=[10,8])
+    
+	seasons = [[12,1,2],[3,4,5],[6,7,8],[9,10,11]]
+	s_names = ["DJF","MAM","JJA","SON"]
+	cnt=0
+	for s in np.arange(len(seasons)):
+		#Get the total envs. per mjo day for the season
+		total = np.concatenate([\
+		    data["phase1"][np.in1d(data["phase1_times.month"],seasons[s])].values, \
+		    data["phase2"][np.in1d(data["phase2_times.month"],seasons[s])].values, \
+		    data["phase3"][np.in1d(data["phase3_times.month"],seasons[s])].values, \
+		    data["phase4"][np.in1d(data["phase4_times.month"],seasons[s])].values, \
+		    data["phase5"][np.in1d(data["phase5_times.month"],seasons[s])].values, \
+		    data["phase6"][np.in1d(data["phase6_times.month"],seasons[s])].values, \
+		    data["phase7"][np.in1d(data["phase7_times.month"],seasons[s])].values, \
+		    data["phase8"][np.in1d(data["phase8_times.month"],seasons[s])].values, \
+			], axis=0)
+		for phase in [ [2,3], [4,5], [6,7], [8,1] ]:
+			print(phase)
+			plt.subplot(4,4,cnt+1)
+			
+			if cnt <= 3:
+				plt.title("Phase "+str(phase[0])+"+" +str(phase[1]))
+			if cnt in [0, 4, 8, 12]:
+				plt.ylabel(s_names[s])
+
+			temp = np.concatenate([\
+			    data["phase"+str(phase[0])][\
+			    np.in1d(data["phase"+str(phase[0])+"_times.month"],seasons[s])].values, \
+			    data["phase"+str(phase[1])][\
+			    np.in1d(data["phase"+str(phase[1])+"_times.month"],seasons[s])].values],\
+				axis=0)
+
+			temp = np.where(lsm>=0.5, temp, np.nan)
+    
+			c=m.pcolormesh(x,y,\
+			    (temp.mean(axis=0) - total.mean(axis=0)) / total.mean(axis=0) * 100,\
+				vmin=-50, vmax=50,cmap=plt.get_cmap("RdBu_r") )
+
+			none, sig = ttest_ind(temp,\
+				    total,equal_var=False,axis=0)
+			sig = np.where(lsm>=0.5, sig, 1)
+			m.contourf(x,y,np.where(sig<=0.05, 1, 0), levels=[.5,1.5], \
+				colors=["none", "grey"], hatches=["///////"], alpha=0)
+
+			m.drawcoastlines()
+			if cnt==15:
+				cax = plt.axes([0.2, 0.075, 0.6, 0.01])
+				cb = plt.colorbar(c, cax=cax, orientation = "horizontal",\
+						extend="both")
+				cb.set_label("Environments per MJO-day anomaly (%)")
+			cnt=cnt+1
+	plt.show()
+
 def plot_aus_monthly_mjo_corr():
 
 	#Define the number of bootstraps
@@ -1190,9 +1252,9 @@ def plot_aus_monthly_mjo_corr():
 	#Define file and variable names for the four diagnostics of interest. 
 	# For each diagnostic, there are two daily netcdf files, one for active MJO days only, 
 	# the other for inactive MJO days
-	f = ["logit_is_conv_aws","logit_is_sta","dcp_0.03","t_totals_48.16"]
-	var = ["logit","logit","dcp","t_totals"]
-	datasets = [read_aus_conv_wind_clim(fnames[i], daily = True) for i in np.arange(len(f))]
+	f = ["era5_logit_is_conv_aws_daily.nc","era5_logit_is_sta_daily.nc","era5_dcp_0.03_daily.nc","era5_t_totals_48.16_daily.nc","era5_mlcape*s06_20000.0_daily.nc"]
+	var = ["logit","logit","dcp","t_totals","mlcape*s06"]
+	datasets = [read_aus_conv_wind_clim(f[i], daily = True) for i in np.arange(len(f))]
 	seasons = [[12,1,2],[3,4,5],[6,7,8],[9,10,11]]
 	s_names = ["DJF","MAM","JJA","SON"]
 	all_times = pd.date_range("1979-01-01","2018-12-31")
@@ -1203,8 +1265,8 @@ def plot_aus_monthly_mjo_corr():
 		resample("1M").sum()
     
 	#Plotting settings
-	vmax = [[-0.5,0.5],[-0.5,0.5],[-0.5,0.5],[-0.5,0.5]]
-	titles = ["Logistic eq. (measured)","Logistic eq. (STA)","DCP","T-totals"]
+	vmax = [[-0.5,0.5],[-0.5,0.5],[-0.5,0.5],[-0.5,0.5],[-0.5,0.5]]
+	titles = ["Logistic eq. (measured)","Logistic eq. (STA)","DCP","T-totals","ML-CS6"]
 	a=ord("a"); alph=[chr(i) for i in range(a,a+26)]; alph = [alph[i]+")" \
 		for i in np.arange(len(alph))]
 	m = Basemap(llcrnrlon=110, llcrnrlat=-45, urcrnrlon=160, urcrnrlat=-10,projection="cyl")
@@ -1214,7 +1276,7 @@ def plot_aus_monthly_mjo_corr():
 		#For each diagnostic
 		for i in np.arange(len(var)):
 			data = datasets[i]
-			plt.subplot(4,len(fnames),cnt)
+			plt.subplot(4,len(f),cnt)
 			m.drawcoastlines()
 			temp_seasonal = data[np.in1d(data["time.month"],seasons[s])]
 			lat = temp_seasonal.lat.data
@@ -1224,8 +1286,8 @@ def plot_aus_monthly_mjo_corr():
 				(temp_seasonal.time.shape[0],-1))
 			spr_out = [pearson(temp_seasonal_reshaped[:,j], \
 				np.squeeze(time_df.loc[np.in1d(time_df.index.month, \
-					seasons[s])].values)) \
-				for j in np.arange(temp_seasonal_reshaped.shape[1])]
+				seasons[s]), "active"].values)) \
+					for j in np.arange(temp_seasonal_reshaped.shape[1])]
 			r = np.array([spr_out[j][0] for j in np.arange(len(spr_out))])
 			p = np.array([spr_out[j][1] for j in np.arange(len(spr_out))])
 			r = r.reshape((lat.shape[0], lon.shape[0]))	
@@ -1327,14 +1389,16 @@ def plot_aus_conv_wind_clim():
 
 	#Plotting function/driver for the above function
 
-	#fnames = ["barra_logit_is_conv_aws_daily.nc","barra_logit_is_sta_daily.nc",\
-	#	"barra_dcp_0.03_daily.nc","barra_t_totals_49.2_daily.nc"]
-	fnames = ["era5_logit_is_conv_aws_daily.nc", "era5_logit_is_sta_daily.nc",\
+	#fnames = ["era5_logit_is_conv_aws_daily.nc", "era5_logit_is_sta_daily.nc",\
+	#	"era5_dcp_0.03_daily.nc", "era5_t_totals_48.16_daily.nc"]
+	#models = ["era5","era5","era5","era5"]
+	fnames = ["era5_logit_is_conv_aws_daily.nc", \
 		"era5_dcp_0.03_daily.nc", "era5_t_totals_48.16_daily.nc"]
-	models = ["era5","era5","era5","era5"]
+	models = ["era5","era5","era5"]
 	datasets = [read_aus_conv_wind_clim(fnames[i], daily = True) for i in np.arange(len(fnames))]
-	vmax = [0.5,0.5,0.5, 0.5]
-	titles = ["Logistic eq. (measured)", "Logistic eq. (reported)", "DCP", "T-totals"]
+	vmax = [0.5,0.5,0.5]
+	#titles = ["Logistic eq. (measured)", "Logistic eq. (reported)", "DCP", "T-totals"]
+	titles = ["Logistic eq. (measured)", "DCP", "T-totals"]
 	a=ord("a"); alph=[chr(i) for i in range(a,a+26)]; alph = [alph[i]+")" for i in np.arange(len(alph))]
 	m = Basemap(llcrnrlon=110, llcrnrlat=-45, urcrnrlon=160, urcrnrlat=-10,projection="cyl")
 	plt.figure(figsize=[10,8])
@@ -1432,4 +1496,4 @@ if __name__ == "__main__":
 
 	#plot_aus_conv_wind_trends()
 	#plot_aus_conv_wind_corr()
-	plot_aus_mjo_corr()
+	plot_aus_daily_mjo_by_phase()

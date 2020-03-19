@@ -1,3 +1,5 @@
+import gc
+from dask.diagnostics import ProgressBar
 import sys
 import netCDF4 as nc
 import numpy as np
@@ -138,15 +140,13 @@ def read_barra(domain,times):
 
 	return [ta,dp,hur,hgt,terrain,p,ps,wap,ua,va,uas,vas,tas,ta2d,wg10,lon,lat,date_list]
 	
-#IF WANTING TO LOOP OVER TIME, CHANGE READ_BARRA TO READ ALL TIMES IN A RANGE, THEN LOOP OVER TIME DIMENSION WITHIN CALC_PARAM
-
 def read_barra_fc(domain,times,mslp=False):
 	#If mslp=True, then replace ps with mslp
 
 	#Open BARRA netcdf files and extract variables needed for a range of times and given
 	# spatial domain
-	#NOTE, currently this uses analysis files, with no time dimension length=1. For
-	# use with forecast files (with time dimension length >1), will need to be changed.
+	#NOTE that 10 m v and v winds are not being de-staggered. There is therefore a 0.05 degree
+	# mis-match between the 10 m u and v
 
 	ref = dt.datetime(1970,1,1,0,0,0)
 	if len(times) > 1:
@@ -597,6 +597,84 @@ def to_points():
 	#df_new = pd.merge(df_orig, df[["time","loc_id","wbz","Vprime"]], on=["time","loc_id"])
 	#df_new.to_pickle("/g/data/eg3/ab4502/ExtremeWind/points/erai_points_sharppy_aus_1979_2017.pkl")
 
+def to_points_loop_rad(loc_id,points,fname,start_year,end_year,rad=50,lsm=True,\
+		variables=False,pb=False):
+
+	#Register progress bar for xarray if desired
+	if pb:
+		ProgressBar().register()
+
+	#Create monthly dates from start_year to end_year to iterate over
+	dates = []
+	for y in np.arange(start_year,end_year+1):
+		for m in np.arange(1,13):
+			dates.append(dt.datetime(y,m,1,0,0,0))
+
+	#Initialise dataframe for point data
+	max_df = pd.DataFrame()
+	mean_df = pd.DataFrame()
+
+	#For each month from start_year to end_year
+	for t in np.arange(len(dates)):
+		#Read convective diagnostics from eg3
+		print(dates[t])
+		f=xr.open_dataset(glob.glob("/g/data/eg3/ab4502/ExtremeWind/aus/"+\
+			"barra_fc/barra_fc_"+dates[t].strftime("%Y%m")+"*.nc")[0],\
+			chunks={"lat":100, "lon":100, "time":100}, engine="h5netcdf")
+
+		#For each location (lat/lon pairing), get the distance (km) to each BARRA grid point
+		lat = f.coords.get("lat").values
+		lon = f.coords.get("lon").values
+		x,y = np.meshgrid(lon,lat)
+		if lsm:
+			mask = get_mask(lon,lat)
+			x[mask==0] = np.nan
+			y[mask==0] = np.nan
+		dist_km = []
+		for i in np.arange(len(loc_id)):
+			dist_km.append(latlon_dist(points[i][1], points[i][0], y, x) )
+
+		#Subset netcdf data to a list of variables, if available
+		try:
+			f=f[variables]
+		except:
+			pass
+
+		#Subset netcdf data based on lat and lon, and convert to a dataframe
+		#Get all points (regardless of LSM) within 100 km radius
+		max_temp_df = pd.DataFrame()
+		mean_temp_df = pd.DataFrame()
+		for i in np.arange(len(loc_id)):
+			a,b = np.where(dist_km[i] <= rad)
+			subset = f.isel_points("points",lat=a, lon=b).persist()
+			max_point_df = subset.max("points").to_dataframe()
+			mean_point_df = subset.mean("points").to_dataframe()
+			max_point_df["points"] = i
+			mean_point_df["points"] = i
+			max_temp_df = pd.concat([max_temp_df, max_point_df], axis=0)
+			mean_temp_df = pd.concat([mean_temp_df, mean_point_df], axis=0)
+
+		#Manipulate dataframe for nice output
+		max_temp_df = max_temp_df.reset_index()
+		for p in np.arange(len(loc_id)):
+			max_temp_df.loc[max_temp_df.points==p,"loc_id"] = loc_id[p]
+		max_temp_df = max_temp_df.drop("points",axis=1)
+		max_df = pd.concat([max_df, max_temp_df])
+
+		mean_temp_df = mean_temp_df.reset_index()
+		for p in np.arange(len(loc_id)):
+			mean_temp_df.loc[mean_temp_df.points==p,"loc_id"] = loc_id[p]
+		mean_temp_df = mean_temp_df.drop("points",axis=1)
+		mean_df = pd.concat([mean_df, mean_temp_df])
+
+		#Clean up
+		f.close()
+		gc.collect()
+
+	#Save point output to disk
+	max_df.sort_values(["loc_id","time"]).to_pickle("/g/data/eg3/ab4502/ExtremeWind/points/"+fname+"_max.pkl")
+	mean_df.sort_values(["loc_id","time"]).to_pickle("/g/data/eg3/ab4502/ExtremeWind/points/"+fname+"_mean.pkl")
+
 def to_points_loop(loc_id,points,fname,start_year,end_year,variables=False):
 
 	#As in to_points(), but by looping over monthly data
@@ -650,6 +728,154 @@ def to_points_loop(loc_id,points,fname,start_year,end_year,variables=False):
 			temp_df.loc[temp_df.points==p,"loc_id"] = loc_id[p]
 
 		temp_df = temp_df.drop("points",axis=1)
+		df = pd.concat([df, temp_df])
+		f.close()
+		gc.collect()
+
+	df.sort_values(["loc_id","time"]).to_pickle("/g/data/eg3/ab4502/ExtremeWind/points/"+fname+".pkl")
+
+def to_points_loop_wind_dir(loc_id,points,fname,start_year,end_year):
+
+	#As in to_points_loop(), but just for 10 m wind direction, from the ma07 directory
+	from dask.diagnostics import ProgressBar
+	import gc
+	#ProgressBar().register()
+
+	dates = []
+	for y in np.arange(start_year,end_year+1):
+		for m in np.arange(1,13):
+			dates.append(dt.datetime(y,m,1,0,0,0))
+
+	df = pd.DataFrame()
+
+	lsm = xr.open_dataset("/g/data/ma05/BARRA_R/v1/static/lnd_mask-an-slv-PT0H-BARRA_R-v1.nc")
+
+	#Read netcdf data
+	for t in np.arange(len(dates)):
+		print(dates[t])
+		year = dt.datetime.strftime(dates[t],"%Y")
+		month =	dt.datetime.strftime(dates[t],"%m")
+		av_u_file = xr.open_mfdataset("/g/data/ma05/BARRA_R/v1/forecast/slv/av_uwnd10m/"+\
+			year+"/"+month+"/*.sub.nc", concat_dim="time")
+		av_v_file = xr.open_mfdataset("/g/data/ma05/BARRA_R/v1/forecast/slv/av_vwnd10m/"+\
+			year+"/"+month+"/*.sub.nc", concat_dim="time")
+		u_file = xr.open_mfdataset("/g/data/ma05/BARRA_R/v1/forecast/spec/uwnd10m/"+\
+			year+"/"+month+"/*.sub.nc", concat_dim="time")
+		v_file = xr.open_mfdataset("/g/data/ma05/BARRA_R/v1/forecast/spec/vwnd10m/"+\
+			year+"/"+month+"/*.sub.nc", concat_dim="time")
+		av_u_int = av_u_file.av_uwnd10m.interp({"latitude":lsm.latitude.values, \
+			"longitude":lsm.longitude.values})
+		av_v_int = av_v_file.av_vwnd10m.interp({"latitude":lsm.latitude.values, \
+			"longitude":lsm.longitude.values})
+		u_int = u_file.uwnd10m.interp({"latitude":lsm.latitude.values, \
+			"longitude":lsm.longitude.values})
+		v_int = v_file.vwnd10m.interp({"latitude":lsm.latitude.values, \
+			"longitude":lsm.longitude.values})
+		av_wd = 180 + ( 180/np.pi ) * \
+			(np.arctan2(av_u_int, av_v_int))
+		wd = 180 + ( 180/np.pi ) * \
+			(np.arctan2(u_int, v_int))
+
+		#Setup lsm
+		lat = lsm.coords.get("latitude").values
+		lon = lsm.coords.get("longitude").values
+		x,y = np.meshgrid(lon,lat)
+		x[lsm.lnd_mask==0] = np.nan
+		y[lsm.lnd_mask==0] = np.nan
+
+		dist_lon = []
+		dist_lat = []
+		for i in np.arange(len(loc_id)):
+
+			dist = np.sqrt(np.square(x-points[i][0]) + \
+				np.square(y-points[i][1]))
+			temp_lat,temp_lon = np.unravel_index(np.nanargmin(dist),dist.shape)
+			dist_lon.append(temp_lon)
+			dist_lat.append(temp_lat)
+
+		av_temp_df = av_wd.isel(latitude = xr.DataArray(dist_lat, dims="points"), \
+			longitude = xr.DataArray(dist_lon, dims="points")).persist().\
+			to_dataframe("av_wd")
+		temp_df = wd.isel(latitude = xr.DataArray(dist_lat, dims="points"), \
+			longitude = xr.DataArray(dist_lon, dims="points")).persist().\
+			to_dataframe("wd")
+
+		av_temp_df = av_temp_df.reset_index()
+		temp_df = temp_df.reset_index()
+
+		temp_df["av_wd"] = av_temp_df["av_wd"]
+
+		for p in np.arange(len(loc_id)):
+			temp_df.loc[temp_df.points==p,"loc_id"] = loc_id[p]
+
+		temp_df = temp_df.drop(["points", "height", \
+			"forecast_period", "forecast_reference_time"],axis=1)
+		df = pd.concat([df, temp_df])
+		u_file.close()
+		v_file.close()
+		av_u_file.close()
+		av_v_file.close()
+		gc.collect()
+
+	df.sort_values(["loc_id","time"]).to_pickle("/g/data/eg3/ab4502/ExtremeWind/points/"+fname+".pkl")
+
+def to_points_loop_verticalwnd(loc_id,points,fname,start_year,end_year):
+
+	#As in to_points_loop(), but just for vertical velocity at 700 hPa, from the ma07 directory
+	from dask.diagnostics import ProgressBar
+	import gc
+	ProgressBar().register()
+
+	dates = []
+	for y in np.arange(start_year,end_year+1):
+		for m in np.arange(1,13):
+			dates.append(dt.datetime(y,m,1,0,0,0))
+
+	df = pd.DataFrame()
+
+	lsm = xr.open_dataset("/g/data/ma05/BARRA_R/v1/static/lnd_mask-an-slv-PT0H-BARRA_R-v1.nc")
+
+	#Read netcdf data
+	for t in np.arange(len(dates)):
+		print(dates[t])
+		year = dt.datetime.strftime(dates[t],"%Y")
+		month =	dt.datetime.strftime(dates[t],"%m")
+		f = xr.open_mfdataset("/g/data/ma05/BARRA_R/v1/forecast/prs/vertical_wnd/"+\
+			year+"/"+month+"/*.sub.nc", concat_dim="time")
+
+		#Setup lsm
+		lat = f.coords.get("latitude").values
+		lon = f.coords.get("longitude").values
+		x,y = np.meshgrid(lon,lat)
+		x[lsm.lnd_mask==0] = np.nan
+		y[lsm.lnd_mask==0] = np.nan
+
+		dist_lon = []
+		dist_lat = []
+		for i in np.arange(len(loc_id)):
+
+			dist = np.sqrt(np.square(x-points[i][0]) + \
+				np.square(y-points[i][1]))
+			temp_lat,temp_lon = np.unravel_index(np.nanargmin(dist),dist.shape)
+			dist_lon.append(temp_lon)
+			dist_lat.append(temp_lat)
+
+		if f.pressure.shape[0] > 37:
+			temp_df = f.isel(latitude = xr.DataArray(dist_lat, dims="points"), \
+				longitude = xr.DataArray(dist_lon, dims="points"), \
+				pressure = [56,57]).persist().to_dataframe().dropna()
+		else:
+			temp_df = f.isel(latitude = xr.DataArray(dist_lat, dims="points"), \
+				longitude = xr.DataArray(dist_lon, dims="points"), \
+				pressure = 28).persist().to_dataframe()
+
+		temp_df = temp_df.reset_index()
+
+		for p in np.arange(len(loc_id)):
+			temp_df.loc[temp_df.points==p,"loc_id"] = loc_id[p]
+
+		temp_df = temp_df.drop(["points", "pressure", "latitude_longitude",\
+			"forecast_period", "forecast_reference_time"],axis=1)
 		df = pd.concat([df, temp_df])
 		f.close()
 		gc.collect()
@@ -776,6 +1002,26 @@ def get_aus_stn_info():
 	points = [(df.lon.iloc[i], df.lat.iloc[i]) for i in np.arange(df.shape[0])]
 	return [df.stn_name.values,points]
 
+def latlon_dist(lat, lon, lats, lons):
+
+	#Calculate great circle distance (Harversine) between a lat lon point (lat, lon) and a list of lat lon
+	# points (lats, lons)
+
+	R = 6373.0
+
+	lat1 = np.deg2rad(lat)
+	lon1 = np.deg2rad(lon)
+	lat2 = np.deg2rad(lats)
+	lon2 = np.deg2rad(lons)
+
+	dlon = lon2 - lon1
+	dlat = lat2 - lat1
+
+	a = np.sin(dlat / 2)**2 + np.cos(lat1) * np.cos(lat2) * np.sin(dlon / 2)**2
+	c = 2 * np.arctan2(np.sqrt(a), np.sqrt(1 - a))
+
+	return (R * c)
+
 def get_dp(ta,hur,dp_mask=True):
 	#Dew point approximation found at https://gist.github.com/sourceperl/45587ea99ff123745428
 	#Same as "Magnus formula" https://en.wikipedia.org/wiki/Dew_point
@@ -801,15 +1047,8 @@ if __name__ == "__main__":
 	if len(sys.argv) > 3:
 		variable = sys.argv[3]
 	
-	#loc_id = ['Melbourne', 'Wollongong', 'Gympie', 'Grafton', 'Canberra', 'Marburg', \
-	#	'Adelaide', 'Namoi', 'Perth', 'Hobart']
-	#radar_latitude = [-37.8553, -34.2625, -25.9574, -29.622, -35.6614, -27.608, -34.6169,\
-	#		-31.0236, -32.3917, -43.1122]
-	#radar_longitude = [144.7554, 150.8752, 152.577, 152.951, 149.5122, 152.539, 138.4689, \
-	#		150.1917, 115.867, 147.8057]
-	#points = [(radar_longitude[i], radar_latitude[i]) for i in np.arange(len(radar_latitude))]
 
 	loc_id, points = get_aus_stn_info()
 
-	to_points_loop(loc_id,points,"barra_allvars_"+str(start_year)+"_"+str(end_year),\
+	to_points_loop_wind_dir(loc_id,points,"barra_wind_dir_"+str(start_year)+"_"+str(end_year),\
 			start_year,end_year)

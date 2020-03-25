@@ -58,6 +58,7 @@ if __name__ == "__main__":
 	parser.add_argument("-e", help="CMIP5 experiment name (not required if using era5, erai or barra)", default="")
 	parser.add_argument("--ens", help="CMIP5 ensemble name (not required if using era5, erai or barra)", default="r1i1p1")
 	parser.add_argument("--group", help="CMIP6 modelling group name", default="")
+	parser.add_argument("--ver", help="Version on al33", default="")
 	parser.add_argument("--issave",help="Save output (True or False, default is False)", default="False")
 	parser.add_argument("--outname",help="Name of saved output. In the form *outname*_*t1*_*t2*.nc. Default behaviour is the model name",default=None)
 	parser.add_argument("--is_dcape",help="Should DCAPE be calculated? (1 or 0. Default is 1)",default=1)
@@ -79,6 +80,7 @@ if __name__ == "__main__":
 	experiment = args.e
 	ensemble = args.ens
 	group = args.group
+	ver = args.ver
 	if region == "sa_small":
 		start_lat = -38; end_lat = -26; start_lon = 132; end_lon = 142
 	elif region == "aus":
@@ -134,7 +136,7 @@ if __name__ == "__main__":
 		year = np.arange(int(t1[0:4]), int(t2[0:4])+1)
 		ta, hur, hgt, terrain, p_3d, ps, ua, va, uas, vas, tas, ta2d, lon, lat, \
 		    date_list = read_cmip(model, experiment, \
-		    ensemble, year, domain, cmip_ver=5, al33=al33, group=group)
+		    ensemble, year, domain, cmip_ver=5, al33=al33, group=group, ver=ver)
 		wap = np.zeros(hgt.shape)
 		wg10 = np.zeros(ps.shape)
 		p = np.zeros(p_3d[0,:,0,0].shape)

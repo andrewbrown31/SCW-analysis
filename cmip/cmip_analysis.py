@@ -12,25 +12,24 @@ import matplotlib as mpl
 from dask.diagnostics import ProgressBar
 from read_cmip import get_lsm
 
+def drop_duplicates(da):
+
+	a, ind = np.unique(da.time.values, return_index=True)
+	return(da[ind])
+
 def daily_max_qm(data, da, models, p, lsm):
 
 	#For a list of quantile-mapped 3d arrays (data), create a DataArray using metadata from da, and 
 	# resample to daily maximum. Save data, and load instead of computing if already exists (depending on
 	# compute time)
 
+	print("Resampling to daily max...")
 	out = []
 	for i in np.arange(len(models)):
-		print(i)
 
 		model_name = models[i][0]
 		ensemble = models[i][1]
-
-		if lsm:
-			fname = "/g/data/eg3/ab4502/ExtremeWind/aus/regrid_1.5/"+\
-			    model_name+"_"+ensemble+"_dmax_"+p+"_qm_lsm.nc"
-		else:
-			fname = "/g/data/eg3/ab4502/ExtremeWind/aus/regrid_1.5/"+\
-			    model_name+"_"+ensemble+"_dmax_"+p+"_qm.nc"
+		print(model_name)
 
 		out.append(xr.Dataset(data_vars={p:(("time", "lat", "lon"), data[i])},\
 		    coords={"time":da[i].time, "lat":da[i].lat, "lon":da[i].lon}).resample({"time":"1D"}).max())
@@ -80,6 +79,34 @@ def calc_logit(models, p, lsm):
 		out_logit.append( 1 / (1 + np.exp(-z)))
 
 	return out_logit
+
+def plot_monthly_threshold(data, models, p, threshold, outname):
+
+	plt.figure(figsize=[12,7])
+	ax=plt.gca()
+	monthly_thresh = pd.DataFrame()
+
+	spatial_points = (~np.isnan(data[0][p][0]).values).sum()
+
+	for i in np.arange(len(models)):
+		thresh = []
+		for m in np.arange(1,13):
+			thresh.append(\
+				( data[i][p][data[i]["time.month"]==m] >= threshold ).sum().values \
+				    / (( data[i]["time.month"]==m).values.sum() * spatial_points)  )
+		if i >= 1:
+			r = str(np.corrcoef(thresh, monthly_thresh["ERA5 r=1"])[1,0].round(3))
+			monthly_thresh = pd.concat([monthly_thresh, pd.DataFrame({models[i][0]+" r="+r:thresh})],\
+				axis=1)
+		else:
+			monthly_thresh = pd.concat([monthly_thresh, \
+				pd.DataFrame({models[i][0]+" r=1":thresh})], axis=1)
+	monthly_thresh.plot(color=plt.get_cmap("tab20")(np.linspace(0,1,len(models))), ax=ax)
+	plt.xticks(np.arange(12), ["J","F","M","A","M","J","J","A","S","O","N","D"])
+	plt.ylabel("Monthly diagnostic frequency over Aus.\n"+p)
+	plt.legend(loc='center left', bbox_to_anchor=(1.0, 0.5))
+	plt.subplots_adjust(right=0.8)
+	plt.savefig("/g/data/eg3/ab4502/figs/CMIP/"+outname+".png")
 
 def plot_monthly_mean(data, data_da, models, p, outname):
 
@@ -144,6 +171,40 @@ def plot_mean_spatial_diff(data, models, subplots, rel_diff, vmax, vmin, geo_plo
 			c.set_label("%")
 	plt.savefig("/g/data/eg3/ab4502/figs/CMIP/"+outname+".png")
 
+def plot_threshold_spatial_dist(data, models, p, threshold, subplots, log, geo_plot, lon, lat, lsm, outname, \
+		vmin=None, vmax=None):
+
+	#For a list of model data, plot the frequency of threshold exceedence
+	if geo_plot:
+		m = Basemap(llcrnrlon=110, llcrnrlat=-45, urcrnrlon=160, \
+				urcrnrlat=-10,projection="cyl")
+	plt.figure(figsize=[11,9])
+
+	era5_freq = ( (data[0][p] >= threshold).sum("time") / data[0][p].shape[0]).values.flatten()
+	if lsm:
+		era5_freq = era5_freq[~np.isnan(era5_freq)]
+
+	x,y = np.meshgrid(lon,lat)
+	for i in np.arange(len(models)):
+			plt.subplot(subplots[0],subplots[1],i+1)
+			if geo_plot:
+				m.drawcoastlines()
+
+    
+			mod_freq = ( (data[i][p] >= threshold).sum("time") / data[i][p].shape[0] ).values
+			mod_freq1d = mod_freq.flatten()
+			if lsm:
+				mod_freq1d = mod_freq1d[~np.isnan(mod_freq1d)]
+			r = str(np.corrcoef(era5_freq, mod_freq1d)[1,0].round(3))
+
+			if log:
+				m.pcolormesh(x, y, mod_freq, norm=mpl.colors.LogNorm(), vmin=vmin, vmax=vmax)
+			else:
+				m.pcolormesh(x, y, mod_freq, vmin=vmin, vmax=vmax)
+			plt.colorbar()
+			plt.title(models[i][0] + " r="+r)
+	plt.savefig("/g/data/eg3/ab4502/figs/CMIP/"+outname+".png")
+
 def plot_mean_spatial_dist(data, models, subplots, log, geo_plot, lon, lat, lsm, outname, vmin=None, vmax=None):
 
 	#For a list of model data, plot the mean spatial distribution
@@ -180,10 +241,12 @@ def plot_mean_spatial_dist(data, models, subplots, log, geo_plot, lon, lat, lsm,
 			plt.title(models[i][0] + " r="+r)
 	plt.savefig("/g/data/eg3/ab4502/figs/CMIP/"+outname+".png")
 
-def load_model_data(models, p, lsm=True, force_cmip_regrid=False):
+def load_model_data(models, p, lsm=True, force_cmip_regrid=False, experiment="historical", y1=1979, y2=2005):
 
 	#For each model in the list "models" (including ERA5), load regridded data and slice in time.
 	#If lsm is True, then mask ocean data based on ERA5 lsm
+
+	assert y2 > y1
 
 	out = []
 	era5 = regrid_era5(p)
@@ -195,20 +258,32 @@ def load_model_data(models, p, lsm=True, force_cmip_regrid=False):
 		if models[i][0] == "ERA5":
 			e = era5
 		else:
-			e = regrid_cmip(era5, models[i][0], models[i][1], p, force_cmip_regrid)
+			e = regrid_cmip(era5, models[i][0], models[i][1], p, force_cmip_regrid, experiment=experiment)
 
 		if lsm:
-			e = xr.where(era5_lsm, e.sel({"time":(e["time.year"] <= 2005) & \
+			if models[i][0] == "ERA5":
+				e = xr.where(era5_lsm, \
+				    e.sel({"time":(e["time.year"] <= 2005) & \
 				    (e["time.year"] >= 1979)}), np.nan)
+			else:
+				e = xr.where(era5_lsm, \
+				    e.sel({"time":(e["time.year"] <= y2) & \
+				    (e["time.year"] >= y1)}), np.nan)
 		else:
-			e = e.sel({"time":(e["time.year"] <= 2005) & \
-			    (e["time.year"] >= 1979)})
+			if models[i][0] == "ERA5":
+				e = e.sel({"time":(e["time.year"] <= 2005) & \
+				    (e["time.year"] >= 1979)})
+			else:
+				e = e.sel({"time":(e["time.year"] <= y2) & \
+				    (e["time.year"] >= y1)})
+		e = drop_duplicates(e)
 		e.close()
 		out.append(e)
 
 	return out
 
-def load_all_qm(data, models, p, lsm, replace_zeros, force_compute=False):
+def load_all_qm(data, models, p, lsm, replace_zeros, force_compute=False, \
+	    experiment="historical"):
 
 	#Loop over all models, and use either load_qm() to load, or qm_cmip_era5() to calculate
 
@@ -220,14 +295,15 @@ def load_all_qm(data, models, p, lsm, replace_zeros, force_compute=False):
 			if force_compute:
 				print(models[i])
 				model_xhat = create_qm(data[0], data[i], models[i][0],\
-					    models[i][1], p, lsm, replace_zeros)
+					    models[i][1], p, lsm, replace_zeros,\
+					    experiment=experiment)
 			else:
 				try:
-					model_xhat = load_qm(models[i][0], models[i][1], p, lsm)
+					model_xhat = load_qm(models[i][0], models[i][1], p, lsm, experiment=experiment)
 				except:
 					print(models[i])
 					model_xhat = create_qm(data[0], data[i], models[i][0],\
-					    models[i][1], p, lsm, replace_zeros)
+					    models[i][1], p, lsm, replace_zeros, experiment=experiment)
 			out_qm.append(model_xhat)
 
 	return out_qm
@@ -261,14 +337,14 @@ def qm_cmip_era5(era5_da, model_da, replace_zeros):
 
 	return model_xhat
 
-def load_qm(model_name, ensemble, p, lsm):
+def load_qm(model_name, ensemble, p, lsm, experiment="historical"):
 
 	if lsm:
 		fname = "/g/data/eg3/ab4502/ExtremeWind/aus/regrid_1.5/"+\
-		    model_name+"_"+ensemble+"_"+p+"_qm_lsm.nc"
+		    model_name+"_"+experiment+"_"+ensemble+"_"+p+"_qm_lsm.nc"
 	else:
 		fname = "/g/data/eg3/ab4502/ExtremeWind/aus/regrid_1.5/"+\
-		    model_name+"_"+ensemble+"_"+p+"_qm.nc"
+		    model_name+"_"+experiment+"_"+ensemble+"_"+p+"_qm.nc"
 	mod_xhat = xr.open_dataset(fname)[p+"_qm"].values
 
 	return mod_xhat
@@ -286,14 +362,15 @@ def save_logit(models, data, da, lsm, p):
 		    coords={"time":da[i].time, "lat":da[i].lat, "lon":da[i].lon}).\
 		    to_netcdf(fname, mode="w")
 
-def create_qm(era5_da, model_da, model_name, ensemble, p, lsm, replace_zeros):
+def create_qm(era5_da, model_da, model_name, ensemble, p, lsm, replace_zeros, \
+	    experiment="historical"):
 
 	if lsm:
 		fname = "/g/data/eg3/ab4502/ExtremeWind/aus/regrid_1.5/"+\
-		    model_name+"_"+ensemble+"_"+p+"_qm_lsm.nc"
+		    model_name+"_"+experiment+"_"+ensemble+"_"+p+"_qm_lsm.nc"
 	else:
 		fname = "/g/data/eg3/ab4502/ExtremeWind/aus/regrid_1.5/"+\
-		    model_name+"_"+ensemble+"_"+p+"_qm.nc"
+		    model_name+"_"+experiment+"_"+ensemble+"_"+p+"_qm.nc"
 	mod_xhat = qm_cmip_era5(era5_da, model_da, replace_zeros)
 	xr.Dataset(data_vars={p+"_qm":(("time", "lat", "lon"), mod_xhat)},\
 		    coords={"time":model_da.time, "lat":model_da.lat, "lon":model_da.lon}).\
@@ -347,13 +424,13 @@ def regrid_era5(p):
 
 	return era5_coarse
 
-def regrid_cmip(era5, model_name, ensemble, p, force_regrid):
+def regrid_cmip(era5, model_name, ensemble, p, force_regrid, experiment="historical"):
 
 	#Regrid convective diagnostics from CMIP models to the coarsened ERA5 grid over Aus (1.5 
 	# degree spacing)
 	
 	fname = "/g/data/eg3/ab4502/ExtremeWind/aus/regrid_1.5/"+\
-		model_name+"_"+ensemble+"_"+p+".nc"
+		model_name+"_"+experiment+"_"+ensemble+"_"+p+".nc"
 
 	if (os.path.isfile(fname)) & (~force_regrid):
 		f = xr.open_dataset(fname)
@@ -362,12 +439,22 @@ def regrid_cmip(era5, model_name, ensemble, p, force_regrid):
 	else:
 		print("Regridding "+model_name+" to a 1.5 degree grid...")
 		mod = xr.open_mfdataset("/g/data/eg3/ab4502/ExtremeWind/aus/"+\
-			model_name+"/"+model_name+"*"+ensemble+"*.nc")
+			model_name+"/"+model_name+"_"+experiment+"_"+ensemble+"*.nc")
 		mod_regrid = mod[p].interp({"lat":era5.lat, "lon":era5.lon})
 		mod_regrid.to_netcdf(fname,format="NETCDF4_CLASSIC")
 		mod_regrid.close()
 
 	return mod_regrid
+
+def str2bool(v):
+    if isinstance(v, bool):
+       return v
+    if v.lower() in ('yes', 'true', 't', 'y', '1'):
+        return True
+    elif v.lower() in ('no', 'false', 'f', 'n', '0'):
+        return False
+    else:
+        raise argparse.ArgumentTypeError('Boolean value expected.')
 
 if __name__ == "__main__":
 
@@ -377,17 +464,19 @@ if __name__ == "__main__":
 	    +" quantile mapping to ERA5 and plotting")
 	parser.add_argument("-p",help="Parameter",required=True)
 	parser.add_argument("--force_compute",help="Force quantile mapping of CMIP data?",default=False,\
-		type=bool)
+		type=str2bool)
 	parser.add_argument("--force_cmip_regrid",help="Force regridding of CMIP data?",default=False,\
-		type=bool)
+		type=str2bool)
 	parser.add_argument("--lsm",help="Mask ocean values using the ERA5 lsm?",default=True,\
-		type=bool)
+		type=str2bool)
 	parser.add_argument("--log",help="Make plots with a LogNorm color-scale, and log y-axis?",default=False,\
-		type=bool)
+		type=str2bool)
 	parser.add_argument("--plot",help="Make plots and save?",default=True,\
-		type=bool)
+		type=str2bool)
 	parser.add_argument("--geo_plot",help="Spatial plots on a geo-grid with coastlines?",default=True,\
-		type=bool)
+		type=str2bool)
+	parser.add_argument("--dmax",help="Resample to daily max? If so, threshold exceedence "\
+		+"frequencies will be plotted, instead of mean plots" ,default=False, type=str2bool)
 	parser.add_argument("--rv1",help="Vmin for relative spatial difference plots",default=None,\
 		type=float)
 	parser.add_argument("--rv2",help="Vmax for relative spatial difference plots",default=None,\
@@ -400,6 +489,8 @@ if __name__ == "__main__":
 		type=float)
 	parser.add_argument("--v2",help="Vmax for spatial mean plots",default=None,\
 		type=float)
+	parser.add_argument("--threshold",help="Threshold for dmax plots",default=0,\
+		type=float)
 	args = parser.parse_args()
 	p = args.p
 	force_compute = args.force_compute
@@ -408,27 +499,37 @@ if __name__ == "__main__":
 	log = args.log
 	plot = args.plot
 	geo_plot = args.geo_plot
+	dmax = args.dmax
 	rel_vmin = args.rv1
 	rel_vmax = args.rv2
 	abs_vmin = args.av1
 	abs_vmax = args.av2
 	vmin = args.v1
 	vmax = args.v2
+	threshold = args.threshold
 
 	#Implicitly set some settings
-	subplots = [5,3]
 	ProgressBar().register()
 	if p in ["srhe_left","ml_cape"]:
 		replace_zeros=True
 	else:
 		replace_zeros=False
-	models = [ ["ERA5",""] , ["ACCESS1-3","r1i1p1",5,""] , ["ACCESS1-0","r1i1p1",5,""] , \
-			["ACCESS-ESM1-5","r1i1p1f1",6,"CSIRO"] , ["BNU-ESM","r1i1p1",5,""] , \
-			["CNRM-CM5","r1i1p1",5,""] , ["GFDL-CM3","r1i1p1",5,""] , \
-			["GFDL-ESM2G","r1i1p1",5,""] , ["GFDL-ESM2M","r1i1p1",5,""] , \
-			["IPSL-CM5A-LR","r1i1p1",5,""] , ["IPSL-CM5A-MR","r1i1p1",5,""] , \
-			["MIROC5","r1i1p1",5,""] , ["MRI-CGCM3","r1i1p1",5,""], \
-			["bcc-csm1-1","r1i1p1",5,""], \
+	#subplots = [5,3]
+	subplots = [1,2]
+	models = [ ["ERA5",""] ,\
+	#		["ACCESS1-3","r1i1p1",5,""] ,\
+	#		["ACCESS1-0","r1i1p1",5,""] , \
+	#		["ACCESS-ESM1-5","r1i1p1f1",6,"CSIRO"] ,\
+	#		["BNU-ESM","r1i1p1",5,""] , \
+	#		["CNRM-CM5","r1i1p1",5,""] ,\
+			["GFDL-CM3","r1i1p1",5,""] , \
+	#		["GFDL-ESM2G","r1i1p1",5,""] , \
+	#		["GFDL-ESM2M","r1i1p1",5,""] , \
+	#		["IPSL-CM5A-LR","r1i1p1",5,""] ,\
+	#		["IPSL-CM5A-MR","r1i1p1",5,""] , \
+	#		["MIROC5","r1i1p1",5,""] ,\
+	#		["MRI-CGCM3","r1i1p1",5,""], \
+	#		["bcc-csm1-1","r1i1p1",5,""], \
 			]
 
 	#For all diagnostics (except logit models), load/coarsen data and quantile-map
@@ -443,20 +544,33 @@ if __name__ == "__main__":
 		out = load_model_data(models, "srhe_left", lsm=lsm)
 		save_logit(models, out_qm, out, lsm, p)
 
+	#Resample to daily max if option is set
+	if dmax:
+		if threshold == 0:
+			raise ValueError("\nMUST SPECIFY THRESHOLD FOR DMAX ANALYSIS\n")
+		out_dmax = daily_max_qm(out_qm, out, models, p, lsm)
+
 	#Make plots
 	if plot:
 		if p not in ["logit_sta","logit_aws"]:
 			plot_hist(out, models, log, p+"_hist")
 			plot_mean_spatial_dist(out, models, subplots, log, geo_plot, \
-				out[0].lon.values, out[0].lat.values, lsm, p+"_mean_spatial_dist")
+				    out[0].lon.values, out[0].lat.values, lsm, p+"_mean_spatial_dist")
 
 		plot_hist(out_qm, models, log, p+"_hist_qm")
-		plot_mean_spatial_dist(out_qm, models, subplots, log, geo_plot, \
+		if dmax:
+			plot_threshold_spatial_dist(out_dmax, models, p, threshold, \
+                            subplots, log, geo_plot, \
+                            out[0].lon.values, out[0].lat.values, lsm, p+"_threshold_spatial_dist",\
+			    vmin=vmin, vmax=vmax)
+			plot_monthly_threshold(out_dmax, models, p, threshold, p+"_monthly_threshold")
+		else:
+			plot_mean_spatial_dist(out_qm, models, subplots, log, geo_plot, \
 			    out[0].lon.values, out[0].lat.values, lsm, p+"_mean_qm_spatial_dist",\
 			    vmin=vmin, vmax=vmax)
-		plot_mean_spatial_diff(out_qm, models, subplots, True, rel_vmin, rel_vmax, geo_plot,\
+			plot_mean_spatial_diff(out_qm, models, subplots, True, rel_vmin, rel_vmax, geo_plot,\
 			    out[0].lon.values, out[0].lat.values, p+"_mean_spatial_rel_diff")
-		plot_mean_spatial_diff(out_qm, models, subplots, False, abs_vmin, abs_vmax, geo_plot,\
+			plot_mean_spatial_diff(out_qm, models, subplots, False, abs_vmin, abs_vmax, geo_plot,\
 			    out[0].lon.values, out[0].lat.values, p+"_mean_spatial_abs_diff")
-		plot_monthly_mean(out_qm, out, models, p, p+"_monthly_mean")
+			plot_monthly_mean(out_qm, out, models, p, p+"_monthly_mean")
 

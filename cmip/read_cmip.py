@@ -12,7 +12,7 @@ import pandas as pd
 from barra_read import date_seq
 from calc_param import get_dp
 
-def read_cmip(model, experiment, ensemble, year, domain, cmip_ver=5, group = "", al33=False):
+def read_cmip(model, experiment, ensemble, year, domain, cmip_ver=5, group = "", al33=False, ver=""):
 
 	if cmip_ver == 5:
 
@@ -23,6 +23,8 @@ def read_cmip(model, experiment, ensemble, year, domain, cmip_ver=5, group = "",
 
 			if group == "":
 				raise ValueError("Group required")
+			if ver == "":
+				raise ValueError("Version required")
 
 			hus_files = np.sort(glob.glob("/g/data/al33/replicas/CMIP5/combined/"+\
 				    group+"/"+model+"/"+experiment+\
@@ -138,6 +140,11 @@ def read_cmip(model, experiment, ensemble, year, domain, cmip_ver=5, group = "",
 	ps = xr.open_mfdataset([ps_files[i] for i in ps_fid], use_cftime=True)
 	ps = ps.sel({"time":np.in1d(ps.time, hus.time)})
 
+	hus = hus.sel({"time":np.in1d(hus.time, ps.time)})
+	ta = ta.sel({"time":np.in1d(ta.time, ps.time)})
+	ua = ua.sel({"time":np.in1d(ua.time, ps.time)})
+	va = va.sel({"time":np.in1d(va.time, ps.time)})
+
 	#Trim to the domain given by "domain", as well as the year given by "year". Expand domain 
 	# for later compairsons with ERA5, and for interpolation of U/V
 	domain[0] = domain[0]-5
@@ -178,7 +185,11 @@ def read_cmip(model, experiment, ensemble, year, domain, cmip_ver=5, group = "",
 		q = hus.hus / (1 - hus.hus)
 		tv = ta.ta * ( ( q + 0.622) / (0.622 * (1+q) ) )
 		p = np.swapaxes(np.swapaxes(ps.ps * np.exp( -9.8*z / (287*tv)), 3, 2), 2, 1)
-		z = np.tile(z.values, [ta.ta.shape[0], 1, 1, 1])
+		if (experiment == "rcp85") & (model in ["ACCESS1-3","ACCESS1-0"]):
+			z = np.swapaxes(z, 0, 1).values
+			orog = orog[0]
+		elif experiment == "historical":
+			z = np.tile(z.values.astype("float32"), [ta.ta.shape[0], 1, 1, 1], )
 	elif np.any(np.in1d(["p0","ap"], names)):
 		#If the model has been stored on a hybrid pressure coordinate, it should have the
 		#   variable "p0". Convert hybrid pressure coordinate to pressure, and calculate 
@@ -193,7 +204,7 @@ def read_cmip(model, experiment, ensemble, year, domain, cmip_ver=5, group = "",
 		tv = ta.ta * ( ( q + 0.622) / (0.622 * (1+q) ) )
 		z = (-287 * tv * (np.log( p / ps.ps)).transpose("time","lev","lat","lon") ) / 9.8
 		orog = trim_cmip5( xr.open_dataset(glob.glob("/g/data/r87/DRSv3/CMIP5/"+\
-		    model+"/"+experiment+"/fx/atmos/r0i0p0/orog/latest/orog*.nc")[0]).orog,\
+		    model+"/historical/fx/atmos/r0i0p0/orog/latest/orog*.nc")[0]).orog,\
 		    domain, year).values
 		orog[orog<0] = 0
 		z = (z + orog).values

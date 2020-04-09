@@ -1,3 +1,5 @@
+from era5_read import get_mask
+from numba import jit
 import argparse
 from mpl_toolkits.basemap import Basemap
 import pandas as pd
@@ -20,8 +22,7 @@ def drop_duplicates(da):
 def daily_max_qm(data, da, models, p, lsm):
 
 	#For a list of quantile-mapped 3d arrays (data), create a DataArray using metadata from da, and 
-	# resample to daily maximum. Save data, and load instead of computing if already exists (depending on
-	# compute time)
+	# resample to daily maximum. Save data.
 
 	print("Resampling to daily max...")
 	out = []
@@ -215,7 +216,10 @@ def plot_mean_spatial_dist(data, models, subplots, log, geo_plot, lon, lat, lsm,
 	try:
 		era5_mean = data[0].mean("time").values.flatten()
 	except:
-		era5_mean = data[0].mean(axis=0).flatten()
+		try:
+			era5_mean = data[0].mean(axis=0).flatten()
+		except:
+			era5_mean = data[0]
 	if lsm:
 		era5_mean = era5_mean[~np.isnan(era5_mean)]
 
@@ -227,7 +231,10 @@ def plot_mean_spatial_dist(data, models, subplots, log, geo_plot, lon, lat, lsm,
 			try:
 				mod_mean = data[i].mean("time").values
 			except:
-				mod_mean = np.nanmean(data[i],axis=0)
+				try:
+					mod_mean = np.nanmean(data[i],axis=0)
+				except:
+					mod_mean = data[i]
 			mod_mean1d = mod_mean.flatten()
 			if lsm:
 				mod_mean1d = mod_mean1d[~np.isnan(mod_mean1d)]
@@ -241,41 +248,37 @@ def plot_mean_spatial_dist(data, models, subplots, log, geo_plot, lon, lat, lsm,
 			plt.title(models[i][0] + " r="+r)
 	plt.savefig("/g/data/eg3/ab4502/figs/CMIP/"+outname+".png")
 
-def load_model_data(models, p, lsm=True, force_cmip_regrid=False, experiment="historical", y1=1979, y2=2005):
+def load_model_data(models, p, era5_data=None, save=True, \
+		era5_regrid=False, lsm=True, force_cmip_regrid=False,\
+		experiment="historical", y1=1979, y2=2005, era5_y1=1979, era5_y2=2005):
 
 	#For each model in the list "models" (including ERA5), load regridded data and slice in time.
 	#If lsm is True, then mask ocean data based on ERA5 lsm
 
-	assert y2 > y1
+	assert y2 >= y1
+	assert era5_y2 >= era5_y1
 
-	out = []
-	era5 = regrid_era5(p)
-	era5 = era5.sel({"time":(era5["time.year"] <= 2005) & \
-				    (era5["time.year"] >= 1979)})
 	era5_lsm = get_era5_lsm()
+	out = []
+	if era5_data is None:
+		era5 = load_era5(p, era5_regrid)
+		era5_data = era5.sel({"time":(era5["time.year"] <= era5_y2) & \
+				    (era5["time.year"] >= era5_y1)})
+		if lsm:
+			era5_data = xr.where(era5_lsm, \
+			    era5_data, np.nan)
 
 	for i in np.arange(len(models)):
 		if models[i][0] == "ERA5":
-			e = era5
+			e = era5_data
 		else:
-			e = regrid_cmip(era5, models[i][0], models[i][1], p, force_cmip_regrid, experiment=experiment)
-
+			e = regrid_cmip(era5_data, models[i][0],\
+				models[i][1], p, y1, y2, \
+				force_cmip_regrid, experiment=experiment, save=save)
 		if lsm:
-			if models[i][0] == "ERA5":
-				e = xr.where(era5_lsm, \
-				    e.sel({"time":(e["time.year"] <= 2005) & \
-				    (e["time.year"] >= 1979)}), np.nan)
-			else:
-				e = xr.where(era5_lsm, \
-				    e.sel({"time":(e["time.year"] <= y2) & \
-				    (e["time.year"] >= y1)}), np.nan)
-		else:
-			if models[i][0] == "ERA5":
-				e = e.sel({"time":(e["time.year"] <= 2005) & \
-				    (e["time.year"] >= 1979)})
-			else:
-				e = e.sel({"time":(e["time.year"] <= y2) & \
-				    (e["time.year"] >= y1)})
+			e = xr.where(era5_lsm, \
+				e, np.nan)
+
 		e = drop_duplicates(e)
 		e.close()
 		out.append(e)
@@ -283,7 +286,7 @@ def load_model_data(models, p, lsm=True, force_cmip_regrid=False, experiment="hi
 	return out
 
 def load_all_qm(data, models, p, lsm, replace_zeros, force_compute=False, \
-	    experiment="historical"):
+	    experiment="historical", loop=True):
 
 	#Loop over all models, and use either load_qm() to load, or qm_cmip_era5() to calculate
 
@@ -296,17 +299,43 @@ def load_all_qm(data, models, p, lsm, replace_zeros, force_compute=False, \
 				print(models[i])
 				model_xhat = create_qm(data[0], data[i], models[i][0],\
 					    models[i][1], p, lsm, replace_zeros,\
-					    experiment=experiment)
+					    experiment=experiment, loop=loop)
 			else:
 				try:
 					model_xhat = load_qm(models[i][0], models[i][1], p, lsm, experiment=experiment)
 				except:
 					print(models[i])
 					model_xhat = create_qm(data[0], data[i], models[i][0],\
-					    models[i][1], p, lsm, replace_zeros, experiment=experiment)
+					    models[i][1], p, lsm, replace_zeros,\
+					    loop, experiment=experiment)
 			out_qm.append(model_xhat)
 
 	return out_qm
+
+@jit
+def qm_cmip_era5_loop(era5_da, model_da, replace_zeros, mask):
+
+	#As in qm_cmip_era5(), but with treating each spatial point as a unique distribution, 
+	# and  matching independantly, rather than treating all spatial points as one distribution
+
+	vals = model_da.values
+	obs = era5_da.values
+	model_xhat = np.zeros(vals.shape) * np.nan
+	for i in np.arange(vals.shape[1]):
+		print(i)
+		for j in np.arange(vals.shape[2]):
+			if mask[i,j] == 1:
+				obs_cdf = ECDF(obs[:,i,j])
+				obs_invcdf = obs_cdf.x
+				model_cdf = ECDF(vals[:,i,j])
+				model_p = np.interp(vals[:,i,j],\
+				model_cdf.x,model_cdf.y)
+				model_xhat[:,i,j] = np.interp(model_p,obs_cdf.y,obs_invcdf)
+			else:
+				model_xhat[:,i,j] = np.nan
+	if replace_zeros:
+		model_xhat[vals == 0] = 0
+	return model_xhat
 
 def qm_cmip_era5(era5_da, model_da, replace_zeros):
 
@@ -360,10 +389,11 @@ def save_logit(models, data, da, lsm, p):
 			    models[i][0]+"_"+models[i][1]+"_"+p+".nc"
 		xr.Dataset(data_vars={p:(("time", "lat", "lon"), data[i])},\
 		    coords={"time":da[i].time, "lat":da[i].lat, "lon":da[i].lon}).\
-		    to_netcdf(fname, mode="w")
+		    to_netcdf(fname, mode="w", engine="h5netcdf",\
+			    encoding={p:{"zlib":True, "complevel":9}})
 
 def create_qm(era5_da, model_da, model_name, ensemble, p, lsm, replace_zeros, \
-	    experiment="historical"):
+	    experiment="historical", loop=True):
 
 	if lsm:
 		fname = "/g/data/eg3/ab4502/ExtremeWind/aus/regrid_1.5/"+\
@@ -371,10 +401,15 @@ def create_qm(era5_da, model_da, model_name, ensemble, p, lsm, replace_zeros, \
 	else:
 		fname = "/g/data/eg3/ab4502/ExtremeWind/aus/regrid_1.5/"+\
 		    model_name+"_"+experiment+"_"+ensemble+"_"+p+"_qm.nc"
-	mod_xhat = qm_cmip_era5(era5_da, model_da, replace_zeros)
+	if loop:
+		mod_xhat = qm_cmip_era5_loop(era5_da, model_da, replace_zeros, \
+		    get_mask(era5_da.lon.values, era5_da.lat.values))
+	else:
+		mod_xhat = qm_cmip_era5(era5_da, model_da, replace_zeros)
 	xr.Dataset(data_vars={p+"_qm":(("time", "lat", "lon"), mod_xhat)},\
 		    coords={"time":model_da.time, "lat":model_da.lat, "lon":model_da.lon}).\
-		    to_netcdf(fname, mode="w")
+		    to_netcdf(fname, mode="w", engine="h5netcdf",\
+			    encoding={p+"_qm":{"zlib":True, "complevel":9}})
 	
 	return mod_xhat
 
@@ -385,20 +420,22 @@ def get_cmip_lsm(era5, model, experiment, cmip_ver, group):
 	return np.flipud(np.where(lsm_regrid.values >= 50, 1, 0))
 	
 
-def get_era5_lsm():
+def get_era5_lsm(regrid=False):
 
 	#load the era5 lsm, subset to Australia, and coarsen as in regrid_era5(). Consider the coarse
 	# lsm to be land if greater than 50% of the points are land
 
-	from era5_read import get_mask
     
 	f = xr.open_mfdataset("/g/data/eg3/ab4502/ExtremeWind/aus/era5/era5_19790101_19790131.nc")
 	lsm = get_mask(f.lon.values,f.lat.values)
-	lsm_coarse = xr.DataArray(lsm, dims=("lat","lon")).coarsen({"lat":6,"lon":6},\
+	if regrid:
+		lsm_coarse = xr.DataArray(lsm, dims=("lat","lon")).coarsen({"lat":6,"lon":6},\
 			    boundary="trim", side="left").sum()
-	return xr.where(lsm_coarse>=18, 1, 0).values
+		return xr.where(lsm_coarse>=18, 1, 0).values
+	else:
+		return lsm
 
-def regrid_era5(p):
+def load_era5(p, regrid=False):
 
 	#Regrid ERA5 convective diagnostics to a 1.5 degree, 6 hourly grid over the Aus region, by
 	# taking the mean over each 1.5 degree region.
@@ -411,20 +448,25 @@ def regrid_era5(p):
 	fname = "/g/data/eg3/ab4502/ExtremeWind/aus/regrid_1.5/"+\
 		"era5_"+p+".nc"
 
-	if (os.path.isfile(fname)):
-		era5_coarse = xr.open_dataset(fname)["__xarray_dataarray_variable__"]
+	if regrid:
+		if (os.path.isfile(fname)):
+			era5_coarse = xr.open_dataset(fname)["__xarray_dataarray_variable__"]
+		else:
+			print("Regridding ERA5 to a 1.5 degree grid...")
+			ProgressBar().register()
+			era5 = xr.open_mfdataset("/g/data/eg3/ab4502/ExtremeWind/aus/era5/era5_*")
+			era5_sub = era5[p].sel({"time":np.in1d(era5["time.hour"], [0,6,12,18])})
+			era5_coarse = era5_sub.coarsen({"lat":6, "lon":6}, boundary="trim", side="left").\
+					mean()
 	else:
-		print("Regridding ERA5 to a 1.5 degree grid...")
-		ProgressBar().register()
-		era5 = xr.open_mfdataset("/g/data/eg3/ab4502/ExtremeWind/aus/era5/era5_*")
-		era5_sub = era5[p].sel({"time":np.in1d(era5["time.hour"], [0,6,12,18])})
-		era5_coarse = era5_sub.coarsen({"lat":6, "lon":6}, boundary="trim", side="left").\
-				mean()
-		era5_coarse.to_netcdf(fname,format="NETCDF4_CLASSIC")
+			print("Loading ERA5...")
+			era5 = xr.open_mfdataset("/g/data/eg3/ab4502/ExtremeWind/aus/era5/era5_*")
+			era5_coarse = era5[p].sel({"time":np.in1d(era5["time.hour"], [0,6,12,18])})
 
 	return era5_coarse
 
-def regrid_cmip(era5, model_name, ensemble, p, force_regrid, experiment="historical"):
+def regrid_cmip(era5, model_name, ensemble, p, y1, y2, force_regrid,\
+	experiment="historical", save=True):
 
 	#Regrid convective diagnostics from CMIP models to the coarsened ERA5 grid over Aus (1.5 
 	# degree spacing)
@@ -433,15 +475,22 @@ def regrid_cmip(era5, model_name, ensemble, p, force_regrid, experiment="histori
 		model_name+"_"+experiment+"_"+ensemble+"_"+p+".nc"
 
 	if (os.path.isfile(fname)) & (~force_regrid):
+		print("Loading regridded "+model_name+" data...")
 		f = xr.open_dataset(fname)
+		f = f.sel({"time":(f["time.year"] <= y2) & (f["time.year"] >= y1)})
 		mod_regrid = f[p]
 		f.close()
 	else:
-		print("Regridding "+model_name+" to a 1.5 degree grid...")
+		spacing = str(era5.lon.values[-1] - era5.lon.values[-2])
+		print("Regridding "+experiment+" "+\
+		    model_name+" to a "+spacing+" degree grid...")
 		mod = xr.open_mfdataset("/g/data/eg3/ab4502/ExtremeWind/aus/"+\
 			model_name+"/"+model_name+"_"+experiment+"_"+ensemble+"*.nc")
-		mod_regrid = mod[p].interp({"lat":era5.lat, "lon":era5.lon})
-		mod_regrid.to_netcdf(fname,format="NETCDF4_CLASSIC")
+		mod = mod.sel({"time":(mod["time.year"] <= y2) & (mod["time.year"] >= y1)})
+		mod_regrid = mod[p].interp({"lat":era5.lat, "lon":era5.lon}).persist()
+		if save:
+			mod_regrid.to_netcdf(fname,format="NETCDF4_CLASSIC",\
+				encoding={p:{"zlib":True, "complevel":9}})
 		mod_regrid.close()
 
 	return mod_regrid
@@ -463,6 +512,16 @@ if __name__ == "__main__":
 	parser = argparse.ArgumentParser(description='Post-processing of CMIP convective diagnostics, including'\
 	    +" quantile mapping to ERA5 and plotting")
 	parser.add_argument("-p",help="Parameter",required=True)
+	parser.add_argument("--y1",help="Start year for CMIP models",default=1979,\
+		type=float)
+	parser.add_argument("--y2",help="End year for CMIP models",default=2005,\
+		type=float)
+	parser.add_argument("--era5_y1",help="Start year for ERA5",default=1979,\
+		type=float)
+	parser.add_argument("--era5_y2",help="End year for ERA5",default=2005,\
+		type=float)
+	parser.add_argument("--loop",help="If True, then loop over each spatial point when QQ-matching",default=True,\
+		type=str2bool)
 	parser.add_argument("--force_compute",help="Force quantile mapping of CMIP data?",default=False,\
 		type=str2bool)
 	parser.add_argument("--force_cmip_regrid",help="Force regridding of CMIP data?",default=False,\
@@ -493,6 +552,11 @@ if __name__ == "__main__":
 		type=float)
 	args = parser.parse_args()
 	p = args.p
+	y1 = args.y1
+	y2 = args.y2
+	era5_y1 = args.era5_y1
+	era5_y2 = args.era5_y2
+	loop = args.loop
 	force_compute = args.force_compute
 	force_cmip_regrid = args.force_cmip_regrid
 	lsm = args.lsm
@@ -534,10 +598,11 @@ if __name__ == "__main__":
 
 	#For all diagnostics (except logit models), load/coarsen data and quantile-map
 	if p not in ["logit_sta","logit_aws"]:
-		print("Loading re-gridded model data...")
-		out = load_model_data(models, p, lsm=lsm, force_cmip_regrid=force_cmip_regrid) 
+		out = load_model_data(models, p, lsm=lsm, force_cmip_regrid=force_cmip_regrid,\
+			y1=y1, y2=y2, era5_y1=era5_y1, era5_y2=era5_y2) 
 		print("Quantile mapping to ERA5...")
-		out_qm = load_all_qm(out, models, p, lsm, replace_zeros, force_compute=force_compute)
+		#out_qm = load_all_qm(out, models, p, lsm, replace_zeros, force_compute=force_compute)
+		out_qm = load_all_qm(out, models, p, lsm, replace_zeros, force_compute=force_compute, loop=loop)
 	#Or else, Load quantile mapped variables and calculate logit model
 	else:
 		out_qm = calc_logit(models, p, lsm)

@@ -268,6 +268,118 @@ def test_dist_assumption(combined,gust_type,stns=False,threshold=0):
 
 	plt.show()
 
+def reanalysis_check():
+
+	import pandas as pd
+	import numpy as np
+	import matplotlib.pyplot as plt
+
+	#Load in reanalysis gusts, and observations. Plot scatterplots, with convective and non-convective
+	# gusts shown separately. Show lines of best fit
+	barra = pd.read_pickle("/g/data/eg3/ab4502/ExtremeWind/points/barra_allvars_2005_2018.pkl")
+	era5 = pd.read_pickle("/g/data/eg3/ab4502/ExtremeWind/points/era5_allvars_2005_2018.pkl")
+	obs = pd.read_pickle("/g/data/eg3/ab4502/ExtremeWind/obs/aws/convective_wind_gust_aus_2005_2018.pkl")
+	obs["hourly_ceil_utc"] = pd.DatetimeIndex(obs["gust_time_utc"]).ceil("1H")
+	barra_sta_wg = pd.merge(obs[["stn_name","wind_gust","hourly_ceil_utc","tc_affected","lightning","is_sta"]],\
+                barra, how="left",left_on=["stn_name","hourly_ceil_utc"], right_on=["loc_id","time"]).\
+		dropna(subset=["ml_cape"])
+	barra_aws_wg = barra_sta_wg.dropna(subset=["wind_gust"])
+	era5_sta_wg = pd.merge(obs[["stn_name","wind_gust","hourly_ceil_utc","tc_affected","lightning","is_sta"]],\
+                era5, how="left",left_on=["stn_name","hourly_ceil_utc"], right_on=["loc_id","time"]).\
+		dropna(subset=["ml_cape"])
+	era5_aws_wg = era5_sta_wg.dropna(subset=["wind_gust"])
+
+	#Find poly fits and correlations
+	barra_conv_fit =np.polynomial.polynomial.Polynomial.fit(\
+		    barra_aws_wg.query("(wind_gust >= 25) & (lightning >= 2) & (tc_affected==0)")\
+		    ["wind_gust"], barra_aws_wg.query("(wind_gust >= 25) & (lightning >= 2) & (tc_affected==0)")["wg10"], 1)
+	barra_conv_corr =np.corrcoef(\
+		    barra_aws_wg.query("(wind_gust >= 25) & (lightning >= 2) & (tc_affected==0)")\
+		    ["wind_gust"], barra_aws_wg.query("(wind_gust >= 25) & (lightning >= 2) & (tc_affected==0)")["wg10"])[1,0]
+	barra_conv_fit_x, barra_conv_fit_y = barra_conv_fit.linspace(10)
+	barra_non_conv_fit =np.polynomial.polynomial.Polynomial.fit(\
+		    barra_aws_wg.query("(wind_gust >= 25) & (lightning < 2) & (tc_affected==0)")\
+		    ["wind_gust"], barra_aws_wg.query("(wind_gust >= 25) & (lightning < 2) & (tc_affected==0)")["wg10"], 1)
+	barra_non_conv_corr =np.corrcoef(\
+		    barra_aws_wg.query("(wind_gust >= 25) & (lightning < 2) & (tc_affected==0)")\
+		    ["wind_gust"], barra_aws_wg.query("(wind_gust >= 25) & (lightning < 2) & (tc_affected==0)")["wg10"])[1,0]
+	barra_non_conv_fit_x, barra_non_conv_fit_y = barra_non_conv_fit.linspace(10)
+	barra_tc_fit =np.polynomial.polynomial.Polynomial.fit(\
+		    barra_aws_wg.query("(wind_gust >= 25) & (tc_affected==1)")\
+		    ["wind_gust"], barra_aws_wg.query("(wind_gust >= 25) & (tc_affected==1)")["wg10"], 1)
+	barra_tc_fit_x, barra_tc_fit_y = barra_tc_fit.linspace(10)
+	barra_tc_corr =np.corrcoef(\
+		    barra_aws_wg.query("(wind_gust >= 25) & (tc_affected == 1)")\
+		    ["wind_gust"], barra_aws_wg.query("(wind_gust >= 25) & (tc_affected==1)")["wg10"])[1,0]
+	era5_conv_fit =np.polynomial.polynomial.Polynomial.fit(\
+		    era5_aws_wg.query("(wind_gust >= 25) & (lightning >= 2 & (tc_affected==0))")\
+		    ["wind_gust"], era5_aws_wg.query("(wind_gust >= 25) & (lightning >= 2) & (tc_affected==0)")["wg10"], 1)
+	era5_conv_corr =np.corrcoef(\
+		    era5_aws_wg.query("(wind_gust >= 25) & (lightning >= 2 & (tc_affected==0))")\
+		    ["wind_gust"], era5_aws_wg.query("(wind_gust >= 25) & (lightning >= 2) & (tc_affected==0)")["wg10"])[1,0]
+	era5_conv_fit_x, era5_conv_fit_y = era5_conv_fit.linspace(10)
+	era5_non_conv_fit =np.polynomial.polynomial.Polynomial.fit(\
+		    era5_aws_wg.query("(wind_gust >= 25) & (lightning < 2) & (tc_affected==0)")\
+		    ["wind_gust"], era5_aws_wg.query("(wind_gust >= 25) & (lightning < 2) & (tc_affected==0)")["wg10"], 1)
+	era5_non_conv_corr =np.corrcoef(\
+		    era5_aws_wg.query("(wind_gust >= 25) & (lightning < 2) & (tc_affected==0)")\
+		    ["wind_gust"], era5_aws_wg.query("(wind_gust >= 25) & (lightning < 2) & (tc_affected==0)")["wg10"])[1,0]
+	era5_non_conv_fit_x, era5_non_conv_fit_y = era5_non_conv_fit.linspace(10)
+	era5_tc_fit =np.polynomial.polynomial.Polynomial.fit(\
+		    era5_aws_wg.query("(wind_gust >= 25) & (tc_affected==1)")\
+		    ["wind_gust"], era5_aws_wg.query("(wind_gust >= 25) & (tc_affected==1)")["wg10"], 1)
+	era5_tc_fit_x, era5_tc_fit_y = era5_tc_fit.linspace(10)
+	era5_tc_corr =np.corrcoef(\
+		    era5_aws_wg.query("(wind_gust >= 25) & (tc_affected == 1)")\
+		    ["wind_gust"], era5_aws_wg.query("(wind_gust >= 25) & (tc_affected == 1)")["wg10"])[1,0]
+
+	#Plot scatterplots for > 25 m/s
+	plt.figure(figsize=[10,6]);plt.subplot(211);ax=plt.gca() 
+	barra_aws_wg.query("(wind_gust >= 25) & (lightning < 2) & (tc_affected==0)").plot(kind="scatter",x="wind_gust",\
+		y="wg10",marker="x",ax=ax, color="tab:blue",label="Non-conv: r="+str(round(barra_non_conv_corr,2)))
+	barra_aws_wg.query("(wind_gust >= 25) & (lightning >= 2) & (tc_affected==0)").plot(kind="scatter",x="wind_gust",\
+		y="wg10",ax=ax,marker="o",color="none",edgecolor="r",label="Conv: r="+str(round(barra_conv_corr,2)))
+	barra_aws_wg.query("(wind_gust >= 25) & (tc_affected==1)").plot(kind="scatter",x="wind_gust",\
+		y="wg10",ax=ax,marker="^",color="none",edgecolor="tab:green",\
+		label="TC affected: r="+str(round(barra_tc_corr,2)))
+	plt.plot([25,40],[25,40],color="k") 
+	plt.plot(barra_conv_fit_x, barra_conv_fit_y, color="r")
+	plt.plot(barra_non_conv_fit_x, barra_non_conv_fit_y, color="tab:blue")
+	plt.plot(barra_tc_fit_x, barra_tc_fit_y, color="tab:green")
+	plt.legend()
+	plt.xlabel("")
+	plt.ylabel("BARRA")
+	plt.subplot(212);ax=plt.gca() 
+	era5_aws_wg.query("(wind_gust >= 25) & (lightning < 2) & (tc_affected==0)").plot(kind="scatter",x="wind_gust",\
+		y="wg10",marker="x",ax=ax, color="tab:blue",label="Non-conv: r="+str(round(era5_non_conv_corr,2)))
+	era5_aws_wg.query("(wind_gust >= 25) & (lightning >= 2) & (tc_affected==0)").plot(kind="scatter",x="wind_gust", \
+		y="wg10",ax=ax,marker="o",color="none",edgecolor="r",label="Conv: r="+str(round(era5_conv_corr,2)))
+	era5_aws_wg.query("(wind_gust >= 25) & (tc_affected==1)").plot(kind="scatter",x="wind_gust",\
+		y="wg10",ax=ax,marker="^",color="none",edgecolor="tab:green",\
+		label="TC affected: r="+str(round(era5_tc_corr,2)))
+	plt.plot([25,40],[25,40],color="k") 
+	plt.plot(era5_conv_fit_x, era5_conv_fit_y, color="r")
+	plt.plot(era5_non_conv_fit_x, era5_non_conv_fit_y, color="tab:blue")
+	plt.plot(era5_tc_fit_x, era5_tc_fit_y, color="tab:green")
+	plt.ylabel("ERA5")
+	plt.xlabel("AWS")
+
+	#Plot scatterplots for all gusts
+	barra_fit = np.polynomial.polynomial.Polynomial.fit(barra_aws_wg["wind_gust"],barra_aws_wg["wg10"], 2)
+	era5_fit = np.polynomial.polynomial.Polynomial.fit(era5_aws_wg["wind_gust"],era5_aws_wg["wg10"], 2)
+	barra_fit_x, barra_fit_y = barra_fit.linspace(10)
+	era5_fit_x, era5_fit_y = era5_fit.linspace(10)
+	plt.subplot(211);ax=plt.gca()
+	barra_aws_wg.plot(kind="scatter",x="wind_gust",y="wg10",color="none",edgecolor="tab:blue",ax=ax)
+	plt.plot(barra_fit_x,barra_fit_y,color="r")
+	plt.plot([0,40],[0,40],"k")
+	plt.ylabel("BARRA");plt.xlabel("")
+	plt.subplot(212);ax=plt.gca()
+	era5_aws_wg.plot(kind="scatter",x="wind_gust",y="wg10",color="none",edgecolor="tab:blue",ax=ax)
+	plt.plot(era5_fit_x,era5_fit_y,color="r")
+	plt.plot([0,40],[0,40],"k")
+	plt.ylabel("ERA5");plt.xlabel("AWS")
+
 if __name__ == "__main__":
 	df = load_wind_gusts(True,remove_incomplete_years=False)
 	#test_dist_assumption(df,["barra_r_gust"],stns=False,threshold=20)

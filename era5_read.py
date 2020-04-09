@@ -198,13 +198,13 @@ def get_lat_lon():
 	ta_file.close()
 	return [lon,lat]
 
-def get_mask(lon,lat):
+def get_mask(lon,lat,thresh=0.5):
 	#Return lsm for a given domain (with lats=lat and lons=lon)
 	lsm,nat_lon,nat_lat = get_lsm()
 	lon_ind = np.where((nat_lon >= lon[0]) & (nat_lon <= lon[-1]))[0]
 	lat_ind = np.where((nat_lat >= lat[-1]) & (nat_lat <= lat[0]))[0]
 	lsm_domain = lsm[(lat_ind[0]):(lat_ind[-1]+1),(lon_ind[0]):(lon_ind[-1]+1)]
-	lsm_domain = np.where(lsm_domain > .5, 1, 0)
+	lsm_domain = np.where(lsm_domain > thresh, 1, 0)
 
 	return lsm_domain
 

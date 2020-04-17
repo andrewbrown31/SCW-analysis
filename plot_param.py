@@ -19,6 +19,55 @@ from scipy.stats import spearmanr as spr
 import matplotlib
 from event_analysis import optimise_pss
 
+def utc_to_lt(df):
+
+	#Convert the time in a dataframe from UTC to LT, for multiple locations
+	tzs = {"Adelaide": "Australia/Adelaide",\
+	    "Alice Springs": "Australia/Darwin","Amberley": "Australia/Brisbane",\
+	    "Broome": "Australia/Perth","Cairns": "Australia/Brisbane",\
+	    "Carnarvon": "Australia/Perth","Ceduna": "Australia/Adelaide",\
+	    "Charleville": "Australia/Brisbane","Cobar": "Australia/Sydney",\
+	    "Coffs Harbour": "Australia/Sydney","Darwin": "Australia/Darwin",\
+	    "East Sale": "Australia/Melbourne","Esperance": "Australia/Perth",\
+	    "Giles": "Australia/Adelaide","Gove": "Australia/Brisbane",\
+	    "Halls Creek": "Australia/Darwin","Hobart": "Australia/Hobart",\
+	    "Kalgoorlie": "Australia/Perth","Mackay": "Australia/Brisbane",\
+	    "Meekatharra": "Australia/Perth","Melbourne": "Australia/Melbourne",\
+	    "Mildura": "Australia/Melbourne","Mount Gambier": "Australia/Adelaide",\
+	    "Mount Isa": "Australia/Brisbane","Oakey": "Australia/Sydney",\
+	    "Perth": "Australia/Perth","Port Hedland": "Australia/Perth",\
+	    "Rockhampton": "Australia/Brisbane","Sydney": "Australia/Sydney",\
+	    "Tennant Creek": "Australia/Darwin","Townsville": "Australia/Brisbane",\
+	    "Wagga Wagga": "Australia/Sydney","Weipa": "Australia/Brisbane",\
+	    "Williamtown": "Australia/Sydney", "Woomera": "Australia/Adelaide"}
+	tzs2 = {"Adelaide": 9.5,\
+	    "Alice Springs": 9.5,"Amberley": 10,\
+	    "Broome": 8,"Cairns": 10,\
+	    "Carnarvon": 8,"Ceduna": 9.5,\
+	    "Charleville": 10,"Cobar": 10,\
+	    "Coffs Harbour": 10,"Darwin": 9.5,\
+	    "East Sale": 10,"Esperance": 8,\
+	    "Giles": 9.5,"Gove": 10,\
+	    "Halls Creek": 9.5,"Hobart": 10,\
+	    "Kalgoorlie": 8,"Mackay": 10,\
+	    "Meekatharra": 8,"Melbourne": 10,\
+	    "Mildura": 10,"Mount Gambier": 9.5,\
+	    "Mount Isa": 10,"Oakey": 10,\
+	    "Perth": 8,"Port Hedland": 8,\
+	    "Rockhampton": 10,"Sydney": 10,\
+	    "Tennant Creek": 9.5,"Townsville": 10,\
+	    "Wagga Wagga": 10,"Weipa": 10,\
+	    "Williamtown": 10, "Woomera": 9.5}
+
+	out_df = pd.DataFrame()
+	for loc in df.loc_id.unique():
+		temp_df = df[df["loc_id"]==loc]
+		#temp_df["time"] = pd.DatetimeIndex(temp_df.time.dt.tz_localize(tz="UTC")).\
+		#	tz_convert(tzs[loc])
+		temp_df["time"] = pd.DatetimeIndex(temp_df.time) + dt.timedelta(hours=tzs2[loc])
+		out_df = pd.concat([out_df, temp_df], axis=0)
+	return out_df
+
 def plot_candidate_variable_kde():
 
 	#For a list of "candidate variables", defined below, plot kde functions for all times, measured events, and reported events
@@ -623,7 +672,7 @@ def obs_versus_mod(model):
 	cols = ["k","grey",'#e41a1c','#377eb8','#4daf4a','#984ea3']
 
 	#Other settings
-	dir_data = "model"  #or "obs"
+	dir_data = "obs"  #or "obs"
 	names = {"is_conv_aws":"Measured", "is_sta":"Reported", "t_totals":"T-Totals",\
 		"dcp":"DCP", "model_aws":"logistic eq. (measured)",\
 		"model_sta":"logistic eq. (reported)"}
@@ -661,7 +710,7 @@ def obs_versus_mod(model):
 	    mod_sta["month"] = pd.DatetimeIndex(mod_sta["time"]).month
 	    #Hourly data
 	    mod_hourly = pd.read_pickle("/g/data/eg3/ab4502/ExtremeWind/points/"+\
-	    "era5_allvars_2005_2018.pkl")
+	    "era5_allvars_2005_2018.pkl").dropna()
 	    #wind direction data
 	    if dir_data == "model":
 		    mod_dir = pd.read_pickle("/g/data/eg3/ab4502/ExtremeWind/points/era5_wind_dir_2005_2018.pkl")
@@ -792,9 +841,13 @@ def obs_versus_mod(model):
 
 		#Plot seasonal and diurnal cycle using hourly reanalysis data, overwriting the "diurnal_df"
 		# and "monthly_df" dataframes
-		df["aws_hour"] = pd.DatetimeIndex(df.gust_time_utc).hour
-		df["sta_hour"] = pd.DatetimeIndex(df.sta_date).hour
-		df["month"] = pd.DatetimeIndex(df.gust_time_utc).month
+		#df["aws_hour"] = pd.DatetimeIndex(df.gust_time_utc).hour
+		#df["sta_hour"] = pd.DatetimeIndex(df.sta_date).hour
+		#df["month"] = pd.DatetimeIndex(df.gust_time_utc).month
+		df["aws_hour"] = pd.DatetimeIndex(df.gust_time_lt).round("H").hour
+		df["sta_hour"] = pd.DatetimeIndex(utc_to_lt(\
+		    df.rename(columns={"sta_date":"time","stn_name":"loc_id"})).time).round("H").hour
+		df["month"] = pd.DatetimeIndex(df.gust_time_lt).month
 		aws_hr = pd.DataFrame(np.unique(df[df["is_conv_aws"]==1]["aws_hour"], \
 			    return_counts=True)).T.set_index(0).\
 			    rename(columns={1:"Measured"})
@@ -808,15 +861,21 @@ def obs_versus_mod(model):
 			    return_counts=True)).T.set_index(0).\
 			    rename(columns={1:"Reported"})
 		month_df = pd.concat([aws_month, sta_month], axis=1)
-		diurnal_df = pd.concat([aws_hr, sta_hr], axis=1)
+		diurnal_df = pd.concat([aws_hr, sta_hr], axis=1).replace(np.nan, 0)
+		mod_hourly = utc_to_lt(mod_hourly)
 		mod_hourly["month"] = pd.DatetimeIndex(mod_hourly.time).month
 		mod_hourly["hour"] = pd.DatetimeIndex(mod_hourly.time).hour
+		#mod_hourly["hour"] = mod_hourly.time.hour
 		for p in ["model_aws","model_sta","dcp","t_totals"]:
+			temp_df = mod_hourly.loc[mod_hourly[p] >= thresh[p]]
 			month_df.loc[:, model+" "+names[p]] = \
-			    mod_hourly.loc[mod_hourly[p] >= thresh[p]]["month"].value_counts().sort_index()
+			    temp_df["month"].value_counts().sort_index()
 			diurnal_df.loc[:, model+" "+names[p]] = \
-			    mod_hourly.loc[mod_hourly[p] >= thresh[p]]["hour"].value_counts().sort_index()
-
+			    temp_df["hour"].value_counts().sort_index()
+		diurnal_df.loc[:,"Measured"] = \
+			diurnal_df.loc[:,"Measured"].rolling(3,min_periods=1).mean()
+		diurnal_df.loc[:,"Reported"] = \
+			diurnal_df.loc[:,"Reported"].rolling(3,min_periods=1).mean()
 		#Distributions of wind direction
 		if dir_data == "obs":
 			aws = read_aws()
@@ -858,12 +917,14 @@ def obs_versus_mod(model):
 		ax.set_xticklabels(["J", "A", "S", "O", "N", "D", "J", "F", "M", "A", "M", "J"]) 
 		plt.xlabel("Month")
 		plt.text(0.05,0.9,label[0],transform=plt.gca().transAxes,fontsize=14)
+
 		ax=plt.subplot(132)
 		(diurnal_df/diurnal_df.sum()).plot(kind="line",color=cols,ax=ax,marker="o",legend=False)
 		ax.grid()
-		plt.xlabel("Time (UTC)")
+		plt.xlabel("Time (LST)")
 		plt.subplots_adjust(bottom=0.3)
 		plt.text(0.05,0.9,label[1],transform=plt.gca().transAxes,fontsize=14)
+
 		ax=plt.subplot(133)
 		wind_dir_data.plot(kind="line", color=cols+["k"], \
 			ax=ax, legend=False,xticks=np.arange(0,len(arr),2))
@@ -878,41 +939,6 @@ def obs_versus_mod(model):
 			ncol=4)
 		ax.grid()
 		plt.text(0.05,0.9,label[2],transform=plt.gca().transAxes,fontsize=14)
-
-		#Compare modelled wind direction with daily max and hourly obs for SCW events
-		#aws = read_aws().rename(columns={"wind_dir":"obs_dir", "wind_gust":"obs_gust"})
-		#mod_aws_combined = pd.merge(mod_hourly, aws, left_on=["loc_id","time"], \
-		#	right_on=["stn_name","time"], how="right").dropna().\
-		#	rename(columns={"wind_dir":"mod_dir"})
-		#conv_gust_df = pd.merge(df[df.is_conv_aws==1],\
-		#	mod_aws_combined[["mod_dir","obs_dir","obs_gust","time","loc_id"]],\
-		#	how="left",left_on=["hourly_floor_utc","stn_name"],\
-		#	right_on=["time","loc_id"]).dropna(subset=["obs_dir"])
-		all_gust_df = pd.merge(df,\
-			mod_hourly.rename(columns={"wind_dir":"mod_dir"})\
-			    [["mod_dir","time","loc_id"]],\
-			how="left",left_on=["hourly_floor_utc","stn_name"],\
-			right_on=["time","loc_id"]).dropna(subset=["wind_dir","mod_dir"])
-		conv_gust_df = pd.merge(df[df.is_conv_aws==1],\
-			mod_hourly.rename(columns={"wind_dir":"mod_dir"})\
-			    [["mod_dir","time","loc_id"]],\
-			how="left",left_on=["hourly_floor_utc","stn_name"],\
-			right_on=["time","loc_id"])
-		#temp = (conv_gust_df[["wind_dir","obs_dir","mod_dir"]]/22.5+0.5).mod(16).astype(int) 
-		temp = (conv_gust_df[["wind_dir","mod_dir"]]/22.5+0.5).mod(16).astype(int) 
-		temp["wind_dir"] = [arr[temp["wind_dir"].iloc[i]] for i in np.arange(temp.shape[0])]
-		#temp["obs_dir"] = [arr[temp["obs_dir"].iloc[i]] for i in np.arange(temp.shape[0])]
-		temp["mod_dir"] = [arr[temp["mod_dir"].iloc[i]] for i in np.arange(temp.shape[0])]
-		ax=plt.subplot(212)
-		temp.apply(pd.value_counts).reindex(arr).plot(ax=ax)
-		plt.title("SCW events")
-
-		ax=plt.subplot(211)
-		plt.title("All daily maximum wind gusts") 
-		temp = (all_gust_df[["wind_dir","mod_dir"]]/22.5+0.5).mod(16).astype(int) 
-		temp["wind_dir"] = [arr[temp["wind_dir"].iloc[i]] for i in np.arange(temp.shape[0])]
-		temp["mod_dir"] = [arr[temp["mod_dir"].iloc[i]] for i in np.arange(temp.shape[0])]
-		temp.apply(pd.value_counts).reindex(arr).plot(ax=ax)
 
 def sta_versus_aws():
 
@@ -956,14 +982,14 @@ def sta_versus_aws():
 	plt.figure(figsize=[8,6])
 	plt.subplot(223)
 	mind=0
-	maxd=1
+	maxd=10
 	scale=10 
 	cm = plt.get_cmap("Reds")
 	norm = matplotlib.colors.Normalize(vmin=mind,vmax=maxd) 
 	#norm = matplotlib.colors.SymLogNorm(0.01,vmin=mind,vmax=maxd) 
 	sm1 = plt.cm.ScalarMappable(cmap=cm, norm=norm) 
 	for i in np.arange(len(locs)): 
-		c = cm(norm((df[(df.is_conv_aws==1) & (df.stn_name==locs[i])].shape[0] / obs[i] )) ) 
+		c = cm(norm((df[(df.is_windy==1) & (df.stn_name==locs[i])].shape[0] / obs[i] )) ) 
 		m.plot( df[df["stn_name"]==locs[i]]["lon"].iloc[0], df[df["stn_name"]==locs[i]]["lat"].iloc[0],
 		"o", linestyle="none", color = c,
 		markersize=scale,
@@ -2234,4 +2260,5 @@ if __name__ == "__main__":
 	#locs = ["Woomera", "Port Augusta", "Adelaide AP", "Mount Gambier"]
 	#[plot_conv_seasonal_cycle(erai, l, ["ml_cape", "s06", "cape*s06"] ) for l in locs]
 
-	plot_ranked_hss()
+	#plot_ranked_hss()
+	obs_versus_mod("BARRA")

@@ -623,7 +623,7 @@ def plot_monthly_mean_scenario(historical_da, scenario_da, \
 				historical_da[i][m]))
                         mean_scenario.append(np.nanmean(\
 				scenario_da[i][m]))
-                plt.plot(era5_mean, "k")
+                plt.plot(era5_mean, "k", marker="x")
                 plt.plot(mean_hist, "b")
                 plt.plot(mean_scenario, "r")
 	    
@@ -745,13 +745,11 @@ def create_qm_combined(era5_da, model_da_hist, model_da_scenario, \
 def load_all_qm_combined(data_hist, data_scenario, models, p, lsm, replace_zeros,\
 	    experiment, hist_y1, hist_y2, scenario_y1, scenario_y2, force_compute=False, loop=True):
                                 
-        out_qm_hist = []                         
-        out_qm_scenario = []                         
+        #out_qm_hist = []                         
+        #out_qm_scenario = []                         
         for i in np.arange(len(models)):    
                 if i == 0:
-                        print("Loading ERA5 data into memory...")
-                        out_qm_hist.append(data_hist[i].values)
-                        out_qm_scenario.append(data_scenario[i].values)
+                        pass
                 else:                   
                         if force_compute:
                                 print("Forcing QQ-mapping of "+models[i][0]+"...")
@@ -780,17 +778,23 @@ def load_all_qm_combined(data_hist, data_scenario, models, p, lsm, replace_zeros
                                             models[i][1], p, lsm, replace_zeros,\
 					    hist_y1, hist_y2, scenario_y1, scenario_y2,\
 					    experiment=experiment)
-                        out_qm_hist.append(model_xhat_hist)
-                        out_qm_scenario.append(model_xhat_scenario)
+                        save_mean([model_xhat_hist], [data_hist[i]], [models[i]], p,\
+				data_hist[0].lon.values, data_hist[0].lat.values,\
+				hist_y1, hist_y2, experiment="historical")
+                        save_mean([model_xhat_scenario], [data_scenario[i]], [models[i]], p,\
+				data_hist[0].lon.values, data_hist[0].lat.values,\
+				scenario_y1, scenario_y2, experiment=experiment)
+                        #out_qm_hist.append(model_xhat_hist)
+                        #out_qm_scenario.append(model_xhat_scenario)
         
-        return out_qm_hist, out_qm_scenario
+        #return out_qm_hist, out_qm_scenario
 
 @jit
 def qm_cmip_combined_loop(era5_da, model_da1, model_da2, replace_zeros, mask):
 
-	model_da = xr.concat([model_da1, model_da2], dim="time") 
+	#model_da = xr.concat([model_da1, model_da2], dim="time") 
 
-	vals = model_da.values
+	#vals = model_da.values
 	vals1 = model_da1.values
 	vals2 = model_da2.values
 	obs = era5_da.values
@@ -799,23 +803,21 @@ def qm_cmip_combined_loop(era5_da, model_da1, model_da2, replace_zeros, mask):
 	model_xhat2 = np.zeros(vals2.shape) * np.nan
 	for m in np.arange(1,13):
 		print(m)
-		model_m_inds = (model_da["time.month"] == m)
+		#model_m_inds = (model_da["time.month"] == m)
 		model_m_inds1 = (model_da1["time.month"] == m)
 		model_m_inds2 = (model_da2["time.month"] == m)
 		obs_m_inds = (era5_da["time.month"] == m)
-		for i in np.arange(vals.shape[1]):
-			for j in np.arange(vals.shape[2]):
+		for i in np.arange(vals1.shape[1]):
+			for j in np.arange(vals1.shape[2]):
 				if mask[i,j] == 1:
 				
 					obs_cdf = ECDF(obs[obs_m_inds,i,j])
-					#obs_p = obs_cdf.y
-					#obs_invcdf = obs_cdf.x
 					obs_invcdf, obs_p = ecdf_to_unique(obs_cdf)
 
-					model_cdf = ECDF(vals[model_m_inds,i,j])
+					#model_cdf = ECDF(vals[model_m_inds,i,j])
+					model_cdf = ECDF(vals1[model_m_inds1,i,j])
 					model_invcdf = model_cdf.x
 					model_p = model_cdf.y
-					#model_invcdf, model_p = ecdf_to_unique(model_cdf)
 					model_p1 = np.interp(vals1[model_m_inds1,i,j],\
 						model_invcdf,model_p)
 					model_p2 = np.interp(vals2[model_m_inds2,i,j],\
@@ -1031,59 +1033,48 @@ if __name__ == "__main__":
 			#For each model, either (a) load quantile-matched CMIP data for the 
 			# given experiment/years if it has been done previously or (b) 
 			# quantile-match a combined historical-scenario distribution at each
-			# spatial point to ERA5.
+			# spatial point to ERA5. Save the output for the puroposes of computing the 
+			# logistic model diagnostic
 			print("Quantile mapping to ERA5...")
-			out_qm_hist, out_qm_scenario = load_all_qm_combined(\
+			#out_qm_hist, out_qm_scenario = load_all_qm_combined(\
+			load_all_qm_combined(\
 				out_hist, out_scenario, models, p, lsm, \
 				replace_zeros, experiment, \
 				hist_y1, hist_y2, scenario_y1, scenario_y2, \
 				force_compute=force_compute)
 			#Save monthly mean distributions of quantile-matched CMIP data
-			save_mean(out_qm_hist, out_hist, models, p, \
-				    out_hist[0].lon.values, \
-				    out_hist[0].lat.values, hist_y1, hist_y2,\
-				     experiment="historical")
-			save_mean(out_qm_scenario[1:], out_scenario[1:],\
-				    models[1:], p, out_scenario[0].lon.values,\
-				    out_scenario[0].lat.values, scenario_y1, scenario_y2,\
-				    experiment=experiment)
+			#save_mean(out_qm_hist, out_hist, models, p, \
+			#	    out_hist[0].lon.values, \
+			#	    out_hist[0].lat.values, hist_y1, hist_y2,\
+			#	     experiment="historical")
+			#save_mean(out_qm_scenario[1:], out_scenario[1:],\
+				    #models[1:], p, out_scenario[0].lon.values,\
+				    #out_scenario[0].lat.values, scenario_y1, scenario_y2,\
+				    #experiment=experiment)
+	else:
 
-	try:
-		hist = get_seasonal_freq(models, p, hist_y1, hist_y2, hist_y1, hist_y2,\
+		try:
+			hist = get_seasonal_freq(models, p, hist_y1, hist_y2, hist_y1, hist_y2,\
 			    experiment="historical")
-		scenario = get_seasonal_freq(models, p, scenario_y1, scenario_y2, hist_y1,\
+			scenario = get_seasonal_freq(models, p, scenario_y1, scenario_y2, hist_y1,\
 			    hist_y2, experiment=experiment)
-		sig = get_seasonal_sig(models, p, scenario_y1, scenario_y2, experiment)
-		plot_mean_spatial_dist(hist, p, models, subplots1, log,\
+			sig = get_seasonal_sig(models, p, scenario_y1, scenario_y2, experiment)
+			plot_mean_spatial_dist(hist, p, models, subplots1, log,\
 			    hist[0].lon.values, hist[0].lat.values, lsm,\
 			    experiment+"/"+p+"_daily_freq", vmin=vmin, vmax=vmax)
-	except:
-		hist = get_mean(models, p, hist_y1, hist_y2, era5_y1, era5_y2, experiment="historical")
-		scenario = get_mean(models, p, scenario_y1, scenario_y2, era5_y1, era5_y2, experiment="rcp85")
+		except:
+			hist = get_mean(models, p, hist_y1, hist_y2, era5_y1, era5_y2, experiment="historical")
+			scenario = get_mean(models, p, scenario_y1, scenario_y2, era5_y1, era5_y2, experiment="rcp85")
+			sig=None
 
-		plot_mean_spatial_dist(hist, p, models, subplots1,\
-			True, hist[0].lon.values, hist[1].lat.values, \
-			True, p+"_qm_historical_mean")
-		sig=None
-	plot_monthly_mean(hist, models, p, p+"_qm_historical_monthly_mean")
-	plot_monthly_mean_scenario(hist, scenario, subplots2, models, p,\
-		experiment+"/"+p+"_monthly_mean_change")
-	plot_scenario_diff(hist, scenario, season, hist[0].lat.values,\
-		hist[0].lon.values, subplots2, models, log,\
-		True, experiment+"/"+p+"_"+season+"_mean_spatial_rel_diff",\
-		vmin=rel_vmin, vmax=rel_vmax, sig=sig)
+		plot_monthly_mean_scenario(hist, scenario, subplots2, models, p,\
+			experiment+"/"+p+"_monthly_mean_change")
+		#plot_mean_spatial_dist(hist, p, models, subplots1,\
+		#	True, hist[0].lon.values, hist[1].lat.values, \
+		#	True, p+"_qm_historical_mean")
+		#plot_monthly_mean(hist, models, p, p+"_qm_historical_monthly_mean")
+		#plot_scenario_diff(hist, scenario, season, hist[0].lat.values,\
+		#	hist[0].lon.values, subplots2, models, log,\
+		#	True, experiment+"/"+p+"_"+season+"_mean_spatial_rel_diff",\
+			#vmin=rel_vmin, vmax=rel_vmax, sig=sig)
 
-	#Compare the historical run to the scenario run
-	#print("Plotting...")
-	#plot_scenario_hist(out_qm_hist, out_qm_scenario, subplots, models, log, experiment+"/"+p+"_hist")
-	#plot_scenario_diff(out_qm_hist, out_qm_scenario, out_hist[0].lat.values,\
-	#	out_hist[0].lon.values, subplots, models, log,\
-	#	False, experiment+"/"+p+"_mean_spatial_abs_diff", vmin=abs_vmin, vmax=abs_vmax)
-	#plot_monthly_mean(out_qm_hist, out_qm_scenario, out_hist, out_scenario,\
-	#	    subplots, models, p, experiment+"/"+p+"_monthly_mean")
-	#plot_mean_spatial_dist(out_qm_hist, models, subplots, log, True,\
-	#	out_hist[0].lon.values, out_hist[0].lat.values, True,\
-	#	experiment+"/"+p+"_hist_mean_spatial_dist")
-	#plot_mean_spatial_dist(out_qm_scenario, models, subplots, log, True,\
-	#	out_hist[0].lon.values, out_hist[0].lat.values, True,\
-	#	experiment+"/"+p+"_scenario_mean_spatial_dist")

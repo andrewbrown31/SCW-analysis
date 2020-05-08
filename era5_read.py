@@ -63,31 +63,31 @@ def read_era5(domain,times):
 	for date in unique_dates:
 
 	#Load ERA-Interim reanalysis files
-		ta_file = nc.Dataset(glob.glob("/g/data/ub4/era5/netcdf/pressure/T/"+date[0:4]+\
-			"/T_era5_aus_"+date+"*.nc")[0])
-		z_file = nc.Dataset(glob.glob("/g/data/ub4/era5/netcdf/pressure/Z/"+date[0:4]+\
-			"/Z_era5_aus_"+date+"*.nc")[0])
-		ua_file = nc.Dataset(glob.glob("/g/data/ub4/era5/netcdf/pressure/U/"+date[0:4]+\
-			"/U_era5_aus_"+date+"*.nc")[0])
-		va_file = nc.Dataset(glob.glob("/g/data/ub4/era5/netcdf/pressure/V/"+date[0:4]+\
-			"/V_era5_aus_"+date+"*.nc")[0])
-		hur_file = nc.Dataset(glob.glob("/g/data/ub4/era5/netcdf/pressure/R/"+date[0:4]+\
-			"/R_era5_aus_"+date+"*.nc")[0])
+		ta_file = nc.Dataset(glob.glob("/g/data/ub4/era5/netcdf/pressure/t/"+date[0:4]+\
+			"/t_era5_aus_"+date+"*.nc")[0])
+		z_file = nc.Dataset(glob.glob("/g/data/ub4/era5/netcdf/pressure/z/"+date[0:4]+\
+			"/z_era5_aus_"+date+"*.nc")[0])
+		ua_file = nc.Dataset(glob.glob("/g/data/ub4/era5/netcdf/pressure/u/"+date[0:4]+\
+			"/u_era5_aus_"+date+"*.nc")[0])
+		va_file = nc.Dataset(glob.glob("/g/data/ub4/era5/netcdf/pressure/v/"+date[0:4]+\
+			"/v_era5_aus_"+date+"*.nc")[0])
+		hur_file = nc.Dataset(glob.glob("/g/data/ub4/era5/netcdf/pressure/r/"+date[0:4]+\
+			"/r_era5_aus_"+date+"*.nc")[0])
 
-		uas_file = nc.Dataset(glob.glob("/g/data/ub4/era5/netcdf/surface/10U/"+date[0:4]+\
-			"/10U_era5_global_"+date+"*.nc")[0])
-		vas_file = nc.Dataset(glob.glob("/g/data/ub4/era5/netcdf/surface/10V/"+date[0:4]+\
-			"/10V_era5_global_"+date+"*.nc")[0])
-		ta2d_file = nc.Dataset(glob.glob("/g/data/ub4/era5/netcdf/surface/2D/"+date[0:4]+\
-			"/2D_era5_global_"+date+"*.nc")[0])
-		tas_file = nc.Dataset(glob.glob("/g/data/ub4/era5/netcdf/surface/2T/"+date[0:4]+\
-			"/2T_era5_global_"+date+"*.nc")[0])
-		ps_file = nc.Dataset(glob.glob("/g/data/ub4/era5/netcdf/surface/SP/"+date[0:4]+\
-			"/SP_era5_global_"+date+"*.nc")[0])
-		cp_file = nc.Dataset(glob.glob("/g/data/ub4/era5/netcdf/surface/CP/"+date[0:4]+\
-			"/CP_era5_global_"+date+"*.nc")[0])
-		wg10_file = nc.Dataset(glob.glob("/g/data/ub4/era5/netcdf/surface/10FG/"+date[0:4]+\
-			"/10FG_era5_global_"+date+"*.nc")[0])
+		uas_file = nc.Dataset(glob.glob("/g/data/ub4/era5/netcdf/surface/u10/"+date[0:4]+\
+			"/u10_era5_global_"+date+"*.nc")[0])
+		vas_file = nc.Dataset(glob.glob("/g/data/ub4/era5/netcdf/surface/v10/"+date[0:4]+\
+			"/v10_era5_global_"+date+"*.nc")[0])
+		ta2d_file = nc.Dataset(glob.glob("/g/data/ub4/era5/netcdf/surface/d2m/"+date[0:4]+\
+			"/d2m_era5_global_"+date+"*.nc")[0])
+		tas_file = nc.Dataset(glob.glob("/g/data/ub4/era5/netcdf/surface/t2m/"+date[0:4]+\
+			"/t2m_era5_global_"+date+"*.nc")[0])
+		ps_file = nc.Dataset(glob.glob("/g/data/ub4/era5/netcdf/surface/sp/"+date[0:4]+\
+			"/sp_era5_global_"+date+"*.nc")[0])
+		cp_file = nc.Dataset(glob.glob("/g/data/ub4/era5/netcdf/surface/cp/"+date[0:4]+\
+			"/cp_era5_global_"+date+"*.nc")[0])
+		wg10_file = nc.Dataset(glob.glob("/g/data/ub4/era5/netcdf/surface/fg10/"+date[0:4]+\
+			"/fg10_era5_global_"+date+"*.nc")[0])
 
 		#Get times to load in from file
 		times = ta_file["time"][:]
@@ -132,8 +132,8 @@ def read_era5(domain,times):
 
 def get_pressure(top):
 	#Returns [no of levels, levels, indices below "top"]
-	ta_file = nc.Dataset(glob.glob("/g/data/ub4/era5/netcdf/pressure/T/2012/"+\
-"T_era5_aus_"+"201201"+"*.nc")[0])
+	ta_file = nc.Dataset(glob.glob("/g/data/ub4/era5/netcdf/pressure/t/2012/"+\
+"t_era5_aus_"+"201201"+"*.nc")[0])
 	p =ta_file["level"][:]
 	p_ind = np.where(p>=top)[0]
 	ta_file.close()
@@ -183,16 +183,16 @@ def format_dates(x):
 	return dt.datetime.strftime(x,"%Y") + dt.datetime.strftime(x,"%m")
 
 def get_lat_lon_sfc():
-	uas_file = nc.Dataset(glob.glob("/g/data/ub4/era5/netcdf/surface/10U/2012/"+\
-"10U_era5_global_"+"201201"+"*.nc")[0])
+	uas_file = nc.Dataset(glob.glob("/g/data/ub4/era5/netcdf/surface/u10/2012/"+\
+"u10_era5_global_"+"201201"+"*.nc")[0])
 	lon = uas_file["longitude"][:]
 	lat = uas_file["latitude"][:]
 	uas_file.close()
 	return [lon,lat]
 
 def get_lat_lon():
-	ta_file = nc.Dataset(glob.glob("/g/data/ub4/era5/netcdf/pressure/T/2012/"+\
-"T_era5_aus_"+"201201"+"*.nc")[0])
+	ta_file = nc.Dataset(glob.glob("/g/data/ub4/era5/netcdf/pressure/t/2012/"+\
+"t_era5_aus_"+"201201"+"*.nc")[0])
 	lon = ta_file["longitude"][:]
 	lat = ta_file["latitude"][:]
 	ta_file.close()

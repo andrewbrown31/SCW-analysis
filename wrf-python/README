@@ -1,0 +1,5 @@
+These are scripts which compile the "wrf-python" package, with changes made by AB. Python scripts need to be copied to the 
+downloaded wrf-python directory, in order for the changes to be complied.
+
+Changes include having LCL, LFC and EL output
+

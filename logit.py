@@ -20,11 +20,11 @@ def logit_test(all_predictors, model, event, model_diagnostics=None):
 	#Load diagnostics/events
 	if model == "era5":
 		pss_df, df_aws, df_sta = optimise_pss("/g/data/eg3/ab4502/ExtremeWind/points/"+\
-			"era5_allvars_2005_2018.pkl", T=1000, compute=False, l_thresh=2,\
-			is_pss="hss", model_name="era5")
+			"era5_allvars_v2_2005_2018.pkl", T=1000, compute=False, l_thresh=2,\
+			is_pss="hss", model_name="era5_v2")
 	elif model == "barra":
 		pss_df, df_aws, df_sta = optimise_pss("/g/data/eg3/ab4502/ExtremeWind/points/"+\
-			"barra_allvars_2005_2018.pkl", T=1000, compute=False, l_thresh=2,\
+			"barra_allvars_2005_2018_2.pkl", T=1000, compute=False, l_thresh=2,\
 			is_pss="hss", model_name="barra")
 	else:
 		raise ValueError("Invalid model name")
@@ -69,7 +69,7 @@ def logit_test(all_predictors, model, event, model_diagnostics=None):
 
 	pd.DataFrame({"predictors":param_out, "hss":hss_out, "pss":pss_out,\
 		"pss_thresh":pss_thresh_out, "hss_thresh":hss_thresh_out}).\
-		to_csv("/g/data/eg3/ab4502/ExtremeWind/points/logit_skill_"+model+"_"+event+".csv",\
+		to_csv("/g/data/eg3/ab4502/ExtremeWind/points/logit_skill_"+model+"_v2_"+event+".csv",\
 		index=False)	
 
 	#Now do the same scores for diagnostics
@@ -459,9 +459,9 @@ if __name__ == "__main__":
 	#		"Umean06","s06",\
 	#		"lr_freezing","qmean01","qmeansubcloud","lr36","mhgt"],\
 	#	"barra","is_conv_aws")
-	#logit_test(["ml_cape","srhe_left","ml_el",\
-	#		"Umean06","s03",\
-	#		"lr36","lr_freezing","mhgt","qmeansubcloud","qmean01"],\
-	#	"era5","is_conv_aws")
+	logit_test(["ml_cape","srhe_left","ml_el",\
+			"Umean06","s03",\
+			"lr36","mhgt","qmeansubcloud","qmean01","te_diff"],\
+		"era5","is_conv_aws")
 
-	run_logit()
+	#run_logit()

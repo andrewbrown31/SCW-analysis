@@ -1134,22 +1134,28 @@ if __name__ == "__main__":
 
 	#Assign p levels to a 3d array, with same dimensions as input variables (ta, hgt, etc.)
 	#If the 3d p-lvl array already exists, then declare the variable "mdl_lvl" as true. 
-	try:
-		p_3d;
-		mdl_lvl = True
-		full_p3d = p_3d
-	except:
-		mdl_lvl = False
-		p_3d = np.moveaxis(np.tile(p,[ta.shape[2],ta.shape[3],1]),[0,1,2],[1,2,0]).\
+	#TODO: The commented code below was implemented for CMIP model data, where some models are on model levels
+	#   and others are on pressure levels. This code works fine in wrf_non_parallel.py. However, in this (the
+	#   parallel) version, this code causes failure. This is because "p_3d" has been parsed as a NoneType object
+	#   to each parallel rank, and so the "try" block is always executed. NOTE that "mdl_lvl" is also used
+	#   inside the "for" loop below, and has also been commented out
+	#try:
+	#	p_3d;
+	#	mdl_lvl = True
+	#	full_p3d = p_3d
+	#except:
+	#	mdl_lvl = False
+	#	p_3d = np.moveaxis(np.tile(p,[ta.shape[2],ta.shape[3],1]),[0,1,2],[1,2,0]).\
+	#		astype(np.float32)
+	p_3d = np.moveaxis(np.tile(p,[ta.shape[2],ta.shape[3],1]),[0,1,2],[1,2,0]).\
 			astype(np.float32)
+	mdl_lvl=False
 
 	tot_start = dt.datetime.now()
 	output = np.zeros((ta_chunk.shape[0]*ps_chunk.shape[1],len(param)))
 	for t in np.arange(0,ta_chunk.shape[0]):
 		cape_start = dt.datetime.now()
 	
-		print(date_list[t])
-
 		if mdl_lvl:
 			p_3d = full_p3d[t]
 

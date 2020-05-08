@@ -14,7 +14,6 @@ import os
 try:
 	import metpy.units as units
 	import metpy.calc as mpcalc
-	from mpi4py import MPI
 except:
 	pass
 import wrf
@@ -44,11 +43,8 @@ def fill_output(output, t, param, ps, p, data):
 
 	return output
 
-
-if __name__ == "__main__":
-
-	warnings.simplefilter("ignore")
-
+def main():
+	load_start = dt.datetime.now()
 	#Try parsing arguments using argparse
 	parser = argparse.ArgumentParser(description='wrf non-parallel convective diagnostics processer')
 	parser.add_argument("-m",help="Model name",required=True)
@@ -226,6 +222,7 @@ if __name__ == "__main__":
 		p_3d = np.moveaxis(np.tile(p,[ta.shape[2],ta.shape[3],1]),[0,1,2],[1,2,0]).\
 			astype(np.float32)
 
+	print("LOAD TIME..."+str(dt.datetime.now()-load_start))
 	tot_start = dt.datetime.now()
 	for t in np.arange(0,ta.shape[0]):
 		output = np.zeros((1, ps.shape[1], ps.shape[2], len(param)))
@@ -775,3 +772,11 @@ if __name__ == "__main__":
 		save_netcdf(region, model, out_name, date_list, lat, lon, param, param_out, \
 			out_dtype = "f4", compress=True)
 
+	print(dt.datetime.now() - tot_start)
+
+if __name__ == "__main__":
+
+
+	warnings.simplefilter("ignore")
+
+	main()

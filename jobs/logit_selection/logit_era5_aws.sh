@@ -6,7 +6,8 @@
 #PBS -l ncpus=16
 #PBS -o /home/548/ab4502/working/ExtremeWind/jobs/messages/logit_era5_aws.o
 #PBS -e /home/548/ab4502/working/ExtremeWind/jobs/messages/logit_era5_aws.e
-#PBS -lstorage=gdata/eg3
+#PBS -l storage=gdata/eg3+gdata/ub4+gdata/ma05
+#PBS -l place=pack:exclhost
 
 source activate wrfpython3.6
 

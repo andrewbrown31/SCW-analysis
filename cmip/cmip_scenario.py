@@ -1036,21 +1036,20 @@ if __name__ == "__main__":
 			# spatial point to ERA5. Save the output for the puroposes of computing the 
 			# logistic model diagnostic
 			print("Quantile mapping to ERA5...")
-			#out_qm_hist, out_qm_scenario = load_all_qm_combined(\
 			load_all_qm_combined(\
 				out_hist, out_scenario, models, p, lsm, \
 				replace_zeros, experiment, \
 				hist_y1, hist_y2, scenario_y1, scenario_y2, \
 				force_compute=force_compute)
 			#Save monthly mean distributions of quantile-matched CMIP data
-			#save_mean(out_qm_hist, out_hist, models, p, \
-			#	    out_hist[0].lon.values, \
-			#	    out_hist[0].lat.values, hist_y1, hist_y2,\
-			#	     experiment="historical")
-			#save_mean(out_qm_scenario[1:], out_scenario[1:],\
-				    #models[1:], p, out_scenario[0].lon.values,\
-				    #out_scenario[0].lat.values, scenario_y1, scenario_y2,\
-				    #experiment=experiment)
+			save_mean(out_qm_hist, out_hist, models, p, \
+				    out_hist[0].lon.values, \
+				    out_hist[0].lat.values, hist_y1, hist_y2,\
+				     experiment="historical")
+			save_mean(out_qm_scenario[1:], out_scenario[1:],\
+				    models[1:], p, out_scenario[0].lon.values,\
+				    out_scenario[0].lat.values, scenario_y1, scenario_y2,\
+				    experiment=experiment)
 	else:
 
 		try:

@@ -2,26 +2,30 @@
 
 #PBS -P eg3 
 #PBS -q normal
-#PBS -l walltime=48:00:00,mem=256GB 
-#PBS -l ncpus=32
-#PBS -o /home/548/ab4502/working/ExtremeWind/jobs/messages/barra_fc_wrf_python_YEAR.o 
-#PBS -e /home/548/ab4502/working/ExtremeWind/jobs/messages/barra_fc_wrf_python_YEAR.e 
-#PBS -l other=gdata<x>
+#PBS -l walltime=48:00:00,mem=64GB 
+#PBS -l ncpus=1
+#PBS -o /home/548/ab4502/working/ExtremeWind/jobs/messages/barra_fc_wrf_python_YEAR_MMstart.o 
+#PBS -e /home/548/ab4502/working/ExtremeWind/jobs/messages/barra_fc_wrf_python_YEAR_MMstart.e 
+#PBS -l storage=gdata/eg3+gdata/ub4+gdata/ma05
+#PBS -N YEAR_MMstart
  
 #Set up conda/shell environments 
-conda activate wrfpython3.6 
-module load mpi4py/3.0.0-py3 
-module unload python3/3.6.2 
+source activate wrfpython3.6 
 
 #Initialise date
-d=YEAR-01-01
+d=YEAR-MMstart-01
 #Specify end date
-while [ "$d" != YearPlusOne-01-01 ]; do
+while [ "$d" != YearPlusOne-MMend-01 ]; do
 
   start_time=$(date -d "$d" +%Y%m%d)"00"
   end_time=$(date -d "$d"  +%Y%m%d)"23"
-  echo "INFO: RUNNING WRFPYTHON ON DATA FROM" $start_time "to" $end_time
-  mpiexec python -m mpi4py /home/548/ab4502/working/ExtremeWind/wrf_parallel.py "barra_fc" "aus" $start_time $end_time "True" "barra_fc" 1
+  file="/g/data/eg3/ab4502/ExtremeWind/aus/barra_fc/barra_fc_$(date -d "$d" +%Y%m%d)_$(date -d "$d"  +%Y%m%d).nc"
+  if [ -e ${file} ]; then
+     echo "INFO: FILE ALREADY EXISTS, GOING TO THE NEXT DAY,,,"
+  else
+     echo "INFO: RUNNING WRFPYTHON ON DATA FROM" $start_time "to" $end_time
+     python /home/548/ab4502/working/ExtremeWind/wrf_non_parallel.py -m barra_fc -r aus -t1 $start_time -t2 $end_time --issave True --outname barra_fc
+  fi
 
   #REMOVE OLD MONTHLY FILES (done every day, but will only work the first day each month for one of the potential "month_end_date"s)
   month_start_date=$(date -d "$d" +%Y%m)"01"
@@ -43,8 +47,8 @@ done
 #Concaternate daily netcdf output into monthly files
 module load cdo
 path="/g/data/eg3/ab4502/ExtremeWind/aus/barra_fc/"
-d=YEAR-01-01
-while [ "$d" != YearPlusOne-01-01 ]; do
+d=YEAR-MMstart-01
+while [ "$d" != YearPlusOne-MMend-01 ]; do
 
   files=$(date -d "$d" +%Y%m)
   start_date=$(date -d "$d" +%Y%m%d)

@@ -24,8 +24,7 @@ def diagnostics_aws_compare():
 	#Plot 2-d histogram comparing ~4 diagnostics from BARRA and ERA5 with measured gust speeds
 
 	#Load model data and obs at station locations.
-	barra = pd.read_pickle("/g/data/eg3/ab4502/ExtremeWind/points/barra_allvars_2005_2018.pkl")
-	#barra = pd.read_pickle("/g/data/eg3/ab4502/ExtremeWind/points/barra_rad50lsm_2005_2018_max.pkl")
+	barra = pd.read_pickle("/g/data/eg3/ab4502/ExtremeWind/points/barra_allvars_2005_2018_2.pkl")
 	era5 = pd.read_pickle("/g/data/eg3/ab4502/ExtremeWind/points/era5_allvars_2005_2018.pkl")
 	obs = pd.read_pickle("/g/data/eg3/ab4502/ExtremeWind/obs/aws/convective_wind_gust_aus_2005_2018.pkl")
 	obs["hourly_ceil_utc"] = pd.DatetimeIndex(obs["gust_time_utc"]).ceil("1H")
@@ -48,18 +47,12 @@ def diagnostics_aws_compare():
 	barra_hss_floor, temp, temp1 = optimise_pss("/g/data/eg3/ab4502/ExtremeWind/points/"+\
 		"barra_allvars_2005_2018_2.pkl",\
 		T=1000, compute=False, l_thresh=2, is_pss="hss", model_name="barra_fc") 
-	#barra_hss_floor, temp, temp1 = optimise_pss("/g/data/eg3/ab4502/ExtremeWind/points/"+\
-	#	"barra_rad50lsm_2005_2018_max.pkl",time="floor",\
-	#	T=1000, compute=False, l_thresh=2, is_pss="hss", model_name="barra_rad50lsm") 
 	era5_hss_floor, temp, temp1 = optimise_pss("/g/data/eg3/ab4502/ExtremeWind/points/"+\
 		"era5_allvars_2005_2018.pkl",\
 		T=1000, compute=False, l_thresh=2, is_pss="hss", model_name="era5")
 	barra_hss_ceil, temp, temp1 = optimise_pss("/g/data/eg3/ab4502/ExtremeWind/points/"+\
 		"barra_allvars_2005_2018_2.pkl",time="ceil",\
 		T=1000, compute=False, l_thresh=2, is_pss="hss", model_name="barra_fc") 
-	#barra_hss_ceil, temp, temp1 = optimise_pss("/g/data/eg3/ab4502/ExtremeWind/points/"+\
-	#	"barra_rad50lsm_2005_2018_max.pkl",time="ceil",\
-	#	T=1000, compute=False, l_thresh=2, is_pss="hss", model_name="barra_rad50lsm") 
 	era5_hss_ceil, temp, temp1 = optimise_pss("/g/data/eg3/ab4502/ExtremeWind/points/"+\
 		"era5_allvars_2005_2018.pkl",time="ceil",\
 		T=1000, compute=False, l_thresh=2, is_pss="hss", model_name="era5")
@@ -74,6 +67,7 @@ def diagnostics_aws_compare():
 		    np.concatenate([ [0], np.logspace(-2,1,19)] ), np.concatenate([ [0], np.logspace(1,6,19)] ) ] 
 	label_a = ["a)","c)","e)","g)"]
 	label_b = ["b)","d)","f)","h)"]
+	plt.figure(figsize=[8,8])
 
 	#Plot for each parameter
 	for p in np.arange(len(params)):
@@ -98,16 +92,21 @@ def diagnostics_aws_compare():
 				era5_aws_p.loc[(era5_aws_p["wind_gust"]>=25) & (era5_aws_p["lightning"]>=2), params[p]], "rx",\
 				markersize=4)
 			plt.gca().axhline(era5_hss_floor.loc[params[p], "threshold_conv_aws"])
-			plt.text(10, era5_hss_floor.loc[params[p], "threshold_conv_aws"], \
-				str(round(era5_hss_floor.loc[params[p], "threshold_conv_aws"], 2) ),\
-				va="top", color="tab:blue")
+			if params[p] == "mlcape*s06":
+				plt.text(10, era5_hss_floor.loc[params[p], "threshold_conv_aws"], \
+					str(int(round(era5_hss_floor.loc[params[p], "threshold_conv_aws"]) )),\
+					va="top", color="tab:blue")
+			else:
+				plt.text(10, era5_hss_floor.loc[params[p], "threshold_conv_aws"], \
+					str(round(era5_hss_floor.loc[params[p], "threshold_conv_aws"], 2) ),\
+					va="top", color="tab:blue")
 		if is_log[p]:
 			plt.yscale("symlog",linthreshy=is_log[p])
 
 		if p < 3:
 			plt.gca().set_xticklabels("")
 		else:
-			plt.xlabel("Measured gust speed")
+			plt.xlabel("Measured gust speed ($m.s^{-1}$)")
 		plt.ylabel(fancy_names[p])
 		if p == 0:
 			plt.title("ERA5")
@@ -133,16 +132,21 @@ def diagnostics_aws_compare():
 				barra_aws_p.loc[(barra_aws_p["wind_gust"]>=25) & (barra_aws_p["lightning"]>=2), params[p]], "rx",\
 				markersize=4)
 			plt.gca().axhline(barra_hss_floor.loc[params[p], "threshold_conv_aws"])
-			plt.text(10, barra_hss_floor.loc[params[p], "threshold_conv_aws"], \
-				str(round(barra_hss_floor.loc[params[p], "threshold_conv_aws"], 2) ),\
-				va="top", color="tab:blue")
+			if params[p] == "mlcape*s06":
+				plt.text(10, barra_hss_floor.loc[params[p], "threshold_conv_aws"], \
+					str(int(round(barra_hss_floor.loc[params[p], "threshold_conv_aws"]) )),\
+					va="top", color="tab:blue")
+			else:
+				plt.text(10, barra_hss_floor.loc[params[p], "threshold_conv_aws"], \
+					str(round(barra_hss_floor.loc[params[p], "threshold_conv_aws"], 2) ),\
+					va="top", color="tab:blue")
 		if is_log[p]:
 			plt.yscale("symlog",linthreshy=is_log[p])
 	    
 		if p < 3:
 			plt.gca().set_xticklabels("")
 		else:
-			plt.xlabel("Measured gust speed (m/s)")
+			plt.xlabel("Measured gust speed ($m.s^{-1}$)")
 		plt.gca().set_yticklabels("")
 		if p == 0:
 			plt.title("BARRA")
@@ -150,6 +154,7 @@ def diagnostics_aws_compare():
 	c = plt.colorbar(cax=ax, orientation="horizontal")
 	c.set_label("Days")
 	plt.subplots_adjust(top=0.95, bottom=0.2)
+	plt.savefig("fig3.png",bbox_inches="tight")
 
 
 def compare_obs_soundings():
@@ -157,11 +162,11 @@ def compare_obs_soundings():
 	#Compare observed soundings (2005 - 2015) at Adelaide AP, Woomera, Darwin and Sydney to
 	# ERA-Interim (and later, ERA5 and BARRA-R)
 
-	barra = pd.read_pickle("/g/data/eg3/ab4502/ExtremeWind/points/barra_allvars_2005_2018.pkl")
+	barra = pd.read_pickle("/g/data/eg3/ab4502/ExtremeWind/points/barra_allvars_2005_2018_2.pkl")
 	era5 = pd.read_pickle("/g/data/eg3/ab4502/ExtremeWind/points/era5_allvars_2005_2018.pkl")
 	obs = pd.read_pickle("/g/data/eg3/ab4502/ExtremeWind/points/UA_wrfpython.pkl").\
 		reset_index().rename(columns={"index":"time"})
-	temp, barra_wg10, barra_sta = optimise_pss("/g/data/eg3/ab4502/ExtremeWind/points/barra_allvars_2005_2018.pkl",
+	temp, barra_wg10, barra_sta = optimise_pss("/g/data/eg3/ab4502/ExtremeWind/points/barra_allvars_2005_2018_2.pkl",
 		T=1000, compute=False, l_thresh=2, is_pss="hss", model_name="barra_fc") 
 	temp, era5_wg10, barra_sta = optimise_pss("/g/data/eg3/ab4502/ExtremeWind/points/era5_allvars_2005_2018.pkl",
 		T=1000, compute=False, l_thresh=2, is_pss="hss", model_name="era5") 
@@ -186,6 +191,7 @@ def compare_obs_soundings():
 	rename_mod = {"era5":"ERA5","barra":"BARRA"}
 	cnt=1
 	fig = ['a','b','c','d','e','f','g','h','i','j','k','l','m','n','o','p']
+	plt.figure(figsize=[18,10])
 	for i in itertools.product(params, ["_barra","_era5"]):
 
 		ax = plt.subplot(4,4,cnt)
@@ -228,6 +234,7 @@ def compare_obs_soundings():
 	plt.text(0.08, 0.5, "Model sounding", fontsize=14, transform=plt.gcf().transFigure,\
 		rotation=90, verticalalignment="center")
 	plt.colorbar(cax=ax, orientation="horizontal")
+	plt.savefig("figA1.png",bbox_inches="tight")
 
 def create_mean_variable(variable, native=False, native_dir=None):
 
@@ -1159,7 +1166,8 @@ def test_pss_location(event, param_list, df=None, pss_df=None, l_thresh=2):
 
 	return pss_df_loc
 
-def optimise_pss(model_fname,T=1000, compute=True, l_thresh=2, is_pss="pss", model_name="erai", time="floor"):
+def optimise_pss(model_fname,T=1000, compute=True, l_thresh=2, is_pss="pss", model_name="erai", time="floor",\
+	exclude_logit_hits=False, logit_mod="era5"):
 
 	#model_fname is the path to the model point data
 	#T is the number of linear steps between the max and min of a parameter, used to test the pss
@@ -1171,7 +1179,7 @@ def optimise_pss(model_fname,T=1000, compute=True, l_thresh=2, is_pss="pss", mod
 	#For era5: /g/data/eg3/ab4502/ExtremeWind/points/era5_allvars_2005_2018.pkl
 	#For barra: /g/data/eg3/ab4502/ExtremeWind/points/barra_allvars_2005_2018.pkl
 
-	model = pd.read_pickle(model_fname)
+	model = pd.read_pickle(model_fname).dropna()
 	param_list = np.delete(np.array(model.columns), \
 		np.where((np.array(model.columns)=="lat") | \
 		(np.array(model.columns)=="lon") | \
@@ -1201,6 +1209,33 @@ def optimise_pss(model_fname,T=1000, compute=True, l_thresh=2, is_pss="pss", mod
 
 	df_sta = df_sta[df_sta.tc_affected==0]
 	df_aws = df_aws[df_aws.tc_affected==0]
+
+	if exclude_logit_hits:
+		if logit_mod == "era5":
+			z_aws = 6.4e-1*df_aws["lr36"] - 1.2e-4*df_aws["mhgt"] +\
+				     4.4e-4*df_aws["ml_el"] \
+				    -1.0e-1*df_aws["qmean01"] \
+				    + 1.7e-2*df_aws["srhe_left"] \
+				    + 1.8e-1*df_aws["Umean06"] - 7.4
+			z_sta = 3.3e-1*df_sta["lr36"] + 1.6e-3*df_sta["ml_cape"] +\
+				     2.9e-2*df_sta["srhe_left"] \
+				    +1.6e-1*df_sta["Umean06"] - 4.5
+			df_aws = df_aws[( 1 / (1 + np.exp(-z_aws))) < 0.72]
+			df_sta = df_sta[( 1 / (1 + np.exp(-z_sta))) < 0.62]
+		if logit_mod == "barra":
+			z_aws = 8.5e-1*df_aws["lr36"] + 6.2e-1*df_aws["lr_freezing"] +\
+				     3.9e-4*df_aws["ml_el"] \
+				    +3.8e-2*df_aws["s06"] \
+				    + 1.5e-2*df_aws["srhe_left"] \
+				    + 1.6e-1*df_aws["Umean06"] - 14.8
+			z_sta = 4.3e-1*df_sta["lr36"] + 2.0e-1*df_sta["lr_freezing"] \
+				    - 9.5e-5*df_sta["mhgt"] \
+				    + 3.2e-4*df_aws["ml_el"] \
+				    +3.8e-2*df_aws["s06"] \
+				    + 1.4e-2*df_aws["srhe_left"] \
+				    + 1.5e-1*df_aws["Umean06"] - 7.9
+			df_aws = df_aws[( 1 / (1 + np.exp(-z_aws))) < 0.80]
+			df_sta = df_sta[( 1 / (1 + np.exp(-z_sta))) < 0.71]
 
 	if compute:
 
@@ -1973,5 +2008,4 @@ if __name__ == "__main__":
 
 	else:	
 
-		optimise_pss("/g/data/eg3/ab4502/ExtremeWind/points/era5_allvars_v2_2005_2018.pkl", is_pss="hss", model_name="era5_v2",time="floor",compute=True)
-		#optimise_pss("/g/data/eg3/ab4502/ExtremeWind/points/barra_allvars_2005_2018_2.pkl", is_pss="hss", model_name="barra_fc_2",time="ceil",compute=True)
+		compare_obs_soundings()

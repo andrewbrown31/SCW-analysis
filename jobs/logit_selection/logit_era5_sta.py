@@ -417,9 +417,8 @@ def rfe_selection_custom(event, model, K=5):
 
 if __name__ == "__main__":
 
-
 	logit_test(["ml_cape","srhe_left","ml_el",\
 			"Umean06","s03",\
-			"lr36","lr_freezing","mhgt","qmeansubcloud","qmean01"],\
-		"era5","is_sta",["t_totals"])
+			"lr36","mhgt","qmeansubcloud","qmean01","te_diff"],\
+		"era5","is_conv_aws",["t_totals"])
 

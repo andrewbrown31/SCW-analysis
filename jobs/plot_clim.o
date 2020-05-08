@@ -1,0 +1,17 @@
+DJF
+MAM
+JJA
+SON
+
+======================================================================================
+                  Resource Usage on 2020-04-17 22:14:19:
+   Job Id:             4506801.gadi-pbs
+   Project:            eg3
+   Exit Status:        0
+   Service Units:      361.96
+   NCPUs Requested:    1                      NCPUs Used: 1               
+                                           CPU Time Used: 07:22:29                                   
+   Memory Requested:   32.0GB                Memory Used: 311.21MB        
+   Walltime requested: 24:00:00            Walltime Used: 07:32:27        
+   JobFS requested:    100.0MB                JobFS used: 0B              
+======================================================================================

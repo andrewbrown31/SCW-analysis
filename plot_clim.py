@@ -870,9 +870,9 @@ def plot_aus_conv_wind_trends():
 			plt.subplot(len(fnames),4,cnt)
 			m.drawcoastlines()
 			temp = data[np.in1d(data["time.month"],s)]
-			temp_first = temp[temp["time.year"] < 1999]
-			temp_second = temp[temp["time.year"] >= 1999]
-			trend = (temp_second.sum("time") / (2019-1999)) - (temp_first.sum("time") / (1999-1979))
+			temp_first = temp[temp["time.year"] <= 1992]
+			temp_second = temp[(temp["time.year"] >= 1992) & (temp["time.year"] <= 2005)] 
+			trend = (temp_second.sum("time") / (2006-1992)) - (temp_first.sum("time") / (1993-1979))
 				#temp_first.sum("time")) * 100
 			lat = temp.lat.data
 			lon = temp.lon.data
@@ -1124,7 +1124,7 @@ def plot_aus_conv_wind_corr():
 	s_names = ["DJF","MAM","JJA","SON"]
 	a=ord("a"); alph=[chr(i) for i in range(a,a+26)]; alph = [alph[i]+")" for i in np.arange(len(alph))]
 	m = Basemap(llcrnrlon=110, llcrnrlat=-45, urcrnrlon=160, urcrnrlat=-10,projection="cyl")
-	clim_inds = {"NINO3.4":nino34,"SAM":sam,"DMI":dmi}
+	#clim_inds = {"NINO3.4":nino34,"SAM":sam,"DMI":dmi}
 		#print("PLOTTING "+clim_ind)
 	plt.figure(figsize=[10,8])
 	cnt=1
@@ -1133,20 +1133,20 @@ def plot_aus_conv_wind_corr():
 			i=0
 			for clim_ind in ["NINO3.4", "SAM", "DMI"]:
 			#for i in np.arange(len(datasets)):
-				data = datasets[i]
+				#data = datasets[i]
 				plt.subplot(4,3,cnt)
 				m.drawcoastlines()
-				temp = data[np.in1d(data["time.month"],seasons[s])]
-				lat = temp.lat.data
-				lon = temp.lon.data
-				x,y = np.meshgrid(lon,lat)
-				lsm = get_era5_mask(lon,lat)
-				lsm_reshaped = lsm.flatten()
-
+				#temp = data[np.in1d(data["time.month"],seasons[s])]
 				corr_file = xr.open_dataset("/g/data/eg3/ab4502/ExtremeWind/aus/threshold_data/corr/"+\
                                         clim_ind+"_"+s_names[s]+".nc")
 				p = corr_file["p"].values
 				r = corr_file["r"].values
+				lat = corr_file.lat.data
+				lon = corr_file.lon.data
+
+				x,y = np.meshgrid(lon,lat)
+				lsm = get_era5_mask(lon,lat)
+				lsm_reshaped = lsm.flatten()
     
 				c = m.contourf(x, y, r, levels=np.linspace(vmax[i][0], vmax[i][1], 11),\
 					colors=plt.get_cmap("PiYG")(np.linspace(0,1,11)))
@@ -1570,6 +1570,7 @@ if __name__ == "__main__":
 			#n_boot=1000,\
 			#seasons=[np.arange(1,13,1)])
 
+	#plot_aus_conv_wind_corr()
 	plot_aus_conv_wind_trends()
 	#calculate_corr_p_values()
 	#plot_aus_conv_wind_clim()

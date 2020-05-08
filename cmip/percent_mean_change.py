@@ -200,7 +200,7 @@ if __name__ == "__main__":
 	lon1 = 112; lon2 = 156
 	lat1 = -45; lat2 = -10
 	experiment = "rcp85"
-	nrm = [0,1,2,3]	#0: Northern Australia;  1: Rangelands ; 2: Southern Australia; 3: Eastern Australia
+	nrm = [2,3]	#0: Northern Australia;  1: Rangelands ; 2: Southern Australia; 3: Eastern Australia
 
 	#Get NRM shapes with geopandas
 	f = geopandas.read_file("/home/548/ab4502/NRM_super_clusters/NRM_super_clusters.shp")
@@ -233,6 +233,6 @@ if __name__ == "__main__":
 	logit_aws_diff = get_diff(logit_aws_hist, logit_aws_scenario, models, shapes, nrm, rel=False)
 
 	plot_boxplot(models, lr36_diff, mhgt_diff, ml_el_diff, qmean01_diff, srhe_left_diff, \
-	    Umean06_diff, logit_aws_diff, rasterize(shapes, lr36_hist[0])["nrm"], nrm, plot_map=False)
+	    Umean06_diff, logit_aws_diff, rasterize(shapes, lr36_hist[0])["nrm"], nrm, plot_map=True)
 
-	plt.savefig("out.png", bbox_inches="tight")
+	plt.savefig("nrm_projections.png", bbox_inches="tight")

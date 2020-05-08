@@ -420,6 +420,6 @@ if __name__ == "__main__":
 
 	logit_test(["ml_cape","srhe_left","ml_el",\
 			"Umean06","s03",\
-			"lr36","lr_freezing","mhgt","qmeansubcloud","qmean01"],\
+			"lr36","mhgt","qmeansubcloud","qmean01","te_diff"],\
 		"era5","is_conv_aws",["t_totals"])
 

@@ -22,7 +22,6 @@ try:
 except:
 	pass
 import wrf
-from numba import jit
 
 # Local thermodynamics stuff, see thermodynamics.py
 try:

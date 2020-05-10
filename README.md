@@ -1,10 +1,9 @@
 # Functions for the analysis of extreme wind gusts in Australia from multiple processes, from various data sources
 
-### Including the analysis of measured and reported severe convective winds from reanalysis. For an indication of how these scripts are used in Brown andDowdy (in prep.), see REPRODUCE_README
+### Including the analysis of measured and reported severe convective winds from reanalysis. For an indication of how these scripts are used in Brown andDowdy (in prep.), see log.md
  
-*  barra_read.py (one/six-hourly at 12 km resolution over Australia)
-* erai_read.py (six-hourly at 0.75 degrees resolution globally)
-* era5_read.py (one-hourly at 0.25 degrees resolution globally)		
+*  barra_read.py 
+* era5_read.py 	
 * wrf_non_parallel.py
 * wrf_parallel.py
 * event_analysis.py

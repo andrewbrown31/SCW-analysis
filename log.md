@@ -1,10 +1,9 @@
 # Log for reproducability
 
 This text file contains a basic reconstructed log of the functions and software called to produce the 
-results in Brown and Dowdy (2020) doi:
+results in Brown and Dowdy (in prep.)
 
-This log utilises python scripts written by the authors, housed in this git repository. This is 
- a working repository, and so it is not guaranteed that the software appears exactly as was used
+ This is a working repository, and so it is not guaranteed that the scripts appear exactly as was used
  to generate the abovementioned paper. Although previous states can be accessed through navagating commits.
 
 #### Set up python environment using conda

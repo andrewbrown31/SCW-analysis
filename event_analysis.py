@@ -271,6 +271,7 @@ def create_mean_variable(variable, native=False, native_dir=None):
 		start = dt.datetime.now()
 		print(files[f])
 		if native:
+			ds = ds.isel({"time":np.in1d(ds["time.hour"].values, [0,6,12,18])})
 			ds = ds.sel({"latitude":(ds.latitude <= -9.975) & \
 				(ds.latitude >= -44.525)\
 				,"longitude":(ds.longitude <= 156.275) & \
@@ -291,8 +292,8 @@ def create_mean_variable(variable, native=False, native_dir=None):
 			coords = {"time":times,"lat":ds.latitude.values,"lon":ds.longitude.values},\
 			name = variable,\
 			attrs = {"steps":steps} ).to_netcdf(\
-					path = "/g/data/eg3/ab4502/ExtremeWind/aus/"+\
-						"era5_"+variable+"_mean.nc",\
+					path = "/g/data/eg3/ab4502/ExtremeWind/aus/threshold_data/"+\
+						"era5_"+variable+"_6hr_mean.nc",\
 					mode = "w",\
 					format = "NETCDF4")
 		xr.DataArray( dims = ("time","lat","lon"),\
@@ -300,8 +301,8 @@ def create_mean_variable(variable, native=False, native_dir=None):
 			coords = {"time":times,"lat":ds.latitude.values,"lon":ds.longitude.values},\
 			name = variable,\
 			attrs = {"steps":steps} ).to_netcdf(\
-					path = "/g/data/eg3/ab4502/ExtremeWind/aus/"+\
-						"era5_"+variable+"_daily_max_mean.nc",\
+					path = "/g/data/eg3/ab4502/ExtremeWind/aus/threshold_data/"+\
+						"era5_"+variable+"_6hr_daily_max_mean.nc",\
 					mode = "w",\
 					format = "NETCDF4")
 	else:
@@ -310,8 +311,8 @@ def create_mean_variable(variable, native=False, native_dir=None):
 			coords = {"time":times,"lat":ds.lat.values,"lon":ds.lon.values},\
 			name = variable,\
 			attrs = {"steps":steps} ).to_netcdf(\
-					path = "/g/data/eg3/ab4502/ExtremeWind/aus/"+\
-						"era5_"+variable+"_mean.nc",\
+					path = "/g/data/eg3/ab4502/ExtremeWind/aus/threshold_data/"+\
+						"era5_"+variable+"_6hr_mean.nc",\
 					mode = "w",\
 					format = "NETCDF4")
 		xr.DataArray( dims = ("time","lat","lon"),\
@@ -319,8 +320,8 @@ def create_mean_variable(variable, native=False, native_dir=None):
 			coords = {"time":times,"lat":ds.lat.values,"lon":ds.lon.values},\
 			name = variable,\
 			attrs = {"steps":steps} ).to_netcdf(\
-					path = "/g/data/eg3/ab4502/ExtremeWind/aus/"+\
-						"era5_"+variable+"_daily_max_mean.nc",\
+					path = "/g/data/eg3/ab4502/ExtremeWind/aus/threshold_data/"+\
+						"era5_"+variable+"_6hr_daily_max_mean.nc",\
 					mode = "w",\
 					format = "NETCDF4")
 
@@ -562,6 +563,7 @@ def create_threshold_variable(variable, threshold, model, event=None, predictors
 		start = dt.datetime.now()
 		print(files[f])
 		ds = xr.open_dataset(files[f])
+		ds = ds.isel({"time":np.in1d(ds["time.hour"].values, [0,6,12,18])})
 		if variable == "logit":
 			if len(predictors) == 6:
 				logit = 1 / ( 1 + np.exp( -(\
@@ -644,7 +646,7 @@ def create_threshold_variable(variable, threshold, model, event=None, predictors
 			name = "logit",\
 			attrs = {"steps":steps, "predictors":predictors, "coefs":logit_mod.coef_[0],\
 				"intercept":logit_mod.intercept_, "threshold":threshold} ).to_netcdf(\
-					path = "/g/data/eg3/ab4502/ExtremeWind/aus/"+model+"_logit_"+event+".nc",\
+					path = "/g/data/eg3/ab4502/ExtremeWind/aus/threshold_data/"+model+"_logit_6hr_"+event+".nc",\
 					mode = "w",\
 					format = "NETCDF4")
 		xr.DataArray( dims = ("time","lat","lon"),\
@@ -653,8 +655,8 @@ def create_threshold_variable(variable, threshold, model, event=None, predictors
 			name = "logit",\
 			attrs = {"steps":steps, "predictors":predictors, "coefs":logit_mod.coef_[0],\
 				"intercept":logit_mod.intercept_, "threshold":threshold} ).to_netcdf(\
-					path = "/g/data/eg3/ab4502/ExtremeWind/aus/"+\
-						model+"_logit_"+event+"_daily.nc",\
+					path = "/g/data/eg3/ab4502/ExtremeWind/aus/threshold_data/"+\
+						model+"_logit_6hr_"+event+"_daily.nc",\
 					mode = "w",\
 					format = "NETCDF4")
 		mjo_active_da = xr.DataArray( dims = ("time","lat","lon"),\
@@ -665,8 +667,8 @@ def create_threshold_variable(variable, threshold, model, event=None, predictors
 			attrs = {"mjo_days":mjo_active_days, "predictors":predictors,\
 				"coefs":logit_mod.coef_[0],\
 				"intercept":logit_mod.intercept_, "threshold":threshold} ).to_netcdf(\
-					path = "/g/data/eg3/ab4502/ExtremeWind/aus/"+\
-						model+"_logit_"+event+"_mjo_active.nc",\
+					path = "/g/data/eg3/ab4502/ExtremeWind/aus/threshold_data/"+\
+						model+"_logit_6hr_"+event+"_mjo_active.nc",\
 					mode = "w",\
 					format = "NETCDF4")
 
@@ -678,8 +680,8 @@ def create_threshold_variable(variable, threshold, model, event=None, predictors
 			attrs = {"mjo_days":mjo_inactive_days, "predictors":predictors,\
 				"coefs":logit_mod.coef_[0],\
 				"intercept":logit_mod.intercept_, "threshold":threshold} ).to_netcdf(\
-					path = "/g/data/eg3/ab4502/ExtremeWind/aus/"+\
-						model+"_logit_"+event+"_mjo_inactive.nc",\
+					path = "/g/data/eg3/ab4502/ExtremeWind/aus/threshold_data/"+\
+						model+"_logit_6hr_"+event+"_mjo_inactive.nc",\
 					mode = "w",\
 					format = "NETCDF4")
 	else:
@@ -688,8 +690,8 @@ def create_threshold_variable(variable, threshold, model, event=None, predictors
 			coords = {"time":times,"lat":ds.lat.values,"lon":ds.lon.values},\
 			name = variable,\
 			attrs = {"steps":steps, "threshold":threshold} ).to_netcdf(\
-					path = "/g/data/eg3/ab4502/ExtremeWind/aus/"+\
-						model+"_"+variable+"_"+str(threshold)+".nc",\
+					path = "/g/data/eg3/ab4502/ExtremeWind/aus/threshold_data/"+\
+						model+"_"+variable+"_6hr_"+str(threshold)+".nc",\
 					mode = "w",\
 					format = "NETCDF4")
 		xr.DataArray( dims = ("time","lat","lon"),\
@@ -697,8 +699,8 @@ def create_threshold_variable(variable, threshold, model, event=None, predictors
 			coords = {"time":times,"lat":ds.lat.values,"lon":ds.lon.values},\
 			name = variable,\
 			attrs = {"steps":steps, "threshold":threshold} ).to_netcdf(\
-					path = "/g/data/eg3/ab4502/ExtremeWind/aus/"+\
-						model+"_"+variable+"_"+str(threshold)+"_daily.nc",\
+					path = "/g/data/eg3/ab4502/ExtremeWind/aus/threshold_data/"+\
+						model+"_"+variable+"_6hr_"+str(threshold)+"_daily.nc",\
 					mode = "w",\
 					format = "NETCDF4")
 		mjo_active_da = xr.DataArray( dims = ("time","lat","lon"),\
@@ -707,8 +709,8 @@ def create_threshold_variable(variable, threshold, model, event=None, predictors
 				"time":np.concatenate(mjo_active_times)},\
 			name = variable,\
 			attrs = {"mjo_days":mjo_active_days, "threshold":threshold} ).to_netcdf(\
-					path = "/g/data/eg3/ab4502/ExtremeWind/aus/"+\
-						model+"_"+variable+"_"+str(threshold)+"_mjo_active.nc",\
+					path = "/g/data/eg3/ab4502/ExtremeWind/aus/threshold_data/"+\
+						model+"_"+variable+"_6hr_"+str(threshold)+"_mjo_active.nc",\
 					mode = "w",\
 					format = "NETCDF4")
 
@@ -718,8 +720,8 @@ def create_threshold_variable(variable, threshold, model, event=None, predictors
 				"time":np.concatenate(mjo_inactive_times)},\
 			name = variable,\
 			attrs = {"mjo_days":mjo_inactive_days, "threshold":threshold} ).to_netcdf(\
-					path = "/g/data/eg3/ab4502/ExtremeWind/aus/"+\
-						model+"_"+variable+"_"+str(threshold)+"_mjo_inactive.nc",\
+					path = "/g/data/eg3/ab4502/ExtremeWind/aus/threshold_data/"+\
+						model+"_"+variable+"_6hr_"+str(threshold)+"_mjo_inactive.nc",\
 					mode = "w",\
 					format = "NETCDF4")
 		
@@ -1310,12 +1312,12 @@ def optimise_pss(model_fname,T=1000, compute=True, l_thresh=2, is_pss="pss", mod
 			pss_df.loc[p, "threshold_conv_aws_cond_light"] = thresh[np.argmax(np.array(pss_p))]
 			pss_df.loc[p, "pss_conv_aws_cond_light"] = np.array(pss_p).max()
 
-		pss_df.to_pickle("/g/data/eg3/ab4502/ExtremeWind/"+is_pss+"_"+time+"_df_lightning"+str(l_thresh)+\
+		pss_df.to_pickle("/g/data/eg3/ab4502/ExtremeWind/skill_scores/"+is_pss+"_"+time+"_df_lightning"+str(l_thresh)+\
 				"_"+model_name+".pkl")
 
 	else:
 
-		pss_df = pd.read_pickle("/g/data/eg3/ab4502/ExtremeWind/"+is_pss+"_"+time+"_df_lightning"+str(l_thresh)+\
+		pss_df = pd.read_pickle("/g/data/eg3/ab4502/ExtremeWind/skill_scores/"+is_pss+"_"+time+"_df_lightning"+str(l_thresh)+\
 			"_"+model_name+".pkl")
 
 		df_sta.loc[:,"is_lightning"] = 0
@@ -2003,9 +2005,9 @@ if __name__ == "__main__":
 
 		create_threshold_variable(variable,float(threshold),model,event=event,\
 			predictors=predictors)
-		create_mjo_phase_variable(variable,float(threshold),model,event=event,\
-			predictors=predictors)
+		#create_mjo_phase_variable(variable,float(threshold),model,event=event,\
+		#	predictors=predictors)
 
 	else:	
-
-		compare_obs_soundings()
+		create_mean_variable("cape",native=True, native_dir="cape")
+		#compare_obs_soundings()

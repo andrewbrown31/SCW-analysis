@@ -16,6 +16,8 @@ from read_cmip import get_lsm
 
 def drop_duplicates(da):
 
+	#Drop time duplicates
+
 	a, ind = np.unique(da.time.values, return_index=True)
 	return(da[ind])
 
@@ -248,6 +250,14 @@ def plot_mean_spatial_dist(data, models, subplots, log, geo_plot, lon, lat, lsm,
 			plt.title(models[i][0] + " r="+r)
 	plt.savefig("/g/data/eg3/ab4502/figs/CMIP/"+outname+".png")
 
+def ecdf_to_unique(ecdf):
+
+	y = ecdf.y
+	x = ecdf.x
+	x, inds = np.unique(x, return_index=True)
+	y = y[inds]
+	return x,y
+
 def load_model_data(models, p, era5_data=None, save=True, \
 		era5_regrid=False, lsm=True, force_cmip_regrid=False,\
 		experiment="historical", y1=1979, y2=2005, era5_y1=1979, era5_y2=2005):
@@ -321,20 +331,24 @@ def qm_cmip_era5_loop(era5_da, model_da, replace_zeros, mask):
 	vals = model_da.values
 	obs = era5_da.values
 	model_xhat = np.zeros(vals.shape) * np.nan
-	for i in np.arange(vals.shape[1]):
-		print(i)
-		for j in np.arange(vals.shape[2]):
-			if mask[i,j] == 1:
-				obs_cdf = ECDF(obs[:,i,j])
-				obs_invcdf = obs_cdf.x
-				model_cdf = ECDF(vals[:,i,j])
-				model_p = np.interp(vals[:,i,j],\
-				model_cdf.x,model_cdf.y)
-				model_xhat[:,i,j] = np.interp(model_p,obs_cdf.y,obs_invcdf)
-			else:
-				model_xhat[:,i,j] = np.nan
+	for m in np.arange(1,13):
+		print(m)
+		model_m_inds = (model_da["time.month"] == m)
+		obs_m_inds = (era5_da["time.month"] == m)
+		for i in np.arange(vals.shape[1]):
+			for j in np.arange(vals.shape[2]):
+				if mask[i,j] == 1:
+					obs_cdf = ECDF(obs[obs_m_inds,i,j])
+					obs_invcdf, obs_p = ecdf_to_unique(obs_cdf)
+
+					model_cdf = ECDF(vals[model_m_inds,i,j])
+					model_invcdf = model_cdf.x
+					model_p = np.interp(vals[model_m_inds,i,j], model_invcdf, model_cdf.y)
+
+					model_xhat[model_m_inds,i,j] = np.interp(model_p,obs_p,obs_invcdf)
 	if replace_zeros:
 		model_xhat[vals == 0] = 0
+
 	return model_xhat
 
 def qm_cmip_era5(era5_da, model_da, replace_zeros):

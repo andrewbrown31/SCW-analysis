@@ -14,7 +14,7 @@ import matplotlib.pyplot as plt
 import matplotlib as mpl
 from dask.diagnostics import ProgressBar
 from read_cmip import get_lsm
-from cmip_analysis import load_model_data, load_era5, plot_mean_spatial_dist, daily_max_qm, str2bool, get_era5_lsm
+from cmip_analysis import load_model_data, load_era5, plot_mean_spatial_dist, daily_max_qm, str2bool, get_era5_lsm, qm_cmip_era5_loop
 
 #Load the historical and scenario data for a range of CMIP models. 
 #Join into one distribution, and quantile map onto ERA5 data.
@@ -90,15 +90,6 @@ def ecdf_to_unique(ecdf):
 	x, inds = np.unique(x, return_index=True)
 	y = y[inds]
 	return x,y
-
-def save_mean(data_list, da_list, models, p, lon, lat, y1, y2, experiment=""):
-
-	for i in np.arange(len(data_list)):
-		xr.Dataset(data_vars={\
-			    p:(("time","lat","lon"), data_list[i])},\
-			    coords={"lat":lat,"lon":lon,"time":da_list[i].time.values}).\
-		to_netcdf("/g/data/eg3/ab4502/ExtremeWind/aus/regrid_1.5/"+\
-		    models[i][0]+"_"+models[i][1]+"_"+p+"_"+experiment+"_"+str(y1)+"_"+str(y2)+".nc")
 
 def seasonal_freq_change_significance(hist_da_list, scenario_da_list,\
 		threshold, models, p, lon, lat, y1, y2, experiment=""):
@@ -518,7 +509,7 @@ def load_logit(model, ensemble, p, lsm, hist_y1, hist_y2, scenario_y1, scenario_
 		str(hist_y1)+"_"+str(hist_y2)+".nc"
 	scenario_fname = "/g/data/eg3/ab4502/ExtremeWind/aus/regrid_1.5/"+\
 		model+"_"+ensemble+"_"+p+"_"+experiment+"_"+\
-		str(hist_y1)+"_"+str(hist_y2)+".nc"
+		str(scenario_y1)+"_"+str(scenario_y2)+".nc"
 
 	if (os.path.isfile(hist_fname)) & (~force_compute):
 		print("Loading regridded "+model+" logistic model...")
@@ -734,22 +725,22 @@ def create_qm_combined(era5_da, model_da_hist, model_da_scenario, \
                     to_netcdf(hist_fname, mode="w",engine="h5netcdf",\
 			    encoding={p:{"zlib":True, "complevel":9}})
         xr.Dataset(data_vars={p:\
-			(("time", "lat", "lon"), mod_xhat_scenario)},\
-                    coords={"time":model_da_scenario.time.values,\
+	    (("time", "lat", "lon"), mod_xhat_scenario)},\
+		    coords={"time":model_da_scenario.time.values,\
 			"lat":model_da_scenario.lat, "lon":model_da_scenario.lon}).\
-                    to_netcdf(scenario_fname, mode="w",engine="h5netcdf",\
-			    encoding={p:{"zlib":True, "complevel":9}})
+		    to_netcdf(scenario_fname, mode="w",engine="h5netcdf",\
+			encoding={p:{"zlib":True, "complevel":9}})
 
         return mod_xhat_hist, mod_xhat_scenario
 
 def load_all_qm_combined(data_hist, data_scenario, models, p, lsm, replace_zeros,\
 	    experiment, hist_y1, hist_y2, scenario_y1, scenario_y2, force_compute=False, loop=True):
                                 
-        #out_qm_hist = []                         
-        #out_qm_scenario = []                         
         for i in np.arange(len(models)):    
-                if i == 0:
-                        pass
+                if models[i][0] == "ERA5":
+                        save_mean([data_hist[i].values], [data_hist[i]], [models[i]], p,\
+				data_hist[0].lon.values, data_hist[0].lat.values,\
+				hist_y1, hist_y2, experiment="historical")
                 else:                   
                         if force_compute:
                                 print("Forcing QQ-mapping of "+models[i][0]+"...")
@@ -784,17 +775,10 @@ def load_all_qm_combined(data_hist, data_scenario, models, p, lsm, replace_zeros
                         save_mean([model_xhat_scenario], [data_scenario[i]], [models[i]], p,\
 				data_hist[0].lon.values, data_hist[0].lat.values,\
 				scenario_y1, scenario_y2, experiment=experiment)
-                        #out_qm_hist.append(model_xhat_hist)
-                        #out_qm_scenario.append(model_xhat_scenario)
-        
-        #return out_qm_hist, out_qm_scenario
 
 @jit
 def qm_cmip_combined_loop(era5_da, model_da1, model_da2, replace_zeros, mask):
 
-	#model_da = xr.concat([model_da1, model_da2], dim="time") 
-
-	#vals = model_da.values
 	vals1 = model_da1.values
 	vals2 = model_da2.values
 	obs = era5_da.values
@@ -803,7 +787,6 @@ def qm_cmip_combined_loop(era5_da, model_da1, model_da2, replace_zeros, mask):
 	model_xhat2 = np.zeros(vals2.shape) * np.nan
 	for m in np.arange(1,13):
 		print(m)
-		#model_m_inds = (model_da["time.month"] == m)
 		model_m_inds1 = (model_da1["time.month"] == m)
 		model_m_inds2 = (model_da2["time.month"] == m)
 		obs_m_inds = (era5_da["time.month"] == m)
@@ -811,17 +794,22 @@ def qm_cmip_combined_loop(era5_da, model_da1, model_da2, replace_zeros, mask):
 			for j in np.arange(vals1.shape[2]):
 				if mask[i,j] == 1:
 				
+					#Create the observed CDF
 					obs_cdf = ECDF(obs[obs_m_inds,i,j])
 					obs_invcdf, obs_p = ecdf_to_unique(obs_cdf)
 
-					#model_cdf = ECDF(vals[model_m_inds,i,j])
+					#Create the model CDF based on the historical experiment
 					model_cdf = ECDF(vals1[model_m_inds1,i,j])
 					model_invcdf = model_cdf.x
 					model_p = model_cdf.y
+
+					#Interpolate model values onto the historical model CDF probabilities
 					model_p1 = np.interp(vals1[model_m_inds1,i,j],\
 						model_invcdf,model_p)
 					model_p2 = np.interp(vals2[model_m_inds2,i,j],\
 						model_invcdf,model_p)
+
+					#Interpolate the model CDF probabilities onto the observed CDF values
 					model_xhat1[model_m_inds1,i,j] = \
 						np.interp(model_p1,obs_p,obs_invcdf)
 					model_xhat2[model_m_inds2,i,j] = \
@@ -874,7 +862,7 @@ if __name__ == "__main__":
 	parser = argparse.ArgumentParser(description='Post-processing of CMIP convective diagnostics, including'\
 	    +" quantile mapping to ERA5 for historical and scenario runs")
 	parser.add_argument("-p",help="Parameter",required=True)
-	parser.add_argument("-m",help="Model",default="")
+	parser.add_argument("-m",help="Model",default="",nargs="+")
 	parser.add_argument("-e",help="Experiment (e.g. rcp85). Note historical is always loaded",required=True)
 	parser.add_argument("--threshold",help="If considering diagnostic indices, use a threshold",default=0,\
 		type=float)
@@ -955,9 +943,13 @@ if __name__ == "__main__":
 			["MIROC5","r1i1p1",5,""] ,\
 			["MRI-CGCM3","r1i1p1",5,""], \
 			["bcc-csm1-1","r1i1p1",5,""], \
+			["ACCESS-ESM1-5", "r1i1p1f1", 6, ""]\
                         ]
-	if model != "":
-		models = [ m for m in models if m[0]==model]
+	if model == "":
+		model = ["ERA5", "ACCESS1-3", "ACCESS1-0", "BNU-ESM", "CNRM-CM5", "GFDL-CM3", \
+			    "GFDL-ESM2G", "GFDL-ESM2M", "IPSL-CM5A-LR", "IPSL-CM5A-MR", \
+			    "MIROC5", "MRI-CGCM3", "bcc-csm1-1"]
+	models = list(np.array(models)[np.in1d([m[0] for m in models], model)])
 
 	#Load all the models for the historical period and the scenario given by "experiment"
 	if not mean_only:
@@ -970,12 +962,19 @@ if __name__ == "__main__":
 				out_qm_hist.append(a[0])
 				out_qm_scenario.append(b[0])
 			#From quantile-matched 6-hourly model data, compute the daily maximum
-			out_hist_dmax = daily_max_qm([ds[p] for ds in out_qm_hist], out_qm_hist, models, p, lsm)
+			try:
+				out_hist_dmax = daily_max_qm([ds[p] for ds in out_qm_hist], out_qm_hist, models, p, lsm)
+			except:
+				out_hist_dmax = daily_max_qm([ds for ds in out_qm_hist], out_qm_hist, models, p, lsm)
 			save_seasonal_freq([ds[p].values for ds in out_hist_dmax], \
 				    out_hist_dmax, threshold, models, p,\
 				    out_qm_hist[0].lon.values, out_qm_hist[0].lat.values,\
 				    hist_y1, hist_y2, experiment="historical")
-			out_scenario_dmax = daily_max_qm([ds[p] for ds in out_qm_scenario], \
+			try:
+				out_scenario_dmax = daily_max_qm([ds[p] for ds in out_qm_scenario], \
+					out_qm_scenario, models, p, lsm)
+			except:
+				out_scenario_dmax = daily_max_qm([ds for ds in out_qm_scenario], \
 					out_qm_scenario, models, p, lsm)
 			save_seasonal_freq([ds[p].values for ds in out_scenario_dmax], \
 				    out_scenario_dmax, threshold, models, p,\
@@ -1016,6 +1015,9 @@ if __name__ == "__main__":
 				    scenario_y1, scenario_y2, experiment=experiment)
 			del out_scenario_dmax, out_qm_scenario
 		else:
+			if (force_compute) & (["ERA5",""] not in models):
+				models = [ ["ERA5", ""] ]+models
+				print(models)
 			print("Loading re-gridded historical model data...")
 			#Load all models (given my "models"), and regrid to the ERA5 spatial
 			# grid, for historical runs only
@@ -1023,13 +1025,15 @@ if __name__ == "__main__":
 				force_cmip_regrid=force_cmip_regrid,\
 				experiment="historical", era5_y1=era5_y1, era5_y2=era5_y2,\
 				y1=hist_y1, y2=hist_y2, save=False) 
+			[print(models[i], out_hist[i].shape) for i in np.arange(len(models))]
 			#For all models, load CMIP data for the run given by "experiment".
 			# Parse "era5_data" into this function, instead of loading again
 			print("Loading re-gridded scenario model data...")
 			out_scenario = load_model_data(models, p, lsm=lsm,\
-				force_cmip_regrid=force_cmip_regrid, \
-				experiment=experiment, y2=scenario_y2, \
-				y1=scenario_y1, era5_data=out_hist[0], save=False) 
+			    force_cmip_regrid=force_cmip_regrid, \
+			    experiment=experiment, y2=scenario_y2, \
+			    y1=scenario_y1, era5_data=out_hist[0], save=False) 
+			[print(x.shape) for x in out_scenario]
 			#For each model, either (a) load quantile-matched CMIP data for the 
 			# given experiment/years if it has been done previously or (b) 
 			# quantile-match a combined historical-scenario distribution at each
@@ -1041,15 +1045,6 @@ if __name__ == "__main__":
 				replace_zeros, experiment, \
 				hist_y1, hist_y2, scenario_y1, scenario_y2, \
 				force_compute=force_compute)
-			#Save monthly mean distributions of quantile-matched CMIP data
-			save_mean(out_qm_hist, out_hist, models, p, \
-				    out_hist[0].lon.values, \
-				    out_hist[0].lat.values, hist_y1, hist_y2,\
-				     experiment="historical")
-			save_mean(out_qm_scenario[1:], out_scenario[1:],\
-				    models[1:], p, out_scenario[0].lon.values,\
-				    out_scenario[0].lat.values, scenario_y1, scenario_y2,\
-				    experiment=experiment)
 	else:
 
 		try:
@@ -1063,17 +1058,9 @@ if __name__ == "__main__":
 			    experiment+"/"+p+"_daily_freq", vmin=vmin, vmax=vmax)
 		except:
 			hist = get_mean(models, p, hist_y1, hist_y2, era5_y1, era5_y2, experiment="historical")
-			scenario = get_mean(models, p, scenario_y1, scenario_y2, era5_y1, era5_y2, experiment="rcp85")
+			scenario = get_mean(models, p, scenario_y1, scenario_y2, era5_y1, era5_y2, experiment=experiment)
 			sig=None
 
 		plot_monthly_mean_scenario(hist, scenario, subplots2, models, p,\
-			experiment+"/"+p+"_monthly_mean_change")
-		#plot_mean_spatial_dist(hist, p, models, subplots1,\
-		#	True, hist[0].lon.values, hist[1].lat.values, \
-		#	True, p+"_qm_historical_mean")
-		#plot_monthly_mean(hist, models, p, p+"_qm_historical_monthly_mean")
-		#plot_scenario_diff(hist, scenario, season, hist[0].lat.values,\
-		#	hist[0].lon.values, subplots2, models, log,\
-		#	True, experiment+"/"+p+"_"+season+"_mean_spatial_rel_diff",\
-			#vmin=rel_vmin, vmax=rel_vmax, sig=sig)
+			experiment+"/"+p+"_monthly_mean_change_"+str(scenario_y1)+"_"+str(scenario_y2))
 

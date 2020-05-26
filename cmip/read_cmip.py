@@ -12,7 +12,7 @@ import pandas as pd
 from barra_read import date_seq
 from calc_param import get_dp
 
-def read_cmip(model, experiment, ensemble, year, domain, cmip_ver=5, group = "", al33=False, ver=""):
+def read_cmip(model, experiment, ensemble, year, domain, cmip_ver=5, group = "", al33=False, ver6hr="", ver3hr="", project="CMIP"):
 
 	if cmip_ver == 5:
 
@@ -23,37 +23,39 @@ def read_cmip(model, experiment, ensemble, year, domain, cmip_ver=5, group = "",
 
 			if group == "":
 				raise ValueError("Group required")
-			if ver == "":
-				raise ValueError("Version required")
+			if ver6hr == "":
+				ver6hr = "v*"
+			if ver3hr == "":
+				ver3hr = "v*"
 
 			hus_files = np.sort(glob.glob("/g/data/al33/replicas/CMIP5/combined/"+\
 				    group+"/"+model+"/"+experiment+\
-				    "/6hr/atmos/6hrLev/"+ensemble+"/v*/hus/*6hrLev*"))
+				    "/6hr/atmos/6hrLev/"+ensemble+"/"+ver6hr+"/hus/*6hrLev*"))
 			ta_files = np.sort(glob.glob("/g/data/al33/replicas/CMIP5/combined/"+\
 				    group+"/"+model+"/"+experiment+\
-				    "/6hr/atmos/6hrLev/"+ensemble+"/v*/ta/*6hrLev*"))
+				    "/6hr/atmos/6hrLev/"+ensemble+"/"+ver6hr+"/ta/*6hrLev*"))
 			ua_files = np.sort(glob.glob("/g/data/al33/replicas/CMIP5/combined/"+\
 				    group+"/"+model+"/"+experiment+\
-				    "/6hr/atmos/6hrLev/"+ensemble+"/v*/ua/*6hrLev*"))
+				    "/6hr/atmos/6hrLev/"+ensemble+"/"+ver6hr+"/ua/*6hrLev*"))
 			va_files = np.sort(glob.glob("/g/data/al33/replicas/CMIP5/combined/"+\
 				    group+"/"+model+"/"+experiment+\
-				    "/6hr/atmos/6hrLev/"+ensemble+"/v*/va/*6hrLev*"))
+				    "/6hr/atmos/6hrLev/"+ensemble+"/"+ver6hr+"/va/*6hrLev*"))
 
 			huss_files = np.sort(glob.glob("/g/data/al33/replicas/CMIP5/combined/"+\
 				    group+"/"+model+"/"+experiment+\
-				    "/3hr/atmos/3hr/"+ensemble+"/v*/huss/*"))
+				    "/3hr/atmos/3hr/"+ensemble+"/"+ver3hr+"/huss/*"))
 			tas_files = np.sort(glob.glob("/g/data/al33/replicas/CMIP5/combined/"+\
 				    group+"/"+model+"/"+experiment+\
-				    "/3hr/atmos/3hr/"+ensemble+"/v*/tas/*"))
+				    "/3hr/atmos/3hr/"+ensemble+"/"+ver3hr+"/tas/*"))
 			uas_files = np.sort(glob.glob("/g/data/al33/replicas/CMIP5/combined/"+\
 				    group+"/"+model+"/"+experiment+\
-				    "/3hr/atmos/3hr/"+ensemble+"/v*/uas/*"))
+				    "/3hr/atmos/3hr/"+ensemble+"/"+ver3hr+"/uas/*"))
 			vas_files = np.sort(glob.glob("/g/data/al33/replicas/CMIP5/combined/"+\
 				    group+"/"+model+"/"+experiment+\
-				    "/3hr/atmos/3hr/"+ensemble+"/v*/vas/*"))
+				    "/3hr/atmos/3hr/"+ensemble+"/"+ver3hr+"/vas/*"))
 			ps_files = np.sort(glob.glob("/g/data/al33/replicas/CMIP5/combined/"+\
 				    group+"/"+model+"/"+experiment+\
-				    "/3hr/atmos/3hr/"+ensemble+"/v*/ps/*"))
+				    "/3hr/atmos/3hr/"+ensemble+"/"+ver3hr+"/ps/*"))
 
 		else:
 
@@ -89,25 +91,25 @@ def read_cmip(model, experiment, ensemble, year, domain, cmip_ver=5, group = "",
 
 		#Get CMIP6 file paths
 
-		hus_files = np.sort(glob.glob("/g/data/r87/DRSv3/CMIP6/CMIP/"+group+"/"+model+\
+		hus_files = np.sort(glob.glob("/g/data/r87/DRSv3/CMIP6/"+project+"/"+group+"/"+model+\
 			"/"+experiment+"/"+ensemble+"/6hrLev/hus/gn/latest/*"))
-		ta_files = np.sort(glob.glob("/g/data/r87/DRSv3/CMIP6/CMIP/"+group+"/"+model+\
+		ta_files = np.sort(glob.glob("/g/data/r87/DRSv3/CMIP6/"+project+"/"+group+"/"+model+\
 			"/"+experiment+"/"+ensemble+"/6hrLev/ta/gn/latest/*"))
-		ua_files = np.sort(glob.glob("/g/data/r87/DRSv3/CMIP6/CMIP/"+group+"/"+model+\
+		ua_files = np.sort(glob.glob("/g/data/r87/DRSv3/CMIP6/"+project+"/"+group+"/"+model+\
 			"/"+experiment+"/"+ensemble+"/6hrLev/ua/gn/latest/*"))
-		va_files = np.sort(glob.glob("/g/data/r87/DRSv3/CMIP6/CMIP/"+group+"/"+model+\
+		va_files = np.sort(glob.glob("/g/data/r87/DRSv3/CMIP6/"+project+"/"+group+"/"+model+\
 			"/"+experiment+"/"+ensemble+"/6hrLev/va/gn/latest/*"))
 
 
-		huss_files = np.sort(glob.glob("/g/data/r87/DRSv3/CMIP6/CMIP/"+group+"/"+model+\
+		huss_files = np.sort(glob.glob("/g/data/r87/DRSv3/CMIP6/"+project+"/"+group+"/"+model+\
 			"/"+experiment+"/"+ensemble+"/3hr/huss/gn/latest/*"))
-		tas_files = np.sort(glob.glob("/g/data/r87/DRSv3/CMIP6/CMIP/"+group+"/"+model+\
+		tas_files = np.sort(glob.glob("/g/data/r87/DRSv3/CMIP6/"+project+"/"+group+"/"+model+\
 			"/"+experiment+"/"+ensemble+"/3hr/tas/gn/latest/*"))
-		uas_files = np.sort(glob.glob("/g/data/r87/DRSv3/CMIP6/CMIP/"+group+"/"+model+\
+		uas_files = np.sort(glob.glob("/g/data/r87/DRSv3/CMIP6/"+project+"/"+group+"/"+model+\
 			"/"+experiment+"/"+ensemble+"/3hr/uas/gn/latest/*"))
-		vas_files = np.sort(glob.glob("/g/data/r87/DRSv3/CMIP6/CMIP/"+group+"/"+model+\
+		vas_files = np.sort(glob.glob("/g/data/r87/DRSv3/CMIP6/"+project+"/"+group+"/"+model+\
 			"/"+experiment+"/"+ensemble+"/3hr/vas/gn/latest/*"))
-		ps_files = np.sort(glob.glob("/g/data/r87/DRSv3/CMIP6/CMIP/"+group+"/"+model+\
+		ps_files = np.sort(glob.glob("/g/data/r87/DRSv3/CMIP6/"+project+"/"+group+"/"+model+\
 			"/"+experiment+"/"+ensemble+"/3hr/ps/gn/latest/*"))
 
 	#Isolate the files relevant for the current "year"
@@ -123,27 +125,18 @@ def read_cmip(model, experiment, ensemble, year, domain, cmip_ver=5, group = "",
 	vas_fid = get_fid( vas_files, year)
 	ps_fid = get_fid( ps_files, year)
 
-	#Load the data, match 3 hourly and 6 hourly data
+	#Load the data
 	hus = xr.open_mfdataset([hus_files[i] for i in hus_fid], use_cftime=True)
 	ta = xr.open_mfdataset([ta_files[i] for i in ta_fid], use_cftime=True)
 	ua = xr.open_mfdataset([ua_files[i] for i in ua_fid], use_cftime=True)
 	va = xr.open_mfdataset([va_files[i] for i in va_fid], use_cftime=True)
 
+	#Load surface data and match to 6 hourly
 	huss = xr.open_mfdataset([huss_files[i] for i in huss_fid], use_cftime=True)
-	huss = huss.sel({"time":np.in1d(huss.time, hus.time)})
 	tas = xr.open_mfdataset([tas_files[i] for i in tas_fid], use_cftime=True)
-	tas = tas.sel({"time":np.in1d(tas.time, ta.time)})
 	uas = xr.open_mfdataset([uas_files[i] for i in uas_fid], use_cftime=True)
-	uas = uas.sel({"time":np.in1d(uas.time, ua.time)})
 	vas = xr.open_mfdataset([vas_files[i] for i in vas_fid], use_cftime=True)
-	vas = vas.sel({"time":np.in1d(vas.time, va.time)})
 	ps = xr.open_mfdataset([ps_files[i] for i in ps_fid], use_cftime=True)
-	ps = ps.sel({"time":np.in1d(ps.time, hus.time)})
-
-	hus = hus.sel({"time":np.in1d(hus.time, ps.time)})
-	ta = ta.sel({"time":np.in1d(ta.time, ps.time)})
-	ua = ua.sel({"time":np.in1d(ua.time, ps.time)})
-	va = va.sel({"time":np.in1d(va.time, ps.time)})
 
 	#Trim to the domain given by "domain", as well as the year given by "year". Expand domain 
 	# for later compairsons with ERA5, and for interpolation of U/V
@@ -167,10 +160,34 @@ def read_cmip(model, experiment, ensemble, year, domain, cmip_ver=5, group = "",
 	va = va.va.interp({"lat":hus.lat},method="linear", assume_sorted=True)
 	uas = uas.uas.interp({"lat":hus.lat,"lon":hus.lon},method="linear", assume_sorted=True)
 	vas = vas.vas.interp({"lat":hus.lat,"lon":hus.lon},method="linear", assume_sorted=True)
-	ua = trim_cmip5(ua, domain, year).values
-	va = trim_cmip5(va, domain, year).values
-	uas = trim_cmip5(uas, domain, year).values
-	vas = trim_cmip5(vas, domain, year).values
+	ua = trim_cmip5(ua, domain, year)
+	va = trim_cmip5(va, domain, year)
+	uas = trim_cmip5(uas, domain, year)
+	vas = trim_cmip5(vas, domain, year)
+
+	#Make sure hus, ta, ua, va are the same length
+	hus = hus.sel({"time":np.in1d(hus.time, ta.time)})
+	ta = ta.sel({"time":np.in1d(ta.time, hus.time)})
+	ta = ta.sel({"time":np.in1d(ta.time, ua.time)})
+	hus = hus.sel({"time":np.in1d(hus.time, ua.time)})
+	ua = ua.sel({"time":np.in1d(ua.time, hus.time)})
+	va = va.sel({"time":np.in1d(va.time, hus.time)})
+
+	#Match the surface data to the level data
+	huss = huss.sel({"time":np.in1d(huss.time, hus.time)})
+	tas = tas.sel({"time":np.in1d(tas.time, ta.time)})
+	uas = uas.sel({"time":np.in1d(uas.time, ua.time)})
+	vas = vas.sel({"time":np.in1d(vas.time, va.time)})
+
+	#Now match the 6 hourly data to the 6-hourly surface data to ensure they are the same length
+	hus = hus.sel({"time":np.in1d(hus.time, huss.time)})
+	ta = ta.sel({"time":np.in1d(ta.time, tas.time)})
+	ua = ua.sel({"time":np.in1d(ua.time, uas.time)})
+	va = va.sel({"time":np.in1d(va.time, vas.time)})
+
+	#Match surface pressure
+	ps = ps.sel({"time":np.in1d(ps.time, hus.time)})
+	ps = ps.sel({"time":np.in1d(ps.time, huss.time)})
 
 	#Either convert vertical coordinate to height or pressure, depending on the model 
 	names = [] 
@@ -185,7 +202,8 @@ def read_cmip(model, experiment, ensemble, year, domain, cmip_ver=5, group = "",
 		q = hus.hus / (1 - hus.hus)
 		tv = ta.ta * ( ( q + 0.622) / (0.622 * (1+q) ) )
 		p = np.swapaxes(np.swapaxes(ps.ps * np.exp( -9.8*z / (287*tv)), 3, 2), 2, 1)
-		if (experiment == "rcp85") & (model in ["ACCESS1-3","ACCESS1-0"]):
+		if ((experiment == "rcp85") & (model in ["ACCESS1-3","ACCESS1-0"])) | \
+			(model in ["ACCESS-CM2"]):
 			z = np.swapaxes(z, 0, 1).values
 			orog = orog[0]
 		elif experiment == "historical":
@@ -215,7 +233,8 @@ def read_cmip(model, experiment, ensemble, year, domain, cmip_ver=5, group = "",
 	if (z.min() < -1000) | (z.max() > 100000):
 		raise ValueError("Potentially erroneous Z values (less than -1000 or greater than 100,000 km")
 	if (p.max().values > 200000) | (p.min().values < 0):
-		raise ValueError("Potentially erroneous pressure (less than 0 or greater than 200,000 Pa")
+		if model != "ACCESS-CM2":
+			raise ValueError("Potentially erroneous pressure (less than 0 or greater than 200,000 Pa")
 
 	#Convert quantities into those expected by wrf_parallel.py
 	ta = ta.ta.values - 273.15
@@ -224,17 +243,29 @@ def read_cmip(model, experiment, ensemble, year, domain, cmip_ver=5, group = "",
 	pres = p.values / 100.
 	sfc_pres = ps.ps.values / 100.
 	tas = tas.tas.values - 273.15
-	ta2d = mpcalc.dewpoint_from_specific_humidity(hus.hus.values, ta*units.units.degC, \
-		    p.values*units.units.pascal)
+	ta2d = mpcalc.dewpoint_from_specific_humidity(huss.huss.values, tas*units.units.degC, \
+		    ps.ps.values*units.units.pascal)
 	lon = p.lon.values
 	lat = p.lat.values
 
-	#Mask all data above 100 hPa
-	ta[pres < 100] = np.nan
-	hur[pres < 100] = np.nan
-	z[pres < 100] = np.nan
-	ua[pres < 100] = np.nan
-	va[pres < 100] = np.nan
+	ua=ua.values
+	va=va.values
+	uas=uas.values
+	vas=vas.values
+
+	#Mask all data above 100 hPa. For ACCESS-CM2, mask data below 20 m
+	if model == "ACCESS-CM2":
+		ta[(pres < 100) | (p == 0) | (p == np.inf)] = np.nan
+		hur[(pres < 100) | (p == 0) | (p == np.inf)] = np.nan
+		z[(pres < 100) | (p == 0) | (p == np.inf)] = np.nan
+		ua[(pres < 100) | (p == 0) | (p == np.inf)] = np.nan
+		va[(pres < 100) | (p == 0) | (p == np.inf)] = np.nan
+	else:
+		ta[pres < 100] = np.nan
+		hur[pres < 100] = np.nan
+		z[pres < 100] = np.nan
+		ua[pres < 100] = np.nan
+		va[pres < 100] = np.nan
 
 	date_list = p.time.values
 	date_list = np.array([dt.datetime.strptime(date_list[t].strftime(), "%Y-%m-%d %H:%M:%S") for t in np.arange(len(date_list))]) 

@@ -10,5 +10,5 @@
 
 source activate wrfpython3.6 
 
-python working/ExtremeWind/cmip/cmip_scenario.py -p ml_el -e rcp85 --force_compute True
+python working/ExtremeWind/cmip/cmip_scenario.py -p ml_el -e rcp85 -m IPSL-CM5A-MR --force_compute True
 

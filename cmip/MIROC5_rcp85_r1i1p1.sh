@@ -2,7 +2,7 @@
 
 #PBS -P eg3 
 #PBS -q normal
-#PBS -l walltime=24:00:00,mem=128GB 
+#PBS -l walltime=48:00:00,mem=128GB 
 #PBS -l ncpus=1
 #PBS -o /home/548/ab4502/working/ExtremeWind/jobs/messages/wrf_python_MIROC5.o 
 #PBS -e /home/548/ab4502/working/ExtremeWind/jobs/messages/wrf_python_MIROC5.e 
@@ -11,8 +11,8 @@
 #Set up conda/shell environments 
 source activate wrfpython3.6 
 
-d=2086-01-01
-while [ "$d" != 2106-01-01 ]; do
+d=2006-01-01
+while [ "$d" != 2026-01-01 ]; do
 
 	start_time=$(date -d "$d" +%Y)"010100"
 	end_time=$(date -d "$d"  +%Y)"123118"

@@ -2,7 +2,7 @@
 
 #PBS -P eg3 
 #PBS -q hugemem
-#PBS -l walltime=18:00:00,mem=512GB 
+#PBS -l walltime=18:00:00,mem=1024GB 
 #PBS -l ncpus=1
 #PBS -o /home/548/ab4502/working/ExtremeWind/jobs/messages/qmean01_scenario.o 
 #PBS -e /home/548/ab4502/working/ExtremeWind/jobs/messages/qmean01_scenario.e 
@@ -10,5 +10,5 @@
 
 source activate wrfpython3.6 
 
-python working/ExtremeWind/cmip/cmip_scenario.py -p qmean01 -e rcp85 --force_compute True
+python working/ExtremeWind/cmip/cmip_scenario.py -p qmean01 -e rcp85 -m IPSL-CM5A-MR --force_compute True
 

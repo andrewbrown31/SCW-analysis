@@ -2,7 +2,7 @@
 
 #PBS -P eg3 
 #PBS -q normal
-#PBS -l walltime=36:00:00,mem=128GB 
+#PBS -l walltime=36:00:00,mem=190GB 
 #PBS -l ncpus=16
 #PBS -o /home/548/ab4502/working/ExtremeWind/jobs/messages/wrf_python_IPSL-CM5A-MR.o 
 #PBS -e /home/548/ab4502/working/ExtremeWind/jobs/messages/wrf_python_IPSL-CM5A-MR.e 
@@ -11,8 +11,8 @@
 #Set up conda/shell environments 
 source activate wrfpython3.6 
 
-d=1970-01-01
-while [ "$d" != 2010-01-01 ]; do
+d=1960-01-01
+while [ "$d" != 1970-01-01 ]; do
 
 	start_time=$(date -d "$d" +%Y)"010100"
 	end_time=$(date -d "$d + 9 year"  +%Y)"123118"

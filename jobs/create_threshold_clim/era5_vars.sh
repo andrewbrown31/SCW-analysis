@@ -10,6 +10,7 @@
 
 source activate wrfpython3.6
 
-python /home/548/ab4502/working/ExtremeWind/event_analysis.py t_totals 48.16 era5
-python /home/548/ab4502/working/ExtremeWind/event_analysis.py dcp 0.03 era5
+#python /home/548/ab4502/working/ExtremeWind/event_analysis.py t_totals 48.16 era5
+#python /home/548/ab4502/working/ExtremeWind/event_analysis.py dcp 0.03 era5
+python /home/548/ab4502/working/ExtremeWind/event_analysis.py mlcape*s06 25000 era5
 

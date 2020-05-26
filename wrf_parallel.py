@@ -611,7 +611,6 @@ def get_var_hgt(var,hgt,var_value,terrain):
 	return var_hgt
 
 def get_ship(mucape,muq,s06,lr75,h5_temp,frz_lvl):
-	#From EWD (no freezing level involved), but using SPC intended values:
 	# https://github.com/sharppy/SHARPpy/blob/master/sharppy/sharptab/params.py
 	
 	#Restrict extreme values

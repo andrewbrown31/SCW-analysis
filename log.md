@@ -13,7 +13,7 @@ conda activate wrfpython3.6
 sh wrf-python/compile_wrf_python.sh
 ```
 
-#### Data processing
+#### Calculating convective diagnostics from reanalyses
 ```bash
 sh jobs/era5_wrfpython/wrfpython_parallel_era5_driver.sh
 sh jobs/era5_points/era5_points_driver.sh
@@ -21,7 +21,7 @@ sh jobs/barra_wrfpython/wrfpython_parallel_barra_driver.sh
 sh jobs/barra_points/barra_points_driver.sh
 ```
 
-#### In python (after concaternating point output using pandas)
+#### Create observed SCW event datasets, calculate convective diagnostics from radiosondes, and compute skill scores from reanalysis
 ```python
 from obs_read import read_convective_wind_gusts, read_upperair_obs
 read_convective_wind_gusts()

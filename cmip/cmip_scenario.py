@@ -14,7 +14,7 @@ import matplotlib.pyplot as plt
 import matplotlib as mpl
 from dask.diagnostics import ProgressBar
 from read_cmip import get_lsm
-from cmip_analysis import load_model_data, load_era5, plot_mean_spatial_dist, daily_max_qm, str2bool, get_era5_lsm, qm_cmip_era5_loop
+from cmip_analysis import load_model_data, load_era5, plot_mean_spatial_dist, daily_max_qm, str2bool, get_era5_lsm, qm_cmip_era5_loop, load_barpa
 
 #Load the historical and scenario data for a range of CMIP models. 
 #Join into one distribution, and quantile map onto ERA5 data.
@@ -500,7 +500,7 @@ def get_mean(models, p, y1, y2, era5_y1, era5_y2, experiment=""):
 	return mean_out
 
 def load_logit(model, ensemble, p, lsm, hist_y1, hist_y2, scenario_y1, scenario_y2,\
-	experiment, force_compute, save):
+	experiment, force_compute, hist_save):
 
 	hist_out = []
 	scenario_out = []
@@ -522,13 +522,12 @@ def load_logit(model, ensemble, p, lsm, hist_y1, hist_y2, scenario_y1, scenario_
 		print("Computing logit regression for "+model+"...")
 		logit_hist, logit_scenario = calc_logit(model, ensemble, p, lsm, hist_y1,\
 			hist_y2, scenario_y1, scenario_y2, experiment)
-		if save:
+		if hist_save:
 			xr.Dataset({p:logit_hist}).to_netcdf(hist_fname,\
 				encoding={p:{"zlib":True, "complevel":1}})
 		if model != "ERA5":
-			if save:
-				xr.Dataset({p:logit_scenario}).to_netcdf(scenario_fname,\
-				    encoding={p:{"zlib":True, "complevel":1}})
+			xr.Dataset({p:logit_scenario}).to_netcdf(scenario_fname,\
+				encoding={p:{"zlib":True, "complevel":1}})
 	hist_out.append(logit_hist)
 	scenario_out.append(logit_scenario)
 	return hist_out, scenario_out
@@ -544,6 +543,9 @@ def calc_logit(model, ensemble, p, lsm, hist_y1, hist_y2, scenario_y1, scenario_
 			    "qmean01","srhe_left","Umean06"]
 	elif p == "logit_sta":
 		vars = ["lr36","ml_cape","srhe_left","Umean06"]
+	elif p == "logit_aws_barra":
+		vars = ["lr36","lr_freezing","ml_el",\
+			    "s06","srhe_left","Umean06"]
 
 	var_list_hist = []
 	var_list_scenario = []
@@ -564,6 +566,9 @@ def calc_logit(model, ensemble, p, lsm, hist_y1, hist_y2, scenario_y1, scenario_
                                             (era5["time.year"] >= hist_y1)})
 			out_hist = era5_trim
 			out_scenario = era5_trim
+		elif model == "BARPA":
+			out_hist = load_barpa(v, hist_y1, hist_y2)
+			out_scenario = load_barpa(v, scenario_y1, scenario_y2)
 		else:
 			try:
 				out_hist, out_scenario = load_qm(\
@@ -590,6 +595,12 @@ def calc_logit(model, ensemble, p, lsm, hist_y1, hist_y2, scenario_y1, scenario_
 			z = 3.3e-1*var_list[0] + 1.6e-3*var_list[1] +\
 				     2.9e-2*var_list[2] \
 				    +1.6e-1*var_list[3] - 4.5
+		elif p == "logit_aws_barra":
+			z = 8.5e-1*var_list[0] + 6.2e-1*var_list[1] +\
+				     3.9e-4*var_list[2] \
+				    + 3.8e-2*var_list[3] \
+				    + 1.5e-2*var_list[4] \
+				    + 1.6e-1*var_list[5] - 14.8
 		out_logit.append( 1 / (1 + np.exp(-z)))
 	logit_hist = out_logit[0]
 	logit_scenario = out_logit[1]
@@ -698,7 +709,7 @@ def load_qm(model_name, ensemble, p, lsm, hist_y1, hist_y2, scenario_y1, scenari
 
 def create_qm_combined(era5_da, model_da_hist, model_da_scenario, \
 	    model_name, ensemble, p, lsm, replace_zeros, hist_y1, hist_y2, scenario_y1, scenario_y2,\
-	    experiment="historical",loop=True):
+	    save_hist_qm, experiment="historical",loop=True):
 
         if lsm:
                 hist_fname = "/g/data/eg3/ab4502/ExtremeWind/aus/regrid_1.5/"+\
@@ -718,7 +729,8 @@ def create_qm_combined(era5_da, model_da_hist, model_da_scenario, \
                 mod_xhat_hist, mod_xhat_scenario = \
 		    qm_cmip_combined(era5_da, model_da_hist, model_da_scenario,\
 		    replace_zeros)
-        xr.Dataset(data_vars={p:\
+        if save_hist_qm:
+                xr.Dataset(data_vars={p:\
 			(("time", "lat", "lon"), mod_xhat_hist)},\
                     coords={"time":model_da_hist.time.values,\
 			"lat":model_da_hist.lat, "lon":model_da_hist.lon}).\
@@ -734,13 +746,20 @@ def create_qm_combined(era5_da, model_da_hist, model_da_scenario, \
         return mod_xhat_hist, mod_xhat_scenario
 
 def load_all_qm_combined(data_hist, data_scenario, models, p, lsm, replace_zeros,\
-	    experiment, hist_y1, hist_y2, scenario_y1, scenario_y2, force_compute=False, loop=True):
+	    experiment, hist_y1, hist_y2, scenario_y1, scenario_y2, force_compute=False, loop=True, save_hist_qm=False):
                                 
         for i in np.arange(len(models)):    
                 if models[i][0] == "ERA5":
                         save_mean([data_hist[i].values], [data_hist[i]], [models[i]], p,\
 				data_hist[0].lon.values, data_hist[0].lat.values,\
 				hist_y1, hist_y2, experiment="historical")
+                elif models[i][0] == "BARPA":
+                        save_mean([data_hist[i].values], [data_hist[i]], [models[i]], p,\
+				data_hist[0].lon.values, data_hist[0].lat.values,\
+				hist_y1, hist_y2, experiment="historical")
+                        save_mean([data_scenario[i].values], [data_scenario[i]], [models[i]], p,\
+				data_scenario[0].lon.values, data_scenario[0].lat.values,\
+				scenario_y1, scenario_y2, experiment=experiment)
                 else:                   
                         if force_compute:
                                 print("Forcing QQ-mapping of "+models[i][0]+"...")
@@ -749,7 +768,7 @@ def load_all_qm_combined(data_hist, data_scenario, models, p, lsm, replace_zeros
 					    data_hist[i], data_scenario[i],\
 					    models[i][0],\
                                             models[i][1], p, lsm, replace_zeros,\
-					    hist_y1, hist_y2, scenario_y1, scenario_y2,\
+					    hist_y1, hist_y2, scenario_y1, scenario_y2, save_hist_qm,\
                                             experiment=experiment, loop=loop)
                         else:               
                                 try:
@@ -767,7 +786,7 @@ def load_all_qm_combined(data_hist, data_scenario, models, p, lsm, replace_zeros
 					    data_hist[i],\
 					    data_scenario[i], models[i][0],\
                                             models[i][1], p, lsm, replace_zeros,\
-					    hist_y1, hist_y2, scenario_y1, scenario_y2,\
+					    hist_y1, hist_y2, scenario_y1, scenario_y2, save_hist_qm,\
 					    experiment=experiment)
                         save_mean([model_xhat_hist], [data_hist[i]], [models[i]], p,\
 				data_hist[0].lon.values, data_hist[0].lat.values,\
@@ -882,7 +901,9 @@ if __name__ == "__main__":
 		type=str2bool)
 	parser.add_argument("--force_compute",help="Force quantile mapping of CMIP data?",default=False,\
 		type=str2bool)
-	parser.add_argument("--force_cmip_regrid",help="Force regridding of CMIP data?",default=False,\
+	parser.add_argument("--force_cmip_regrid",help="Force regridding of CMIP data?",default=True,\
+		type=str2bool)
+	parser.add_argument("--save_hist_qm",help="Save the historical quantile matched CMIP data",default=False,\
 		type=str2bool)
 	parser.add_argument("--lsm",help="Mask ocean values using the ERA5 lsm?",default=True,\
 		type=str2bool)
@@ -916,6 +937,7 @@ if __name__ == "__main__":
 	scenario_y1 = args.scenario_y1
 	scenario_y2 = args.scenario_y2
 	log = args.log
+	save_hist_qm=args.save_hist_qm
 	force_cmip_regrid=args.force_cmip_regrid
 	force_compute=args.force_compute
 	mean_only=args.mean_only
@@ -943,7 +965,9 @@ if __name__ == "__main__":
 			["MIROC5","r1i1p1",5,""] ,\
 			["MRI-CGCM3","r1i1p1",5,""], \
 			["bcc-csm1-1","r1i1p1",5,""], \
-			["ACCESS-ESM1-5", "r1i1p1f1", 6, ""]\
+			["ACCESS-ESM1-5", "r1i1p1f1", 6, ""], \
+			["ACCESS-CM2", "r1i1p1f1", 6, ""],\
+			["BARPA", ""]
                         ]
 	if model == "":
 		model = ["ERA5", "ACCESS1-3", "ACCESS1-0", "BNU-ESM", "CNRM-CM5", "GFDL-CM3", \
@@ -953,12 +977,12 @@ if __name__ == "__main__":
 
 	#Load all the models for the historical period and the scenario given by "experiment"
 	if not mean_only:
-		if p in ["logit_sta","logit_aws"]:
+		if p in ["logit_sta","logit_aws","logit_aws_barra"]:
 			out_qm_hist = []; out_qm_scenario = []
 			for i in np.arange(len(models)):
 				a, b = load_logit(models[i][0], models[i][1], p, lsm,\
 				    hist_y1, hist_y2, scenario_y1, scenario_y2,\
-				    experiment, force_compute, save=True)
+				    experiment, force_compute, hist_save=save_hist_qm)
 				out_qm_hist.append(a[0])
 				out_qm_scenario.append(b[0])
 			#From quantile-matched 6-hourly model data, compute the daily maximum
@@ -1000,7 +1024,7 @@ if __name__ == "__main__":
 				out_hist, out_scenario, models, p, lsm, \
 				replace_zeros, experiment, \
 				hist_y1, hist_y2, scenario_y1, scenario_y2, \
-				force_compute=force_compute)
+				force_compute=force_compute, save_hist_qm=save_hist_qm)
 			out_hist_dmax = daily_max_qm( out_qm_hist, out_hist, models, p, lsm)
 			save_daily_freq([ds[p].values for ds in out_hist_dmax], \
 				    out_hist_dmax, threshold, models, p,\
@@ -1016,7 +1040,8 @@ if __name__ == "__main__":
 			del out_scenario_dmax, out_qm_scenario
 		else:
 			if (force_compute) & (["ERA5",""] not in models):
-				models = [ ["ERA5", ""] ]+models
+				if models != [["BARPA",""]]:
+					models = [ ["ERA5", ""] ]+models
 				print(models)
 			print("Loading re-gridded historical model data...")
 			#Load all models (given my "models"), and regrid to the ERA5 spatial
@@ -1044,7 +1069,7 @@ if __name__ == "__main__":
 				out_hist, out_scenario, models, p, lsm, \
 				replace_zeros, experiment, \
 				hist_y1, hist_y2, scenario_y1, scenario_y2, \
-				force_compute=force_compute)
+				force_compute=force_compute, save_hist_qm=save_hist_qm)
 	else:
 
 		try:

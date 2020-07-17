@@ -1,3 +1,4 @@
+import glob
 from era5_read import get_mask
 from numba import jit
 import argparse
@@ -268,26 +269,32 @@ def load_model_data(models, p, era5_data=None, save=True, \
 	assert y2 >= y1
 	assert era5_y2 >= era5_y1
 
-	era5_lsm = get_era5_lsm()
-	out = []
-	if era5_data is None:
-		era5 = load_era5(p, era5_regrid)
-		era5_data = era5.sel({"time":(era5["time.year"] <= era5_y2) & \
-				    (era5["time.year"] >= era5_y1)})
-		if lsm:
-			era5_data = xr.where(era5_lsm, \
-			    era5_data, np.nan)
+	if models[0][0] == "ERA5":
+		era5_lsm = get_era5_lsm()
+		if era5_data is None:
+			era5 = load_era5(p, era5_regrid)
+			era5_data = era5.sel({"time":(era5["time.year"] <= era5_y2) & \
+					    (era5["time.year"] >= era5_y1)})
+			if lsm:
+				era5_data = xr.where(era5_lsm, \
+				    era5_data, np.nan)
 
+	out = []
 	for i in np.arange(len(models)):
 		if models[i][0] == "ERA5":
 			e = era5_data
+			if lsm:
+				e = xr.where(era5_lsm, \
+					e, np.nan)
+		elif models[i][0] == "BARPA":
+			e = load_barpa(p, y1, y2)
 		else:
 			e = regrid_cmip(era5_data, models[i][0],\
 				models[i][1], p, y1, y2, \
 				force_cmip_regrid, experiment=experiment, save=save)
-		if lsm:
-			e = xr.where(era5_lsm, \
-				e, np.nan)
+			if lsm:
+				e = xr.where(era5_lsm, \
+					e, np.nan)
 
 		e = drop_duplicates(e)
 		e.close()
@@ -448,6 +455,21 @@ def get_era5_lsm(regrid=False):
 		return xr.where(lsm_coarse>=18, 1, 0).values
 	else:
 		return lsm
+
+def load_barpa(p, y1, y2, regrid=False):
+
+	#Load BARPA data between two years.
+
+	print("Loading BARPA...")
+	files = np.sort(glob.glob("/g/data/eg3/ab4502/ExtremeWind/aus/barpa_access/barpa_access_*"))
+	years = np.array([int(file.split("/")[8].split("_")[2][0:4]) for file in files])
+	barpa = xr.open_mfdataset(files[(years>=y1) & (years <= y2)])[p]
+	lsm = xr.open_dataset("/g/data/du7/barpa/trials/BARPA-EASTAUS_12km/static/lnd_mask-BARPA-EASTAUS_12km.nc").interp({"longitude":barpa.lon, "latitude":barpa.lat}, "nearest")
+	barpa_lsm = barpa.where(lsm["lnd_mask"].values==1, np.nan)
+	barpa_lsm = barpa_lsm.sel({"time":(barpa_lsm["time.year"] >= y1) & (barpa_lsm["time.year"] <= y2)})
+	print(barpa_lsm)
+
+	return barpa_lsm
 
 def load_era5(p, regrid=False):
 

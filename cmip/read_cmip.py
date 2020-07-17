@@ -165,29 +165,21 @@ def read_cmip(model, experiment, ensemble, year, domain, cmip_ver=5, group = "",
 	uas = trim_cmip5(uas, domain, year)
 	vas = trim_cmip5(vas, domain, year)
 
-	#Make sure hus, ta, ua, va are the same length
-	hus = hus.sel({"time":np.in1d(hus.time, ta.time)})
-	ta = ta.sel({"time":np.in1d(ta.time, hus.time)})
-	ta = ta.sel({"time":np.in1d(ta.time, ua.time)})
-	hus = hus.sel({"time":np.in1d(hus.time, ua.time)})
-	ua = ua.sel({"time":np.in1d(ua.time, hus.time)})
-	va = va.sel({"time":np.in1d(va.time, hus.time)})
+	#Get common times for all datasets
+	common_times = np.array(list(set(hus.time.values) & set(ta.time.values) & set(ua.time.values)\
+		 & set(va.time.values) & set(huss.time.values) & set(tas.time.values)\
+		 & set(uas.time.values) & set(vas.time.values) & set(ps.time.values)))
 
-	#Match the surface data to the level data
-	huss = huss.sel({"time":np.in1d(huss.time, hus.time)})
-	tas = tas.sel({"time":np.in1d(tas.time, ta.time)})
-	uas = uas.sel({"time":np.in1d(uas.time, ua.time)})
-	vas = vas.sel({"time":np.in1d(vas.time, va.time)})
-
-	#Now match the 6 hourly data to the 6-hourly surface data to ensure they are the same length
-	hus = hus.sel({"time":np.in1d(hus.time, huss.time)})
-	ta = ta.sel({"time":np.in1d(ta.time, tas.time)})
-	ua = ua.sel({"time":np.in1d(ua.time, uas.time)})
-	va = va.sel({"time":np.in1d(va.time, vas.time)})
-
-	#Match surface pressure
-	ps = ps.sel({"time":np.in1d(ps.time, hus.time)})
-	ps = ps.sel({"time":np.in1d(ps.time, huss.time)})
+	#Restrict all data to common times
+	hus = hus.sel({"time": np.in1d(hus.time, common_times)})
+	ta = ta.sel({"time": np.in1d(ta.time, common_times)})
+	ua = ua.sel({"time": np.in1d(ua.time, common_times)})
+	va = va.sel({"time": np.in1d(va.time, common_times)})
+	huss = huss.sel({"time": np.in1d(huss.time, common_times)})
+	tas = tas.sel({"time": np.in1d(tas.time, common_times)})
+	uas = uas.sel({"time": np.in1d(uas.time, common_times)})
+	vas = vas.sel({"time": np.in1d(vas.time, common_times)})
+	ps = ps.sel({"time": np.in1d(ps.time, common_times)})
 
 	#Either convert vertical coordinate to height or pressure, depending on the model 
 	names = [] 
@@ -202,11 +194,10 @@ def read_cmip(model, experiment, ensemble, year, domain, cmip_ver=5, group = "",
 		q = hus.hus / (1 - hus.hus)
 		tv = ta.ta * ( ( q + 0.622) / (0.622 * (1+q) ) )
 		p = np.swapaxes(np.swapaxes(ps.ps * np.exp( -9.8*z / (287*tv)), 3, 2), 2, 1)
-		if ((experiment == "rcp85") & (model in ["ACCESS1-3","ACCESS1-0"])) | \
-			(model in ["ACCESS-CM2"]):
+		if ((model in ["ACCESS1-3","ACCESS1-0","ACCESS-CM2","ACCESS-ESM1-5"])):
 			z = np.swapaxes(z, 0, 1).values
 			orog = orog[0]
-		elif experiment == "historical":
+		else:
 			z = np.tile(z.values.astype("float32"), [ta.ta.shape[0], 1, 1, 1], )
 	elif np.any(np.in1d(["p0","ap"], names)):
 		#If the model has been stored on a hybrid pressure coordinate, it should have the
@@ -229,14 +220,15 @@ def read_cmip(model, experiment, ensemble, year, domain, cmip_ver=5, group = "",
 	else:
 		raise ValueError("Check the vertical coordinate of this model")
 
-	#Sanity checks on pressure and height, one of which is calculated via hydrostatic approx.
+	#Sanity checks on pressure and height, one of which is calculated via hydrostatic approx. Note ACCESS-CM2 is
+	# missing a temperature level, and so that level will have zero pressure. Ignore sanity check for this model.
 	if (z.min() < -1000) | (z.max() > 100000):
 		raise ValueError("Potentially erroneous Z values (less than -1000 or greater than 100,000 km")
 	if (p.max().values > 200000) | (p.min().values < 0):
 		if model != "ACCESS-CM2":
 			raise ValueError("Potentially erroneous pressure (less than 0 or greater than 200,000 Pa")
 
-	#Convert quantities into those expected by wrf_parallel.py
+	#Convert quantities into those expected by wrf_(non)_parallel.py
 	ta = ta.ta.values - 273.15
 	hur = mpcalc.relative_humidity_from_specific_humidity(hus.hus.values, \
 		    ta*units.units.degC, p.values*units.units.pascal) * 100

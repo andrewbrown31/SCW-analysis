@@ -2,10 +2,10 @@
 
 #PBS -P eg3 
 #PBS -q normal
-#PBS -l walltime=48:00:00,mem=128GB 
-#PBS -l ncpus=16
-#PBS -o /home/548/ab4502/working/ExtremeWind/jobs/messages/wrf_python_ACCESS1-3.o 
-#PBS -e /home/548/ab4502/working/ExtremeWind/jobs/messages/wrf_python_ACCESS1-3.e 
+#PBS -l walltime=36:00:00,mem=190GB 
+#PBS -l ncpus=1
+#PBS -o /home/548/ab4502/working/ExtremeWind/jobs/messages/wrf_python_ACCESS1-3_rcp85.o 
+#PBS -e /home/548/ab4502/working/ExtremeWind/jobs/messages/wrf_python_ACCESS1-3_rcp85.e 
 #PBS -l storage=gdata/eg3+gdata/ub4+gdata/ma05+gdata/du7+gdata/rr3+gdata/r87+gdata/fs38
  
 #Set up conda/shell environments 

@@ -2,7 +2,7 @@
 
 #PBS -P eg3
 #PBS -q express
-#PBS -l walltime=24:00:00,mem=128GB
+#PBS -l walltime=06:00:00,mem=190GB
 #PBS -l ncpus=1
 #PBS -o /home/548/ab4502/working/ExtremeWind/jobs/messages/save_cmip_mean.o
 #PBS -e /home/548/ab4502/working/ExtremeWind/jobs/messages/save_cmip_mean.e

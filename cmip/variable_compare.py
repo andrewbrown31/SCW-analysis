@@ -23,7 +23,7 @@ def plot_mean(models, hist_y1, hist_y2, outname, qm=True):
 
 	m = Basemap(llcrnrlon=110, llcrnrlat=-45, urcrnrlon=160, \
 		urcrnrlat=-10,projection="cyl")
-	plt.figure(figsize=[6,10])
+	plt.figure(figsize=[8,10])
 	tick_locator = ticker.MaxNLocator(nbins=4)
 	n = 6
 	r = 12
@@ -36,15 +36,17 @@ def plot_mean(models, hist_y1, hist_y2, outname, qm=True):
 				cmip = np.median(np.stack([data[i][p].values for i in np.arange(1,13)]), axis=0)
 				era5 = data[0][p].values
 			else:
-				data = [xr.open_dataarray("/g/data/eg3/ab4502/ExtremeWind/aus/regrid_1.5/"+p+"_1979_2005_ensemble_mean.nc")]
+				data = [xr.open_dataarray("/g/data/eg3/ab4502/ExtremeWind/aus/regrid_1.5/"+p+"_1979_2005_ensemble_mean_cmip5.nc")]
+				data2 = [xr.open_dataarray("/g/data/eg3/ab4502/ExtremeWind/aus/regrid_1.5/"+p+"_1979_2005_ensemble_mean_cmip6.nc")]
 				cmip = data[0].values
+				cmip6 = data2[0].values
 				era5 = xr.open_dataset("/g/data/eg3/ab4502/ExtremeWind/aus/regrid_1.5/ERA5__mean_"+p+"_historical_1979_2005.nc")[p].values
 				
 			lon = data[0].lon.values
 			lat = data[0].lat.values
 			x,y = np.meshgrid(lon,lat)
 
-			plt.subplot(6,2,cnt)
+			plt.subplot(6,3,cnt)
 			if p=="lr36":
 				plt.title("ERA5")
 			m.drawcoastlines()
@@ -55,9 +57,10 @@ def plot_mean(models, hist_y1, hist_y2, outname, qm=True):
 				c = m.contourf(x, y, era5, cmap=cm, levels=n)
 				cb = plt.colorbar(ticks=tick_locator, aspect=r)
 			plt.ylabel(titles[p])
+			cb.ax.tick_params(labelsize=12)
 			cnt=cnt+1
 
-			plt.subplot(6,2,cnt)
+			plt.subplot(6,3,cnt)
 			if p=="lr36":
 				plt.title("CMIP5")
 			m.drawcoastlines()
@@ -68,11 +71,25 @@ def plot_mean(models, hist_y1, hist_y2, outname, qm=True):
 			else:
 				c = m.contourf(x, y, cmip, cmap=cm)
 				cb = plt.colorbar(ticks=tick_locator, aspect=r)
-			cb.set_label(units[p])
-
+			cb.ax.tick_params(labelsize=12)
 			cnt=cnt+1
 
-	plt.subplots_adjust(hspace=0.3)
+			plt.subplot(6,3,cnt)
+			if p=="lr36":
+				plt.title("CMIP6")
+			m.drawcoastlines()
+			if log[p]:
+				c = m.contourf(x, y, cmip6,\
+					norm=mpl.colors.LogNorm(), cmap=cm, levels=n)
+				cb = plt.colorbar()
+			else:
+				c = m.contourf(x, y, cmip6, cmap=cm)
+				cb = plt.colorbar(ticks=tick_locator, aspect=r)
+			cb.set_label(units[p])
+			cb.ax.tick_params(labelsize=12)
+			cnt=cnt+1
+
+	plt.subplots_adjust(hspace=0.2, wspace=0.3)
 	plt.savefig("/g/data/eg3/ab4502/figs/CMIP/"+outname+".png", bbox_inches="tight")
 
 if __name__ == "__main__":
@@ -93,7 +110,6 @@ if __name__ == "__main__":
                         ]
 	hist_y1 = 1979
 	hist_y2 = 2005
-    
 
 	plot_mean(models, hist_y1, hist_y2,\
 		"mean_variable_compare", qm=False)

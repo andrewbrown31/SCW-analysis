@@ -1,18 +1,18 @@
 #!/bin/bash
 
 #PBS -P eg3 
-#PBS -q normal
-#PBS -l walltime=36:00:00,mem=190GB 
+#PBS -q hugemem
+#PBS -l walltime=48:00:00,mem=512GB 
 #PBS -l ncpus=1
-#PBS -o /home/548/ab4502/working/ExtremeWind/jobs/messages/wrf_python_IPSL-CM5A-LR.o 
-#PBS -e /home/548/ab4502/working/ExtremeWind/jobs/messages/wrf_python_IPSL-CM5A-LR.e 
+#PBS -o /home/548/ab4502/working/ExtremeWind/jobs/messages/wrf_python_IPSL-CM5A-LR_historical.o 
+#PBS -e /home/548/ab4502/working/ExtremeWind/jobs/messages/wrf_python_IPSL-CM5A-LR_historical.e 
 #PBS -l storage=gdata/eg3+gdata/ub4+gdata/ma05+gdata/du7+gdata/rr3+gdata/r87+gdata/fs38+gdata/al33
  
 #Set up conda/shell environments 
 source activate wrfpython3.6 
 
 d=1960-01-01
-while [ "$d" != 1970-01-01 ]; do
+while [ "$d" != 2010-01-01 ]; do
 
 	start_time=$(date -d "$d" +%Y)"010100"
 	end_time=$(date -d "$d + 9 year"  +%Y)"123118"

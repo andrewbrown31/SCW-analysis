@@ -2,7 +2,7 @@
 
 #PBS -P eg3 
 #PBS -q hugemem
-#PBS -l walltime=36:00:00,mem=1024GB
+#PBS -l walltime=36:00:00,mem=512GB
 #PBS -l ncpus=1
 #PBS -o /home/548/ab4502/working/ExtremeWind/jobs/messages/wrf_python_ACCESS-CM2_ssp585.o 
 #PBS -e /home/548/ab4502/working/ExtremeWind/jobs/messages/wrf_python_ACCESS-CM2_ssp585.e 

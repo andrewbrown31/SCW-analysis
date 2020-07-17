@@ -1,11 +1,11 @@
 #!/bin/bash
 
 #PBS -P eg3 
-#PBS -q normal
-#PBS -l walltime=36:00:00,mem=128GB 
+#PBS -q hugemem
+#PBS -l walltime=36:00:00,mem=512GB 
 #PBS -l ncpus=1
-#PBS -o /home/548/ab4502/working/ExtremeWind/jobs/messages/wrf_python_CNRM-CM5.o 
-#PBS -e /home/548/ab4502/working/ExtremeWind/jobs/messages/wrf_python_CNRM-CM5.e 
+#PBS -o /home/548/ab4502/working/ExtremeWind/jobs/messages/wrf_python_CNRM-CM5_rcp85.o 
+#PBS -e /home/548/ab4502/working/ExtremeWind/jobs/messages/wrf_python_CNRM-CM5_rcp85.e 
 #PBS -l storage=gdata/eg3+gdata/ub4+gdata/ma05+gdata/du7+gdata/rr3+gdata/r87+gdata/fs38+gdata/al33
  
 #Set up conda/shell environments 

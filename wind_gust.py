@@ -1,11 +1,12 @@
 #Load point-based daily max wind gust data (reanalyisis and aws) and compare
 
+import matplotlib.colors as colors
 from scipy.stats import spearmanr as rho
 from statsmodels.distributions.empirical_distribution import ECDF
 from event_analysis import *
 from plot_param import *
 import matplotlib
-matplotlib.use("TkAgg")
+#matplotlib.use("TkAgg")
 
 def load_wind_gusts(include_barra,remove_incomplete_years='True'):
 	#Load dataframes
@@ -122,7 +123,6 @@ def quantile_match(combined,obs_name,model_name):
 	return combined
 
 def plot_scatter(combined,model_list,name_list,location=False):
-	import matplotlib.colors as colors
 	fig = plt.figure(figsize=[15,7])
 	if location != False:
 		combined = combined[combined.index.get_level_values(1) == location]
@@ -276,10 +276,16 @@ def reanalysis_check():
 
 	#Load in reanalysis gusts, and observations. Plot scatterplots, with convective and non-convective
 	# gusts shown separately. Show lines of best fit
-	barra = pd.read_pickle("/g/data/eg3/ab4502/ExtremeWind/points/barra_allvars_2005_2018.pkl")
+	barra = pd.read_pickle("/g/data/eg3/ab4502/ExtremeWind/points/barra_allvars_2005_2018_2.pkl")
+	barpa = pd.read_pickle("/g/data/eg3/ab4502/ExtremeWind/points/barpa_erai_gusts.pkl")
 	era5 = pd.read_pickle("/g/data/eg3/ab4502/ExtremeWind/points/era5_allvars_2005_2018.pkl")
 	obs = pd.read_pickle("/g/data/eg3/ab4502/ExtremeWind/obs/aws/convective_wind_gust_aus_2005_2018.pkl")
 	obs["hourly_ceil_utc"] = pd.DatetimeIndex(obs["gust_time_utc"]).ceil("1H")
+
+	removed = ['Broome', 'Port Hedland', 'Carnarvon', 'Meekatharra', 'Perth', 'Esperance', 'Kalgoorlie', 'Halls Creek']
+	barra = barra.loc[np.in1d(barra.loc_id, removed, invert=True)]
+	era5 = era5.loc[np.in1d(era5.loc_id, removed, invert=True)]
+
 	barra_sta_wg = pd.merge(obs[["stn_name","wind_gust","hourly_ceil_utc","tc_affected","lightning","is_sta"]],\
                 barra, how="left",left_on=["stn_name","hourly_ceil_utc"], right_on=["loc_id","time"]).\
 		dropna(subset=["ml_cape"])
@@ -288,6 +294,10 @@ def reanalysis_check():
                 era5, how="left",left_on=["stn_name","hourly_ceil_utc"], right_on=["loc_id","time"]).\
 		dropna(subset=["ml_cape"])
 	era5_aws_wg = era5_sta_wg.dropna(subset=["wind_gust"])
+	barpa_sta_wg = pd.merge(obs[["stn_name","wind_gust","daily_date_utc","tc_affected","lightning","is_sta"]],\
+		barpa, how="left",left_on=["stn_name","daily_date_utc"], right_on=["loc_id","time"]).\
+		dropna(subset=["max_wndgust10m"])      
+	barpa_aws_wg = barpa_sta_wg.dropna(subset=["wind_gust"])
 
 	#Find poly fits and correlations
 	barra_conv_fit =np.polynomial.polynomial.Polynomial.fit(\
@@ -311,6 +321,29 @@ def reanalysis_check():
 	barra_tc_corr =np.corrcoef(\
 		    barra_aws_wg.query("(wind_gust >= 25) & (tc_affected == 1)")\
 		    ["wind_gust"], barra_aws_wg.query("(wind_gust >= 25) & (tc_affected==1)")["wg10"])[1,0]
+
+	barpa_conv_fit =np.polynomial.polynomial.Polynomial.fit(\
+		    barpa_aws_wg.query("(wind_gust >= 25) & (lightning >= 2) & (tc_affected==0)")\
+		    ["wind_gust"], barpa_aws_wg.query("(wind_gust >= 25) & (lightning >= 2) & (tc_affected==0)")["max_wndgust10m"], 1)
+	barpa_conv_corr =np.corrcoef(\
+		    barpa_aws_wg.query("(wind_gust >= 25) & (lightning >= 2) & (tc_affected==0)")\
+		    ["wind_gust"], barpa_aws_wg.query("(wind_gust >= 25) & (lightning >= 2) & (tc_affected==0)")["max_wndgust10m"])[1,0]
+	barpa_conv_fit_x, barpa_conv_fit_y = barpa_conv_fit.linspace(10)
+	barpa_non_conv_fit =np.polynomial.polynomial.Polynomial.fit(\
+		    barpa_aws_wg.query("(wind_gust >= 25) & (lightning < 2) & (tc_affected==0)")\
+		    ["wind_gust"], barpa_aws_wg.query("(wind_gust >= 25) & (lightning < 2) & (tc_affected==0)")["max_wndgust10m"], 1)
+	barpa_non_conv_corr =np.corrcoef(\
+		    barpa_aws_wg.query("(wind_gust >= 25) & (lightning < 2) & (tc_affected==0)")\
+		    ["wind_gust"], barpa_aws_wg.query("(wind_gust >= 25) & (lightning < 2) & (tc_affected==0)")["max_wndgust10m"])[1,0]
+	barpa_non_conv_fit_x, barpa_non_conv_fit_y = barpa_non_conv_fit.linspace(10)
+	barpa_tc_fit =np.polynomial.polynomial.Polynomial.fit(\
+		    barpa_aws_wg.query("(wind_gust >= 25) & (tc_affected==1)")\
+		    ["wind_gust"], barpa_aws_wg.query("(wind_gust >= 25) & (tc_affected==1)")["max_wndgust10m"], 1)
+	barpa_tc_fit_x, barpa_tc_fit_y = barpa_tc_fit.linspace(10)
+	barpa_tc_corr =np.corrcoef(\
+		    barpa_aws_wg.query("(wind_gust >= 25) & (tc_affected == 1)")\
+		    ["wind_gust"], barpa_aws_wg.query("(wind_gust >= 25) & (tc_affected==1)")["max_wndgust10m"])[1,0]
+
 	era5_conv_fit =np.polynomial.polynomial.Polynomial.fit(\
 		    era5_aws_wg.query("(wind_gust >= 25) & (lightning >= 2 & (tc_affected==0))")\
 		    ["wind_gust"], era5_aws_wg.query("(wind_gust >= 25) & (lightning >= 2) & (tc_affected==0)")["wg10"], 1)
@@ -334,7 +367,7 @@ def reanalysis_check():
 		    ["wind_gust"], era5_aws_wg.query("(wind_gust >= 25) & (tc_affected == 1)")["wg10"])[1,0]
 
 	#Plot scatterplots for > 25 m/s
-	plt.figure(figsize=[10,6]);plt.subplot(211);ax=plt.gca() 
+	plt.figure(figsize=[10,6]);plt.subplot(311);ax=plt.gca() 
 	barra_aws_wg.query("(wind_gust >= 25) & (lightning < 2) & (tc_affected==0)").plot(kind="scatter",x="wind_gust",\
 		y="wg10",marker="x",ax=ax, color="tab:blue",label="Non-conv: r="+str(round(barra_non_conv_corr,2)))
 	barra_aws_wg.query("(wind_gust >= 25) & (lightning >= 2) & (tc_affected==0)").plot(kind="scatter",x="wind_gust",\
@@ -349,7 +382,7 @@ def reanalysis_check():
 	plt.legend()
 	plt.xlabel("")
 	plt.ylabel("BARRA")
-	plt.subplot(212);ax=plt.gca() 
+	plt.subplot(312);ax=plt.gca() 
 	era5_aws_wg.query("(wind_gust >= 25) & (lightning < 2) & (tc_affected==0)").plot(kind="scatter",x="wind_gust",\
 		y="wg10",marker="x",ax=ax, color="tab:blue",label="Non-conv: r="+str(round(era5_non_conv_corr,2)))
 	era5_aws_wg.query("(wind_gust >= 25) & (lightning >= 2) & (tc_affected==0)").plot(kind="scatter",x="wind_gust", \
@@ -362,26 +395,60 @@ def reanalysis_check():
 	plt.plot(era5_non_conv_fit_x, era5_non_conv_fit_y, color="tab:blue")
 	plt.plot(era5_tc_fit_x, era5_tc_fit_y, color="tab:green")
 	plt.ylabel("ERA5")
+	plt.subplot(313);ax=plt.gca() 
+	barpa_aws_wg.query("(wind_gust >= 25) & (lightning < 2) & (tc_affected==0)").plot(kind="scatter",x="wind_gust",\
+		y="max_wndgust10m",marker="x",ax=ax, color="tab:blue",label="Non-conv: r="+str(round(barpa_non_conv_corr,2)))
+	barpa_aws_wg.query("(wind_gust >= 25) & (lightning >= 2) & (tc_affected==0)").plot(kind="scatter",x="wind_gust",\
+		y="max_wndgust10m",ax=ax,marker="o",color="none",edgecolor="r",label="Conv: r="+str(round(barpa_conv_corr,2)))
+	barpa_aws_wg.query("(wind_gust >= 25) & (tc_affected==1)").plot(kind="scatter",x="wind_gust",\
+		y="max_wndgust10m",ax=ax,marker="^",color="none",edgecolor="tab:green",\
+		label="TC affected: r="+str(round(barpa_tc_corr,2)))
+	plt.plot([25,40],[25,40],color="k") 
+	plt.plot(barpa_conv_fit_x, barpa_conv_fit_y, color="r")
+	plt.plot(barpa_non_conv_fit_x, barpa_non_conv_fit_y, color="tab:blue")
+	plt.plot(barpa_tc_fit_x, barpa_tc_fit_y, color="tab:green")
+	plt.legend()
+	plt.xlabel("")
+	plt.ylabel("BARPA")
 	plt.xlabel("AWS")
 
 	#Plot scatterplots for all gusts
+	plt.figure(figsize=[8,10])
 	barra_fit = np.polynomial.polynomial.Polynomial.fit(barra_aws_wg["wind_gust"],barra_aws_wg["wg10"], 2)
 	era5_fit = np.polynomial.polynomial.Polynomial.fit(era5_aws_wg["wind_gust"],era5_aws_wg["wg10"], 2)
+	barpa_fit = np.polynomial.polynomial.Polynomial.fit(barpa_aws_wg["wind_gust"],barpa_aws_wg["max_wndgust10m"], 2)
 	barra_fit_x, barra_fit_y = barra_fit.linspace(10)
 	era5_fit_x, era5_fit_y = era5_fit.linspace(10)
-	plt.subplot(211);ax=plt.gca()
-	barra_aws_wg.plot(kind="scatter",x="wind_gust",y="wg10",color="none",edgecolor="tab:blue",ax=ax)
+	barpa_fit_x, barpa_fit_y = barpa_fit.linspace(10)
+	plt.subplot(311);ax=plt.gca()
+	barra_aws_wg.plot(kind="hexbin",x="wind_gust",y="wg10",ax=ax,gridsize=20, norm=colors.SymLogNorm(1), vmin=0, vmax=1000, cmap=plt.get_cmap("Oranges"), extent=(0, 40, 0, 40))
+	#barra_aws_wg.plot(kind="hexbin",x="wind_gust",y="wg10",color="none",edgecolor="tab:blue",ax=ax)
 	plt.plot(barra_fit_x,barra_fit_y,color="r")
-	plt.plot([0,40],[0,40],"k")
-	plt.ylabel("BARRA");plt.xlabel("")
-	plt.subplot(212);ax=plt.gca()
-	era5_aws_wg.plot(kind="scatter",x="wind_gust",y="wg10",color="none",edgecolor="tab:blue",ax=ax)
+	plt.plot([0,40],[0,40],"k"); plt.ylim([0,40]); plt.xlim([0,40])
+	plt.ylabel("BARRA (m/s)");plt.xlabel("")
+	r = np.corrcoef(barra_aws_wg["wind_gust"], barra_aws_wg["wg10"])
+	plt.text(35, 5, "r = "+str(round(r[1,0],3)),va="center", ha="center")
+	plt.subplot(312);ax=plt.gca()
+	era5_aws_wg.plot(kind="hexbin",x="wind_gust",y="wg10",ax=ax,gridsize=20, norm=colors.SymLogNorm(1), vmin=0, vmax=1000, cmap=plt.get_cmap("Oranges"), extent=(0, 40, 0, 40))
+	#era5_aws_wg.plot(kind="hexbin",x="wind_gust",y="wg10",color="none",edgecolor="tab:blue",ax=ax)
 	plt.plot(era5_fit_x,era5_fit_y,color="r")
-	plt.plot([0,40],[0,40],"k")
-	plt.ylabel("ERA5");plt.xlabel("AWS")
+	plt.plot([0,40],[0,40],"k"); plt.ylim([0,40]); plt.xlim([0,40])
+	plt.ylabel("ERA5 (m/s)");plt.xlabel("")
+	r = np.corrcoef(era5_aws_wg["wind_gust"], era5_aws_wg["wg10"])
+	plt.text(35, 5, "r = "+str(round(r[1,0],3)),va="center", ha="center")
+	plt.subplot(313);ax=plt.gca()
+	barpa_aws_wg.plot(kind="hexbin",x="wind_gust",y="max_wndgust10m",ax=ax,gridsize=20, norm=colors.SymLogNorm(1), vmin=0, vmax=1000, cmap=plt.get_cmap("Oranges"), extent=(0, 40, 0, 40))
+	#barpa_aws_wg.plot(kind="scatter",x="wind_gust",y="max_wndgust10m",color="none",edgecolor="tab:blue",ax=ax)
+	plt.plot(barra_fit_x,barpa_fit_y,color="r")
+	plt.plot([0,40],[0,40],"k"); plt.ylim([0,40]); plt.xlim([0,40])
+	plt.ylabel("BARPA (m/s)");plt.xlabel("AWS (m/s)")
+	r = np.corrcoef(barpa_aws_wg["wind_gust"], barpa_aws_wg["max_wndgust10m"])
+	plt.text(35, 5, "r = "+str(round(r[1,0],3)),va="center", ha="center")
+	plt.savefig("/g/data/eg3/ab4502/figs/barpa/aws_gusts.png", bbox_inches="tight")
 
 if __name__ == "__main__":
-	df = load_wind_gusts(True,remove_incomplete_years=False)
+	#df = load_wind_gusts(True,remove_incomplete_years=False)
 	#test_dist_assumption(df,["barra_r_gust"],stns=False,threshold=20)
-	[plot_scatter(df,["erai_gust","barra_r_gust","barra_ad_gust"],["ERA-Interim","BARRA-R","BARRA-AD"],\
-		location=l) for l in ["Adelaide AP","Woomera","Port Augusta","Mount Gambier"]]
+	#[plot_scatter(df,["erai_gust","barra_r_gust","barra_ad_gust"],["ERA-Interim","BARRA-R","BARRA-AD"],\
+	#	location=l) for l in ["Adelaide AP","Woomera","Port Augusta","Mount Gambier"]]
+	reanalysis_check()

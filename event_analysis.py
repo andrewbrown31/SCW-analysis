@@ -236,9 +236,10 @@ def compare_obs_soundings():
 	plt.colorbar(cax=ax, orientation="horizontal")
 	plt.savefig("figA1.png",bbox_inches="tight")
 
-def create_mean_variable(variable, native=False, native_dir=None):
+def create_mean_variable(variable, model, native=False, native_dir=None):
 
-	#From ERA5, compute the monthly mean of a variable. Do this for hourly and daily maximum data
+	#From sub-daily model data (barra_fc, barpa_erai, era5), compute the monthly mean of a variable.
+	# Do this for houry and daily maximum data
 	#If native, then get data from the ub4 surface variables directory. Need to then specify the 
 	# "native_dir" name for the variable, which is different from the variable within the netcdf 
 	# file (e.g. for 2 m dew point, native_dir="2D" but variable="d2m")
@@ -249,7 +250,7 @@ def create_mean_variable(variable, native=False, native_dir=None):
 		f_years = np.array([int(files[i].split("_")[3][0:4]) for i in np.arange(len(files))])
 		files = files[f_years < 2019]
 	else:
-		files = glob.glob("/g/data/eg3/ab4502/ExtremeWind/aus/era5/era5*")
+		files = glob.glob("/g/data/eg3/ab4502/ExtremeWind/aus/"+model+"/"+model+"*")
 	files.sort()
 
 	#Initialise output
@@ -265,7 +266,7 @@ def create_mean_variable(variable, native=False, native_dir=None):
 	times = []
 	steps = []
 
-	#For each file, apply the equation
+	#For each file, calculate the mean
 	for f in np.arange(len(files)):
 		ds = xr.open_dataset(files[f])
 		start = dt.datetime.now()
@@ -312,7 +313,7 @@ def create_mean_variable(variable, native=False, native_dir=None):
 			name = variable,\
 			attrs = {"steps":steps} ).to_netcdf(\
 					path = "/g/data/eg3/ab4502/ExtremeWind/aus/threshold_data/"+\
-						"era5_"+variable+"_6hr_mean.nc",\
+						model+"_"+variable+"_6hr_mean.nc",\
 					mode = "w",\
 					format = "NETCDF4")
 		xr.DataArray( dims = ("time","lat","lon"),\
@@ -321,10 +322,9 @@ def create_mean_variable(variable, native=False, native_dir=None):
 			name = variable,\
 			attrs = {"steps":steps} ).to_netcdf(\
 					path = "/g/data/eg3/ab4502/ExtremeWind/aus/threshold_data/"+\
-						"era5_"+variable+"_6hr_daily_max_mean.nc",\
+						model+"_"+variable+"_6hr_daily_max_mean.nc",\
 					mode = "w",\
 					format = "NETCDF4")
-
 
 def create_annmax_variable(var, start_year, end_year):
 
@@ -1791,13 +1791,6 @@ def get_far66(df,event,param):
 	return (fa_ratio,fa_rate,param_thresh)
 
 def get_aus_stn_info():
-	#df = pd.read_pickle("/short/eg3/ab4502/ExtremeWind/aws/all_daily_max_wind_gusts_aus_1979_2017.pkl")
-	#loc_id = list(df.stn_name.unique())
-	#points = []
-	#for loc in loc_id:
-	#	lon = df[df.stn_name==loc]["lon"].unique()[0]
-	#	lat = df[df.stn_name==loc]["lat"].unique()[0]
-	#	points.append((lon,lat))
 
 	names = ["id", "stn_no", "district", "stn_name", "1", "2", "lat", "lon", "3", "4", "5", "6", "7", "8", \
 			"9", "10", "11", "12", "13", "14", "15", "16"]	
@@ -2003,8 +1996,9 @@ if __name__ == "__main__":
 
 		print("Creating monthly variables from gridded data...")
 
-		create_threshold_variable(variable,float(threshold),model,event=event,\
-			predictors=predictors)
+		create_mean_variable(variable, model, native=False)
+		#create_threshold_variable(variable,float(threshold),model,event=event,\
+		#	predictors=predictors)
 		#create_mjo_phase_variable(variable,float(threshold),model,event=event,\
 		#	predictors=predictors)
 

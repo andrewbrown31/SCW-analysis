@@ -1,3 +1,6 @@
+import gc
+from barra_read import latlon_dist
+from dask.diagnostics import ProgressBar
 import sys
 import xarray as xr
 import netCDF4 as nc
@@ -8,7 +11,7 @@ import pandas as pd
 from barra_read import date_seq
 from calc_param import get_dp
 
-def read_era5(domain,times):
+def read_era5(domain,times,pres=True):
 	#Open ERA5 netcdf files and extract variables needed for a range of times 
 	# and given spatial domain
 
@@ -39,40 +42,42 @@ def read_era5(domain,times):
 	sfc_lon,sfc_lat = get_lat_lon_sfc()
 	sfc_lon_ind = np.where((sfc_lon >= domain[2]) & (sfc_lon <= domain[3]))[0]
 	sfc_lat_ind = np.where((sfc_lat >= domain[0]) & (sfc_lat <= domain[1]))[0]
-	sfc_lon = sfc_lon[lon_ind]
-	sfc_lat = sfc_lat[lat_ind]
+	sfc_lon = sfc_lon[sfc_lon_ind]
+	sfc_lat = sfc_lat[sfc_lat_ind]
 
 	#Initialise arrays for each variable
-	ta = np.empty((len(date_list),no_p,len(lat_ind),len(lon_ind)))
-	dp = np.empty((len(date_list),no_p,len(lat_ind),len(lon_ind)))
-	hur = np.empty((len(date_list),no_p,len(lat_ind),len(lon_ind)))
-	hgt = np.empty((len(date_list),no_p,len(lat_ind),len(lon_ind)))
-	ua = np.empty((len(date_list),no_p,len(lat_ind),len(lon_ind)))
-	va = np.empty((len(date_list),no_p,len(lat_ind),len(lon_ind)))
-	wap = np.empty((len(date_list),no_p,len(lat_ind),len(lon_ind)))
-	uas = np.empty((len(date_list),len(lat_ind),len(lon_ind)))
-	vas = np.empty((len(date_list),len(lat_ind),len(lon_ind)))
-	ps = np.empty((len(date_list),len(lat_ind),len(lon_ind)))
+	if pres:
+		ta = np.empty((len(date_list),no_p,len(lat_ind),len(lon_ind)))
+		dp = np.empty((len(date_list),no_p,len(lat_ind),len(lon_ind)))
+		hur = np.empty((len(date_list),no_p,len(lat_ind),len(lon_ind)))
+		hgt = np.empty((len(date_list),no_p,len(lat_ind),len(lon_ind)))
+		ua = np.empty((len(date_list),no_p,len(lat_ind),len(lon_ind)))
+		va = np.empty((len(date_list),no_p,len(lat_ind),len(lon_ind)))
+		wap = np.empty((len(date_list),no_p,len(lat_ind),len(lon_ind)))
+	uas = np.empty((len(date_list),len(sfc_lat_ind),len(sfc_lon_ind)))
+	vas = np.empty((len(date_list),len(sfc_lat_ind),len(sfc_lon_ind)))
+	ps = np.empty((len(date_list),len(sfc_lat_ind),len(sfc_lon_ind)))
 	cp = np.zeros(ps.shape) * np.nan
 	cape = np.zeros(ps.shape) * np.nan
 	wg10 = np.zeros(ps.shape) * np.nan
 
-	tas = np.empty((len(date_list),len(lat_ind),len(lon_ind)))
-	ta2d = np.empty((len(date_list),len(lat_ind),len(lon_ind)))
+	tas = np.empty((len(date_list),len(sfc_lat_ind),len(sfc_lon_ind)))
+	ta2d = np.empty((len(date_list),len(sfc_lat_ind),len(sfc_lon_ind)))
 
 	for date in unique_dates:
 
 	#Load ERA-Interim reanalysis files
-		ta_file = nc.Dataset(glob.glob("/g/data/ub4/era5/netcdf/pressure/t/"+date[0:4]+\
-			"/t_era5_aus_"+date+"*.nc")[0])
-		z_file = nc.Dataset(glob.glob("/g/data/ub4/era5/netcdf/pressure/z/"+date[0:4]+\
-			"/z_era5_aus_"+date+"*.nc")[0])
-		ua_file = nc.Dataset(glob.glob("/g/data/ub4/era5/netcdf/pressure/u/"+date[0:4]+\
-			"/u_era5_aus_"+date+"*.nc")[0])
-		va_file = nc.Dataset(glob.glob("/g/data/ub4/era5/netcdf/pressure/v/"+date[0:4]+\
-			"/v_era5_aus_"+date+"*.nc")[0])
-		hur_file = nc.Dataset(glob.glob("/g/data/ub4/era5/netcdf/pressure/r/"+date[0:4]+\
-			"/r_era5_aus_"+date+"*.nc")[0])
+		if pres:
+			ta_file = nc.Dataset(glob.glob("/g/data/ub4/era5/netcdf/pressure/t/"+date[0:4]+\
+				"/t_era5_aus_"+date+"*.nc")[0])
+			z_file = nc.Dataset(glob.glob("/g/data/ub4/era5/netcdf/pressure/z/"+date[0:4]+\
+				"/z_era5_aus_"+date+"*.nc")[0])
+			ua_file = nc.Dataset(glob.glob("/g/data/ub4/era5/netcdf/pressure/u/"+date[0:4]+\
+				"/u_era5_aus_"+date+"*.nc")[0])
+			va_file = nc.Dataset(glob.glob("/g/data/ub4/era5/netcdf/pressure/v/"+date[0:4]+\
+				"/v_era5_aus_"+date+"*.nc")[0])
+			hur_file = nc.Dataset(glob.glob("/g/data/ub4/era5/netcdf/pressure/r/"+date[0:4]+\
+				"/r_era5_aus_"+date+"*.nc")[0])
 
 		uas_file = nc.Dataset(glob.glob("/g/data/ub4/era5/netcdf/surface/u10/"+date[0:4]+\
 			"/u10_era5_global_"+date+"*.nc")[0])
@@ -90,24 +95,30 @@ def read_era5(domain,times):
 			"/fg10_era5_global_"+date+"*.nc")[0])
 
 		#Get times to load in from file
-		times = ta_file["time"][:]
-		time_ind = [np.where(x==times)[0][0] for x in time_hours if (x in times)]
-		date_ind = np.where(np.array(formatted_dates) == date)[0]
+		if pres:
+			times = ta_file["time"][:]
+			time_ind = [np.where(x==times)[0][0] for x in time_hours if (x in times)]
+			date_ind = np.where(np.array(formatted_dates) == date)[0]
+		else:
+			times = uas_file["time"][:]
+			time_ind = [np.where(x==times)[0][0] for x in time_hours if (x in times)]
+			date_ind = np.where(np.array(formatted_dates) == date)[0]
 
 		#Get times to load in from forecast files (wg10 and cp)
 		fc_times = cp_file["time"][:]
 		fc_time_ind = [np.where(x==fc_times)[0][0] for x in time_hours if (x in fc_times)]
 
 		#Load analysis data
-		ta[date_ind,:,:,:] = ta_file["t"][time_ind,p_ind,lat_ind,lon_ind] - 273.15
-		#wap[date_ind,:,:,:] = wap_file["wap"][time_ind,p_ind,lat_ind,lon_ind]
-		ua[date_ind,:,:,:] = ua_file["u"][time_ind,p_ind,lat_ind,lon_ind]
-		va[date_ind,:,:,:] = va_file["v"][time_ind,p_ind,lat_ind,lon_ind]
-		hgt[date_ind,:,:,:] = z_file["z"][time_ind,p_ind,lat_ind,lon_ind] / 9.8
-		hur[date_ind,:,:,:] = hur_file["r"][time_ind,p_ind,lat_ind,lon_ind]
-		hur[hur<0] = 0
-		hur[hur>100] = 100
-		dp[date_ind,:,:,:] = get_dp(ta[date_ind,:,:,:],hur[date_ind,:,:,:])
+		if pres:
+			ta[date_ind,:,:,:] = ta_file["t"][time_ind,p_ind,lat_ind,lon_ind] - 273.15
+			#wap[date_ind,:,:,:] = wap_file["wap"][time_ind,p_ind,lat_ind,lon_ind]
+			ua[date_ind,:,:,:] = ua_file["u"][time_ind,p_ind,lat_ind,lon_ind]
+			va[date_ind,:,:,:] = va_file["v"][time_ind,p_ind,lat_ind,lon_ind]
+			hgt[date_ind,:,:,:] = z_file["z"][time_ind,p_ind,lat_ind,lon_ind] / 9.8
+			hur[date_ind,:,:,:] = hur_file["r"][time_ind,p_ind,lat_ind,lon_ind]
+			hur[hur<0] = 0
+			hur[hur>100] = 100
+			dp[date_ind,:,:,:] = get_dp(ta[date_ind,:,:,:],hur[date_ind,:,:,:])
 		uas[date_ind,:,:] = uas_file["u10"][time_ind,sfc_lat_ind,sfc_lon_ind]
 		vas[date_ind,:,:] = vas_file["v10"][time_ind,sfc_lat_ind,sfc_lon_ind]
 		tas[date_ind,:,:] = tas_file["t2m"][time_ind,sfc_lat_ind,sfc_lon_ind] - 273.15
@@ -117,18 +128,21 @@ def read_era5(domain,times):
 		cp[fc_date_ind,:,:] = cp_file["cp"][fc_time_ind,sfc_lat_ind,sfc_lon_ind]
 		wg10[fc_date_ind,:,:] = wg10_file["fg10"][fc_time_ind,sfc_lat_ind,sfc_lon_ind]
 
-		ta_file.close();z_file.close();ua_file.close();va_file.close();hur_file.close();uas_file.close();vas_file.close();tas_file.close();ta2d_file.close();ps_file.close()
-	
+		if pres:
+			ta_file.close();z_file.close();ua_file.close();va_file.close();hur_file.close()
+		uas_file.close();vas_file.close();tas_file.close();ta2d_file.close();ps_file.close()
 
-	p = np.flip(p)
-	ta = np.flip(ta, axis=1)
-	dp = np.flip(dp, axis=1)
-	hur = np.flip(hur, axis=1)
-	hgt = np.flip(hgt, axis=1)
-	ua = np.flip(ua, axis=1)
-	va = np.flip(va, axis=1)
-
-	return [ta,dp,hur,hgt,terrain,p,ps,ua,va,uas,vas,tas,ta2d,cp,wg10,cape,lon,lat,date_list]
+	if pres:
+		p = np.flip(p)
+		ta = np.flip(ta, axis=1)
+		dp = np.flip(dp, axis=1)
+		hur = np.flip(hur, axis=1)
+		hgt = np.flip(hgt, axis=1)
+		ua = np.flip(ua, axis=1)
+		va = np.flip(va, axis=1)
+		return [ta,dp,hur,hgt,terrain,p,ps,ua,va,uas,vas,tas,ta2d,cp,wg10,cape,lon,lat,date_list]
+	else:
+		return [ps,uas,vas,tas,ta2d,cp,wg10,cape,sfc_lon,sfc_lat,date_list]
 
 def get_pressure(top):
 	#Returns [no of levels, levels, indices below "top"]
@@ -287,6 +301,84 @@ def to_points():
 	df_orig = pd.read_pickle("/g/data/eg3/ab4502/ExtremeWind/points/erai_points_sharppy_aus_1979_2017.pkl")
 	df_new = pd.merge(df_orig, df[["time","loc_id","wbz","Vprime"]], on=["time","loc_id"])
 	df_new.to_pickle("/g/data/eg3/ab4502/ExtremeWind/points/erai_points_sharppy_aus_1979_2017.pkl")
+
+def to_points_loop_rad(loc_id,points,fname,start_year,end_year,rad=50,lsm=True,\
+		variables=False,pb=False):
+
+	#Register progress bar for xarray if desired
+	if pb:
+		ProgressBar().register()
+
+	#Create monthly dates from start_year to end_year to iterate over
+	dates = []
+	for y in np.arange(start_year,end_year+1):
+		for m in np.arange(1,13):
+			dates.append(dt.datetime(y,m,1,0,0,0))
+
+	#Initialise dataframe for point data
+	max_df = pd.DataFrame()
+	mean_df = pd.DataFrame()
+
+	#For each month from start_year to end_year
+	for t in np.arange(len(dates)):
+		#Read convective diagnostics from eg3
+		print(dates[t])
+		f=xr.open_dataset(glob.glob("/g/data/eg3/ab4502/ExtremeWind/aus/"+\
+			"era5/era5_"+dates[t].strftime("%Y%m")+"*.nc")[0],\
+			chunks={"lat":10, "lon":10, "time":10}, engine="h5netcdf")
+
+		#For each location (lat/lon pairing), get the distance (km) to each BARRA grid point
+		lat = f.coords.get("lat").values
+		lon = f.coords.get("lon").values
+		x,y = np.meshgrid(lon,lat)
+		if lsm:
+			mask = get_mask(lon,lat)
+			x[mask==0] = np.nan
+			y[mask==0] = np.nan
+		dist_km = []
+		for i in np.arange(len(loc_id)):
+			dist_km.append(latlon_dist(points[i][1], points[i][0], y, x) )
+
+		#Subset netcdf data to a list of variables, if available
+		try:
+			f=f[variables]
+		except:
+			pass
+
+		#Subset netcdf data based on lat and lon, and convert to a dataframe
+		#Get all points (regardless of LSM) within 100 km radius
+		max_temp_df = pd.DataFrame()
+		mean_temp_df = pd.DataFrame()
+		for i in np.arange(len(loc_id)):
+			a,b = np.where(dist_km[i] <= rad)
+			subset = f.isel_points("points",lat=a, lon=b).persist()
+			max_point_df = subset.max("points").to_dataframe()
+			mean_point_df = subset.mean("points").to_dataframe()
+			max_point_df["points"] = i
+			mean_point_df["points"] = i
+			max_temp_df = pd.concat([max_temp_df, max_point_df], axis=0)
+			mean_temp_df = pd.concat([mean_temp_df, mean_point_df], axis=0)
+
+		#Manipulate dataframe for nice output
+		max_temp_df = max_temp_df.reset_index()
+		for p in np.arange(len(loc_id)):
+			max_temp_df.loc[max_temp_df.points==p,"loc_id"] = loc_id[p]
+		max_temp_df = max_temp_df.drop("points",axis=1)
+		max_df = pd.concat([max_df, max_temp_df])
+
+		mean_temp_df = mean_temp_df.reset_index()
+		for p in np.arange(len(loc_id)):
+			mean_temp_df.loc[mean_temp_df.points==p,"loc_id"] = loc_id[p]
+		mean_temp_df = mean_temp_df.drop("points",axis=1)
+		mean_df = pd.concat([mean_df, mean_temp_df])
+
+		#Clean up
+		f.close()
+		gc.collect()
+
+	#Save point output to disk
+	max_df.sort_values(["loc_id","time"]).to_pickle("/g/data/eg3/ab4502/ExtremeWind/points/"+fname+"_max.pkl")
+	mean_df.sort_values(["loc_id","time"]).to_pickle("/g/data/eg3/ab4502/ExtremeWind/points/"+fname+"_mean.pkl")
 
 def to_points_loop(loc_id,points,fname,start_year,end_year,variables=False):
 
@@ -472,7 +564,14 @@ if __name__ == "__main__":
 		start_time = int(sys.argv[1])
 		end_time = int(sys.argv[2])
 
-	loc_id, points = get_aus_stn_info()
+	#loc_id, points = get_aus_stn_info()
+	loc_id = ['Melbourne', 'Wollongong', 'Gympie', 'Grafton', 'Canberra', 'Marburg', \
+		'Adelaide', 'Namoi', 'Perth', 'Hobart']
+	radar_latitude = [-37.8553, -34.2625, -25.9574, -29.622, -35.6614, -27.608, -34.6169,\
+			-31.0236, -32.3917, -43.1122]
+	radar_longitude = [144.7554, 150.8752, 152.577, 152.951, 149.5122, 152.539, 138.4689, \
+			150.1917, 115.867, 147.8057]
+	points = [(radar_longitude[i], radar_latitude[i]) for i in np.arange(len(radar_latitude))]
 
-	to_points_loop(loc_id, points, "era5_allvars_v2_"+str(start_time)+"_"+str(end_time), \
-			start_time, end_time)
+	to_points_loop_rad(loc_id, points, "era5_hail_"+str(start_time)+"_"+str(end_time), \
+			start_time, end_time, rad=100, lsm=True, variables=["ml_cape","ship","s06","mhgt","mlcape*s06"], pb=False)

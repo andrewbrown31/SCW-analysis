@@ -25,6 +25,7 @@ from erai_read import get_mask as  get_erai_mask
 from barra_read import read_barra, read_barra_fc
 from barra_ad_read import read_barra_ad
 from barra_read import get_mask as  get_barra_mask
+from barpa_read import read_barpa
 from read_cmip import read_cmip
 from wrf_parallel import *
 
@@ -52,6 +53,7 @@ def main():
 	parser.add_argument("-t1",help="Time start YYYYMMDDHH",required=True)
 	parser.add_argument("-t2",help="Time end YYYYMMDDHH",required=True)
 	parser.add_argument("-e", help="CMIP5 experiment name (not required if using era5, erai or barra)", default="")
+	parser.add_argument("--barpa_forcing_mdl", help="BARPA forcing model (erai or ACCESS1-0). Default erai.", default="erai")
 	parser.add_argument("--ens", help="CMIP5 ensemble name (not required if using era5, erai or barra)", default="r1i1p1")
 	parser.add_argument("--group", help="CMIP6 modelling group name", default="")
 	parser.add_argument("--project", help="CMIP6 modelling intercomparison project", default="CMIP")
@@ -61,9 +63,14 @@ def main():
 	parser.add_argument("--outname",help="Name of saved output. In the form *outname*_*t1*_*t2*.nc. Default behaviour is the model name",default=None)
 	parser.add_argument("--is_dcape",help="Should DCAPE be calculated? (1 or 0. Default is 1)",default=1)
 	parser.add_argument("--al33",help="Should data be gathered from al33? Default is False, and data is gathered from r87. If True, then group is required",default="False")
+	parser.add_argument("--params",help="Should the full set of convective parameters be calculated (full) or just a reduced set (reduced)",default="full")
 	args = parser.parse_args()
 
 	#Parse arguments from cmd line and set up inputs (date region model)
+	if args.params == "full":
+		full_params = True
+	else:
+		full_params = False
 	model = args.m
 	region = args.r
 	t1 = args.t1
@@ -75,6 +82,7 @@ def main():
 	else:
 		out_name = args.outname
 	is_dcape = args.is_dcape
+	barpa_forcing_mdl = args.barpa_forcing_mdl
 	experiment = args.e
 	ensemble = args.ens
 	group = args.group
@@ -126,6 +134,11 @@ def main():
 	elif model == "barra_fc":
 		ta,temp1,hur,hgt,terrain,p,ps,wap,ua,va,uas,vas,tas,ta2d,wg10,lon,lat,date_list = \
 			read_barra_fc(domain,time)
+	elif model == "barpa":
+		ta,hur,hgt,terrain,p,ps,ua,va,uas,vas,tas,ta2d,wg10,lon,lat,date_list = \
+			read_barpa(domain, time, experiment, barpa_forcing_mdl, ensemble)
+		wap = np.zeros(hgt.shape)
+		temp1 = None
 	elif model == "barra_ad":
 		wg10,temp2,ta,temp1,hur,hgt,terrain,p,ps,wap,ua,va,uas,vas,tas,ta2d,lon,lat,date_list = \
 			read_barra_ad(domain, time, False)
@@ -174,7 +187,8 @@ def main():
 
 	gc.collect()
 
-	param = np.array(["ml_cape", "mu_cape", "sb_cape", "ml_cin", "sb_cin", "mu_cin",\
+	if full_params:
+		param = np.array(["ml_cape", "mu_cape", "sb_cape", "ml_cin", "sb_cin", "mu_cin",\
 			"ml_lcl", "mu_lcl", "sb_lcl", "eff_cape", "eff_cin", "eff_lcl",\
 			"lr01", "lr03", "lr13", "lr36", "lr24", "lr_freezing","lr_subcloud",\
 			"qmean01", "qmean03", "qmean06", \
@@ -203,6 +217,32 @@ def main():
 			\
 			"F10", "Fn10", "Fs10", "icon10", "vgt10", "conv10", "vo10",\
 				])
+	else:
+		param = np.array(["ml_cape", "mu_cape", "sb_cape", "ml_cin", "sb_cin", "mu_cin",\
+			"ml_lcl", "mu_lcl", "sb_lcl", "eff_cape", "eff_cin", "eff_lcl",\
+			"lr36", "lr_freezing","lr_subcloud",\
+			"qmean01",  \
+			"qmeansubcloud",\
+			"mhgt", "mu_el", "ml_el", "sb_el", "eff_el", \
+			"pwat", "t_totals", \
+			"dcape", \
+			\
+			"srhe_left", "srh03_left", \
+			"ebwd", "s06", "s03", \
+			"U10", \
+			"Umean800_600", "Umean06", \
+			"wg10",\
+			\
+			"dcp", "stp_cin_left", "stp_fixed_left",\
+			"scp", "scp_fixed", "ship",\
+			"mlcape*s06", "mucape*s06", "sbcape*s06", "effcape*s06", \
+			"dmgwind", "dmgwind_fixed", \
+			"convgust_wet", "convgust_dry", "windex",\
+			"gustex", "mmp", \
+			"wndg","sweat","k_index"\
+				])
+
+
 	if model != "era5":
 		param = np.concatenate([param, ["omega01", "omega03", "omega06", \
 			"maxtevv", "mosh", "moshe"]])
@@ -449,7 +489,7 @@ def main():
 					minthetae_inds=np.argmin(sfc_thetae300, axis=0))
 
 			else:
-				#Get 3d DCAPE for every point below 300 hPa
+				#Get 3d DCAPE for every point below 300 hPa, and then mask points above 400 hPa AGL
 				#For each lat/lon point, calculate the minimum thetae, and use
 				# DCAPE for that point
 				dcape, ddraft_temp = get_dcape(\
@@ -459,8 +499,8 @@ def main():
 							sfc_q[np.concatenate([[1100], p]) >= 300], \
 							sfc_hgt[np.concatenate([[1100], p]) >= 300], \
 							ps[t], p=np.array(p[p>=300]))
-				sfc_thetae300 = sfc_thetae_unit[np.concatenate([[1100], \
-					p]) >= 300].data
+				sfc_thetae300 = np.array(sfc_thetae_unit[np.concatenate([[1100], \
+					p]) >= 300])
 				sfc_p300 = sfc_p_3d[np.concatenate([[1100], p]) >= 300]
 				sfc_thetae300[(ps[t] - sfc_p300) > 400] = np.nan 
 				sfc_thetae300[(sfc_p300 > ps[t])] = np.nan 
@@ -641,119 +681,122 @@ def main():
 		output = fill_output(output, t, param, ps, "mu_el", mu_el)
 		output = fill_output(output, t, param, ps, "eff_el", eff_el)
 		output = fill_output(output, t, param, ps, "sb_el", sb_el)
-		if (model == "erai") | (model == "era5"):
-			output = fill_output(output, t, param, ps, "cp", cp[t])
-		if model == "erai":
-			output = fill_output(output, t, param, ps, "cape", mod_cape[t])
-
-		output = fill_output(output, t, param, ps, "lr01", lr01)
-		output = fill_output(output, t, param, ps, "lr03", lr03)
-		output = fill_output(output, t, param, ps, "lr13", lr13)
-		output = fill_output(output, t, param, ps, "lr24", lr24)
 		output = fill_output(output, t, param, ps, "lr36", lr36)
-		output = fill_output(output, t, param, ps, "lr_subcloud", lr_subcloud)
 		output = fill_output(output, t, param, ps, "lr_freezing", lr_freezing)
-		output = fill_output(output, t, param, ps, "mhgt", melting_hgt)
-		output = fill_output(output, t, param, ps, "wbz", hwb0)
+		output = fill_output(output, t, param, ps, "lr_subcloud", lr_subcloud)
 		output = fill_output(output, t, param, ps, "qmean01", qmean01)
-		output = fill_output(output, t, param, ps, "qmean03", qmean03)
-		output = fill_output(output, t, param, ps, "qmean06", qmean06)
 		output = fill_output(output, t, param, ps, "qmeansubcloud", qmeansubcloud)
-		output = fill_output(output, t, param, ps, "q_melting", q_melting)
-		output = fill_output(output, t, param, ps, "q1", q1)
-		output = fill_output(output, t, param, ps, "q3", q3)
-		output = fill_output(output, t, param, ps, "q6", q6)
-		output = fill_output(output, t, param, ps, "sfc_thetae", sfc_thetae)
-		output = fill_output(output, t, param, ps, "rhmin01", rhmin01)
-		output = fill_output(output, t, param, ps, "rhmin03", rhmin03)
-		output = fill_output(output, t, param, ps, "rhmin13", rhmin13)
-		output = fill_output(output, t, param, ps, "rhminsubcloud", rhminsubcloud)
-		output = fill_output(output, t, param, ps, "v_totals", v_totals)
-		output = fill_output(output, t, param, ps, "c_totals", c_totals)
-		output = fill_output(output, t, param, ps, "t_totals", t_totals)
+		output = fill_output(output, t, param, ps, "mhgt", melting_hgt)
 		output = fill_output(output, t, param, ps, "pwat", pwat)
-		output = fill_output(output, t, param, ps, "te_diff", te_diff)
-		output = fill_output(output, t, param, ps, "tei", tei)
-		output = fill_output(output, t, param, ps, "dpd700", dpd700)
-		output = fill_output(output, t, param, ps, "dpd850", dpd850)
 		output = fill_output(output, t, param, ps, "dcape", dcape)
-		output = fill_output(output, t, param, ps, "ddraft_temp", ddraft_temp)
-
-		output = fill_output(output, t, param, ps, "Umeanwindinf", Umeanwindinf)
-		output = fill_output(output, t, param, ps, "Umean01", Umean01)
-		output = fill_output(output, t, param, ps, "Umean03", Umean03)
-		output = fill_output(output, t, param, ps, "Umean06", Umean06)
-		output = fill_output(output, t, param, ps, "Umean800_600", Umean800_600)
-		output = fill_output(output, t, param, ps, "Uwindinf", Uwindinf)
-		output = fill_output(output, t, param, ps, "U500", U500)
-		output = fill_output(output, t, param, ps, "U1", U1)
-		output = fill_output(output, t, param, ps, "U3", U3)
-		output = fill_output(output, t, param, ps, "U6", U6)
-		output = fill_output(output, t, param, ps, "Ust_left", Ust_left)
-		output = fill_output(output, t, param, ps, "Usr01_left", Usr01_left)
-		output = fill_output(output, t, param, ps, "Usr03_left", Usr03_left)
-		output = fill_output(output, t, param, ps, "Usr06_left", Usr06_left)
-		output = fill_output(output, t, param, ps, "wg10", wg10[t])
-		output = fill_output(output, t, param, ps, "U10", U10)
-		output = fill_output(output, t, param, ps, "scld", scld)
-		output = fill_output(output, t, param, ps, "s01", s01)
+		output = fill_output(output, t, param, ps, "srh03_left", srh03_left)
+		output = fill_output(output, t, param, ps, "srhe_left", srhe_left)
 		output = fill_output(output, t, param, ps, "s03", s03)
 		output = fill_output(output, t, param, ps, "s06", s06)
-		output = fill_output(output, t, param, ps, "s010", s010)
-		output = fill_output(output, t, param, ps, "s13", s13)
-		output = fill_output(output, t, param, ps, "s36", s36)
 		output = fill_output(output, t, param, ps, "ebwd", ebwd)
-		output = fill_output(output, t, param, ps, "srh01_left", srh01_left)
-		output = fill_output(output, t, param, ps, "srh03_left", srh03_left)
-		output = fill_output(output, t, param, ps, "srh06_left", srh06_left)
-		output = fill_output(output, t, param, ps, "srhe_left", srhe_left)
-
-		output = fill_output(output, t, param, ps, "F10", F10)
-		output = fill_output(output, t, param, ps, "Fn10", Fn10)
-		output = fill_output(output, t, param, ps, "Fs10", Fs10)
-		output = fill_output(output, t, param, ps, "icon10", icon10)
-		output = fill_output(output, t, param, ps, "vgt10", vgt10)
-		output = fill_output(output, t, param, ps, "conv10", conv10)
-		output = fill_output(output, t, param, ps, "vo10", vo10)
-
+		output = fill_output(output, t, param, ps, "Umean06", Umean06)
+		output = fill_output(output, t, param, ps, "Umean800_600", Umean800_600)
+		output = fill_output(output, t, param, ps, "wg10", wg10[t])
+		output = fill_output(output, t, param, ps, "U10", U10)
 		output = fill_output(output, t, param, ps, "stp_cin_left", stp_cin_left)
 		output = fill_output(output, t, param, ps, "stp_fixed_left", stp_fixed_left)
 		output = fill_output(output, t, param, ps, "windex", windex)
 		output = fill_output(output, t, param, ps, "gustex", gustex)
-		output = fill_output(output, t, param, ps, "hmi", hmi)
-		output = fill_output(output, t, param, ps, "wmsi_ml", wmsi_ml)
-		output = fill_output(output, t, param, ps, "dmi", dmi)
-		output = fill_output(output, t, param, ps, "mwpi_ml", mwpi_ml)
-		output = fill_output(output, t, param, ps, "wmpi", wmpi)
 		output = fill_output(output, t, param, ps, "ship", ship)
 		output = fill_output(output, t, param, ps, "scp", scp)
 		output = fill_output(output, t, param, ps, "scp_fixed", scp_fixed)
-		output = fill_output(output, t, param, ps, "eff_sherb", eff_sherb)
-		output = fill_output(output, t, param, ps, "sherb", sherb)
 		output = fill_output(output, t, param, ps, "k_index", k_index)
 		output = fill_output(output, t, param, ps, "mlcape*s06", mlcs6)
 		output = fill_output(output, t, param, ps, "mucape*s06", mucs6)
 		output = fill_output(output, t, param, ps, "sbcape*s06", sbcs6)
 		output = fill_output(output, t, param, ps, "effcape*s06", effcs6)
-		if model == "erai":
-			output = fill_output(output, t, param, ps, "cape*s06", cs6)
 		output = fill_output(output, t, param, ps, "wndg", wndg)
 		output = fill_output(output, t, param, ps, "sweat", sweat)
 		output = fill_output(output, t, param, ps, "mmp", mmp)
-		output = fill_output(output, t, param, ps, "mburst", mburst)
 		output = fill_output(output, t, param, ps, "convgust_wet", convgust_wet)
 		output = fill_output(output, t, param, ps, "convgust_dry", convgust_dry)
 		output = fill_output(output, t, param, ps, "dcp", dcp)
 		output = fill_output(output, t, param, ps, "dmgwind", dmgwind)
 		output = fill_output(output, t, param, ps, "dmgwind_fixed", dmgwind_fixed)
+		output = fill_output(output, t, param, ps, "t_totals", t_totals)
+	    
+		if full_params:
+			if model == "erai":
+				output = fill_output(output, t, param, ps, "cape*s06", cs6)
+			if (model == "erai") | (model == "era5"):
+				output = fill_output(output, t, param, ps, "cp", cp[t])
+			if model == "erai":
+				output = fill_output(output, t, param, ps, "cape", mod_cape[t])
 
-		if model != "era5":
-			output = fill_output(output, t, param, ps, "mosh", mosh)
-			output = fill_output(output, t, param, ps, "moshe", moshe)
-			output = fill_output(output, t, param, ps, "maxtevv", maxtevv)
-			output = fill_output(output, t, param, ps, "omega01", omega01)
-			output = fill_output(output, t, param, ps, "omega03", omega03)
-			output = fill_output(output, t, param, ps, "omega06", omega06)
+			output = fill_output(output, t, param, ps, "lr01", lr01)
+			output = fill_output(output, t, param, ps, "lr03", lr03)
+			output = fill_output(output, t, param, ps, "lr13", lr13)
+			output = fill_output(output, t, param, ps, "lr24", lr24)
+			output = fill_output(output, t, param, ps, "wbz", hwb0)
+			output = fill_output(output, t, param, ps, "qmean03", qmean03)
+			output = fill_output(output, t, param, ps, "qmean06", qmean06)
+			output = fill_output(output, t, param, ps, "q_melting", q_melting)
+			output = fill_output(output, t, param, ps, "q1", q1)
+			output = fill_output(output, t, param, ps, "q3", q3)
+			output = fill_output(output, t, param, ps, "q6", q6)
+			output = fill_output(output, t, param, ps, "sfc_thetae", sfc_thetae)
+			output = fill_output(output, t, param, ps, "rhmin01", rhmin01)
+			output = fill_output(output, t, param, ps, "rhmin03", rhmin03)
+			output = fill_output(output, t, param, ps, "rhmin13", rhmin13)
+			output = fill_output(output, t, param, ps, "rhminsubcloud", rhminsubcloud)
+			output = fill_output(output, t, param, ps, "v_totals", v_totals)
+			output = fill_output(output, t, param, ps, "c_totals", c_totals)
+			output = fill_output(output, t, param, ps, "te_diff", te_diff)
+			output = fill_output(output, t, param, ps, "tei", tei)
+			output = fill_output(output, t, param, ps, "dpd700", dpd700)
+			output = fill_output(output, t, param, ps, "dpd850", dpd850)
+			output = fill_output(output, t, param, ps, "ddraft_temp", ddraft_temp)
+			output = fill_output(output, t, param, ps, "Umeanwindinf", Umeanwindinf)
+			output = fill_output(output, t, param, ps, "Umean01", Umean01)
+			output = fill_output(output, t, param, ps, "Umean03", Umean03)
+			output = fill_output(output, t, param, ps, "Uwindinf", Uwindinf)
+			output = fill_output(output, t, param, ps, "U500", U500)
+			output = fill_output(output, t, param, ps, "U1", U1)
+			output = fill_output(output, t, param, ps, "U3", U3)
+			output = fill_output(output, t, param, ps, "U6", U6)
+			output = fill_output(output, t, param, ps, "Ust_left", Ust_left)
+			output = fill_output(output, t, param, ps, "Usr01_left", Usr01_left)
+			output = fill_output(output, t, param, ps, "Usr03_left", Usr03_left)
+			output = fill_output(output, t, param, ps, "Usr06_left", Usr06_left)
+			output = fill_output(output, t, param, ps, "scld", scld)
+			output = fill_output(output, t, param, ps, "s01", s01)
+			output = fill_output(output, t, param, ps, "s010", s010)
+			output = fill_output(output, t, param, ps, "s13", s13)
+			output = fill_output(output, t, param, ps, "s36", s36)
+			output = fill_output(output, t, param, ps, "srh01_left", srh01_left)
+			output = fill_output(output, t, param, ps, "srh06_left", srh06_left)
+
+			output = fill_output(output, t, param, ps, "F10", F10)
+			output = fill_output(output, t, param, ps, "Fn10", Fn10)
+			output = fill_output(output, t, param, ps, "Fs10", Fs10)
+			output = fill_output(output, t, param, ps, "icon10", icon10)
+			output = fill_output(output, t, param, ps, "vgt10", vgt10)
+			output = fill_output(output, t, param, ps, "conv10", conv10)
+			output = fill_output(output, t, param, ps, "vo10", vo10)
+
+			output = fill_output(output, t, param, ps, "hmi", hmi)
+			output = fill_output(output, t, param, ps, "wmsi_ml", wmsi_ml)
+			output = fill_output(output, t, param, ps, "dmi", dmi)
+			output = fill_output(output, t, param, ps, "mwpi_ml", mwpi_ml)
+			output = fill_output(output, t, param, ps, "wmpi", wmpi)
+			output = fill_output(output, t, param, ps, "eff_sherb", eff_sherb)
+			output = fill_output(output, t, param, ps, "sherb", sherb)
+			if model == "erai":
+				output = fill_output(output, t, param, ps, "cape*s06", cs6)
+			output = fill_output(output, t, param, ps, "mburst", mburst)
+
+			if model != "era5":
+				output = fill_output(output, t, param, ps, "mosh", mosh)
+				output = fill_output(output, t, param, ps, "moshe", moshe)
+				output = fill_output(output, t, param, ps, "maxtevv", maxtevv)
+				output = fill_output(output, t, param, ps, "omega01", omega01)
+				output = fill_output(output, t, param, ps, "omega03", omega03)
+				output = fill_output(output, t, param, ps, "omega06", omega06)
 
 		output_data[t] = output
 
@@ -765,10 +808,10 @@ def main():
 		temp_data = output_data[:,:,:,np.where(param==param_name)[0][0]]
 		param_out.append(temp_data)
 
-	#If the U1 variable is zero everywhere, then it is likely that data has not been read.
+	#If the mhgt variable is zero everywhere, then it is likely that data has not been read.
 	#In this case, all values are missing, set to zero.
 	for t in np.arange(param_out[0].shape[0]):
-		if param_out[np.where(param=="U1")[0][0]][t].max() == 0:
+		if param_out[np.where(param=="mhgt")[0][0]][t].max() == 0:
 			for p in np.arange(len(param_out)):
 				param_out[p][t] = np.nan
 

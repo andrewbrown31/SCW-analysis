@@ -57,7 +57,7 @@ def get_seasonal_freq(models, p, y1, y2, era5_y1, era5_y2, experiment=""):
 			    models[i][0]+"_"+models[i][1]+"_seasonal_freq_"+p+"_"+experiment+"_"+str(y1)+"_"+str(y2)+".nc"))
 	return mean_out
 
-def plot_boxplot(v, models, data_list, nrm_da, spatial_diff, spatial_diff_sig, mean_envs, min_envs=0, plot_map=True):
+def plot_boxplot(v, models, data_list, cmip6, nrm_da, spatial_diff, spatial_diff_sig, mean_envs, min_envs=0, plot_map=True):
 
 	#min_envs is the minimum number of environments at a spatial point per season, required to draw statistical significance at that point.
 
@@ -66,7 +66,7 @@ def plot_boxplot(v, models, data_list, nrm_da, spatial_diff, spatial_diff_sig, m
 	f2 = geopandas.read_file(geopandas.datasets.get_path("naturalearth_lowres"))
 	titles = ["a) Northern Australia", "b) Rangelands", "c) Eastern Australia", \
 		    "d) Southern Australia"]
-	ranges = [-5.5,5.5]
+	ranges = [-10,10]
 	for i in np.arange(len(data_list)):
 		ax=plt.subplot2grid((5,4), (i, 0), colspan=4, rowspan=1)
 		boxes = []
@@ -85,6 +85,7 @@ def plot_boxplot(v, models, data_list, nrm_da, spatial_diff, spatial_diff_sig, m
 		else:
 			ax.set_xticks(np.arange(1,13))
 			ax.set_xticklabels(return_months())
+		plt.plot(np.arange(1,13),cmip6[i].values[:,0], marker="o", color="k", linestyle="none")
 
 		plt.title(titles[i])
 		if plot_map:
@@ -242,6 +243,8 @@ if __name__ == "__main__":
 	if v == "logit_aws":
 		hist = get_seasonal_freq(models, v, hist_y1, hist_y2, None, None, "historical")
 		scenario = get_seasonal_freq(models, v, scenario_y1, scenario_y2, None, None, experiment)
+		hist_cmip6 = get_seasonal_freq([["ACCESS-CM2","r1i1p1f1",6,""]], v, hist_y1, hist_y2, None, None, "historical")
+		scenario_cmip6 = get_seasonal_freq([["ACCESS-CM2","r1i1p1f1",6,""]], v, scenario_y1, scenario_y2, None, None, "ssp585")
 	else:
 		hist = get_mean(models, v, hist_y1, hist_y2, None, None, "historical")
 		scenario = get_mean(models, v, scenario_y1, scenario_y2, None, None, experiment)
@@ -252,6 +255,13 @@ if __name__ == "__main__":
 	diff2 = get_diff(hist, scenario, models, shapes, [2], rel=False)
 	diff3 = get_diff(hist, scenario, models, shapes, [3], rel=False)
 	diff = [diff0, diff1, diff2, diff3]
+
+	#Get pandas dataframes which summarise percentage changes for each month/model
+	diff0 = get_diff(hist_cmip6, scenario_cmip6, [["ACCESS-CM2","r1i1p1f1",6,""]], shapes, [0], rel=False)
+	diff1 = get_diff(hist_cmip6, scenario_cmip6, [["ACCESS-CM2","r1i1p1f1",6,""]], shapes, [1], rel=False)
+	diff2 = get_diff(hist_cmip6, scenario_cmip6, [["ACCESS-CM2","r1i1p1f1",6,""]], shapes, [2], rel=False)
+	diff3 = get_diff(hist_cmip6, scenario_cmip6, [["ACCESS-CM2","r1i1p1f1",6,""]], shapes, [3], rel=False)
+	diff_cmip6 = [diff0, diff1, diff2, diff3]
 
 	#The MME median spatial diff
 	spatial_diff_djf, spatial_diff_sig_djf, mean_envs_djf = get_spatial_diff(hist, scenario, models, "DJF")
@@ -267,5 +277,5 @@ if __name__ == "__main__":
 	temp["nrm"] = rasterize(shapes, {"lon":temp.lon,"lat":temp.lat})
 	temp["aus"] = rasterize([f2.loc[f2.name=="Australia"].geometry.values[0]], {"lon":temp.lon,"lat":temp.lat})
 
-	plot_boxplot(v, models, diff, temp, spatial_diffs, spatial_diff_sigs, mean_envs, min_envs=1, plot_map=False)
+	plot_boxplot(v, models, diff, diff_cmip6, temp, spatial_diffs, spatial_diff_sigs, mean_envs, min_envs=1, plot_map=False)
 

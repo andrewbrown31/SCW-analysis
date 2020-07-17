@@ -58,6 +58,8 @@ def load_logit(model, ensemble, era52=False):
 if __name__ == "__main__":
 	access0 = load_logit("ACCESS1-0","r1i1p1").persist()
 	access3 = load_logit("ACCESS1-3","r1i1p1").persist()
+	access_esm = load_logit("ACCESS-ESM1-5","r1i1p1f1").persist()
+	access_cm2 = load_logit("ACCESS-CM2","r1i1p1f1").persist()
 	bnu = load_logit("BNU-ESM","r1i1p1").persist()
 	cnrm = load_logit("CNRM-CM5","r1i1p1").persist()
 	gfdl_cm3 = load_logit("GFDL-CM3","r1i1p1").persist()
@@ -70,11 +72,13 @@ if __name__ == "__main__":
 	bcc = load_logit("bcc-csm1-1","r1i1p1").persist()
 	era5 = load_logit("ERA5","").persist()
 
-	x = [access0, access3, bnu, cnrm, gfdl_cm3, gfdl2g, gfdl2m, ipsll, ipslm, miroc, mri, bcc, era5]
-	n = ["ACCESS1-0","ACCESS1-3","BNU-ESM","CNRM","GFDL-CM3","GFDL-ESM2G","GFDL-ESM2M"\
+	x = [access0, access3, access_esm, access_cm2, bnu, cnrm, gfdl_cm3, gfdl2g, gfdl2m, ipsll, ipslm, miroc, mri, bcc, era5]
+	n = ["ACCESS1-0","ACCESS1-3","ACCESS-ESM1-5","ACCESS-CM2","BNU-ESM","CNRM","GFDL-CM3","GFDL-ESM2G","GFDL-ESM2M"\
 		,"IPSL-CM5A-LR","IPSL-CM5A-MR","MIROC5","MRI-CGCM3","bcc-csm1-1","ERA5"]
 	[print(n[i], np.unique(x[i]["time.hour"])) for i in np.arange(len(x))]
-	df = pd.DataFrame(index=[0,6,12,18])
+	df2 = pd.DataFrame(index=[0,6,12,18])
+	df = pd.DataFrame(index=[3,9,15,21])
+	df3 = pd.DataFrame(index=[0,6,12,18])
 	for i in np.arange(len(x)):
 		print(i)
 		tot = np.nansum(x[i]["logit_aws"].values)
@@ -86,7 +90,25 @@ if __name__ == "__main__":
 		for t in times:
 			print(t)
 			out.append(np.nansum(x[i].sel({"time":x[i]["time.hour"]==t})["logit_aws"].values) / tot)
-		df[n[i]] = out
+		if n[i] in ["IPSL-CM5A-LR", "IPSL-CM5A-MR"]:
+			df[n[i]] = out
+		elif n[i] in ["ACCESS-ESM1-5", "ACCESS-CM2"]:
+			df3[n[i]] = out
+		else:
+			df2[n[i]] = out
 
-
-
+	plt.figure(figsize=[10,5])
+	ax = plt.gca()
+	df2.loc[:,np.in1d(df2.columns, ["ERA5"], invert=True)].median(axis=1).plot(ax=ax, legend=False, color="k", marker="o")
+	df2.loc[:,np.in1d(df2.columns, ["ERA5"])].plot(ax=ax, legend=False, color="tab:red", marker="o")
+	df.plot(ax=ax, legend=False, color=["dimgrey","darkgrey"], marker="o")
+	l=df3.plot(ax=ax, legend=False, color=["tab:green","tab:blue"], marker="o")
+	ax.xaxis.set_ticks([0,3,6,9,12,15,18,21])
+	#ax.xaxis.set_ticks([3,9,15,21], minor=True)
+	ax.grid(True)
+	plt.xlabel("UTC")
+	plt.ylabel("Relative SCW environment frequency")
+	plt.subplots_adjust(bottom=0.3)
+	plt.legend((l.lines[-6], l.lines[-5],l.lines[-4],l.lines[-3],l.lines[-2],l.lines[-1]), ("CMIP5*","ERA5","IPSL-CM5A-LR","IPSL-CM5A-MR","ACCESS-ESM1-5","ACCESS-CM2"), loc=8, bbox_to_anchor=(0.5,-0.5), ncol=3)
+	plt.xlim([-1, 24])
+	plt.savefig("out.png",bbox_inches="tight")

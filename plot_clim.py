@@ -1460,16 +1460,18 @@ def plot_aus_conv_wind_clim():
 
 	#Plotting function/driver for the above function
 
-	fnames = ["era5_logit_6hr_is_conv_aws_daily.nc", "era5_mlcape*s06_6hr_25000.0_daily.nc"]
-	models = ["era5","era5","era5"]
+	fnames = ["era5_logit_6hr_is_conv_aws_daily.nc", "era5_dcp_6hr_0.04_daily.nc", "era5_mucape*s06_6hr_33864.0_daily.nc", "era5_scp_fixed_6hr_0.04_daily.nc" ]
+	models = ["era5","era5","era5","era5"]
 	datasets = [read_aus_conv_wind_clim(fnames[i], daily = True) for i in np.arange(len(fnames))]
-	vmax = [50,50,0.5]
-	titles = ["Logistic eq. (measured)", "DCP", "T-totals"]
+	vmax = [50,50,50,50]
+	titles = ["Statistical model", "DCP", "CS6", "SCP"]
 	a=ord("a"); alph=[chr(i) for i in range(a,a+26)]; alph = [alph[i]+")" for i in np.arange(len(alph))]
 	m = Basemap(llcrnrlon=110, llcrnrlat=-45, urcrnrlon=160, urcrnrlat=-10,projection="cyl")
-	plt.figure(figsize=[10,5])
-	pos = [1,5,2,6,3,7,4,8]
-	alph = ["a)","e)","b)","f)","c)","g)","d)","h)"]
+	#plt.figure(figsize=[10,5])
+	plt.figure(figsize=[10,8])
+	#pos = [1,5,2,6,3,7,4,8]
+	pos = np.arange(1,20)
+	#alph = ["a)","e)","b)","f)","c)","g)","d)","h)"]
 	cnt=0
 	for s in [[12,1,2],[3,4,5],[6,7,8],[9,10,11]]: 
 		print(s)
@@ -1493,21 +1495,23 @@ def plot_aus_conv_wind_clim():
 			plt.annotate(alph[cnt], xy=(0.05, 0.05), xycoords='axes fraction')
 			if i == 0:
 				if s == [12,1,2]:
-					plt.title("DJF")
+					plt.ylabel("DJF")
 				if s == [3,4,5]:
-					plt.title("MAM")
+					plt.ylabel("MAM")
 				if s == [6,7,8]:
-					plt.title("JJA")
+					plt.ylabel("JJA")
 				if s == [9,10,11]:
-					plt.title("SON")
+					plt.ylabel("SON")
 			if (s == [9,10,11]) & (i == (len(datasets)-1) ):
 				cax = plt.axes([0.2, 0.25, 0.6, 0.02])
 				cb = plt.colorbar(c, cax=cax, orientation = "horizontal", extend="max")
 				cb.set_label("Seasonal frequency")
-			if cnt == 0:
-				plt.ylabel("SCW environments")
-			if cnt == 1:
-				plt.ylabel("CS6")
+			#if cnt == 0:
+				#plt.ylabel("SCW environments")
+			#if cnt == 1:
+				#plt.ylabel("CS6")
+			if (s == [12,1,2]):
+				plt.title(titles[i])
 			cnt = cnt+1
 	plt.subplots_adjust(wspace=0.2, hspace=0.1, bottom=0.3)
 		

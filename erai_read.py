@@ -1,3 +1,4 @@
+import sys
 import xarray as xr
 import netCDF4 as nc
 import numpy as np
@@ -339,8 +340,7 @@ def format_dates(x):
 	return dt.datetime.strftime(x,"%Y") + dt.datetime.strftime(x,"%m")
 
 def get_lat_lon():
-	ta_file = nc.Dataset(glob.glob("/g/data/ub4/erai/netcdf/6hr/atmos/oper_an_pl/v01/ta/\
-ta_6hrs_ERAI_historical_an-pl_"+"201201"+"*.nc")[0])
+	ta_file = nc.Dataset(glob.glob("/g/data/ub4/erai/netcdf/6hr/atmos/oper_an_pl/v01/ta/ta_6hrs_ERAI_historical_an-pl_20120101_20120131.nc")[0])
 	lon = ta_file["lon"][:]
 	lat = ta_file["lat"][:]
 	ta_file.close()
@@ -395,9 +395,6 @@ def to_points():
 	ProgressBar().register()
 	f=xr.open_mfdataset("/g/data/eg3/ab4502/ExtremeWind/aus/erai/erai*", parallel=True)
 
-	#JUST WANTING TO APPEND A COUPLE OF NEW VARIABLES TO THE DATAFRAME
-	f=f[["Vprime", "wbz"]]
-
 	#Setup lsm
 	lon_orig,lat_orig = get_lat_lon()
 	lsm = reform_lsm(lon_orig,lat_orig)
@@ -430,17 +427,75 @@ def to_points():
 	for p in np.arange(len(loc_id)):
 		df.loc[df.points==p,"loc_id"] = loc_id[p]
 
-	#df.drop("points",axis=1).to_pickle("/g/data/eg3/ab4502/ExtremeWind/points/erai_points_sharppy_aus_1979_2017.pkl")
-	df = df.drop("points",axis=1)
-	df_orig = pd.read_pickle("/g/data/eg3/ab4502/ExtremeWind/points/erai_points_sharppy_aus_1979_2017.pkl")
-	df_new = pd.merge(df_orig, df[["time","loc_id","wbz","Vprime"]], on=["time","loc_id"])
-	df_new.to_pickle("/g/data/eg3/ab4502/ExtremeWind/points/erai_points_sharppy_aus_1979_2017.pkl")
+	df.drop("points",axis=1).to_pickle("/g/data/eg3/ab4502/ExtremeWind/points/erai_points_sharppy_aus_1979_2017.pkl")
+
+def to_points_loop(loc_id,points,fname,start_year,end_year,variables=False):
+
+	#As in to_points(), but by looping over monthly data
+	from dask.diagnostics import ProgressBar
+	import gc
+	ProgressBar().register()
+
+	dates = []
+	for y in np.arange(start_year,end_year+1):
+		for m in np.arange(1,13):
+			dates.append(dt.datetime(y,m,1,0,0,0))
+
+	df = pd.DataFrame()
+
+	#Read netcdf data
+	for t in np.arange(len(dates)):
+		print(dates[t])
+		f=xr.open_dataset(glob.glob("/g/data/eg3/ab4502/ExtremeWind/aus/"+\
+			"erai/erai_"+dates[t].strftime("%Y%m")+"*.nc")[0],\
+			 engine="h5netcdf")
+
+		#Setup lsm
+		lon_orig,lat_orig = get_lat_lon()
+		lsm_orig = reform_lsm(lon_orig,lat_orig)
+		lat = f.coords.get("lat").values
+		lon = f.coords.get("lon").values
+		x,y = np.meshgrid(lon,lat)
+		lsm_new = lsm_orig[((lat_orig<=lat[0]) & (lat_orig>=lat[-1]))]
+		lsm = lsm_new[:,((lon_orig>=lon[0]) & (lon_orig<=lon[-1]))]
+		x[lsm==0] = np.nan
+		y[lsm==0] = np.nan
+
+		dist_lon = []
+		dist_lat = []
+		for i in np.arange(len(loc_id)):
+
+			dist = np.sqrt(np.square(x-points[i][0]) + \
+				np.square(y-points[i][1]))
+			temp_lat,temp_lon = np.unravel_index(np.nanargmin(dist),dist.shape)
+			dist_lon.append(temp_lon)
+			dist_lat.append(temp_lat)
+
+		try:
+			f=f[variables]
+		except:
+			pass
+
+		temp_df = f.isel(lat = xr.DataArray(dist_lat, dims="points"), \
+				lon = xr.DataArray(dist_lon, dims="points")).persist().to_dataframe()
+
+		temp_df = temp_df.reset_index()
+
+		for p in np.arange(len(loc_id)):
+			temp_df.loc[temp_df.points==p,"loc_id"] = loc_id[p]
+
+		temp_df = temp_df.drop("points",axis=1)
+		df = pd.concat([df, temp_df])
+		f.close()
+		gc.collect()
+
+	df.sort_values(["loc_id","time"]).to_pickle("/g/data/eg3/ab4502/ExtremeWind/points/"+fname+".pkl")
 
 def get_aus_stn_info():
 	names = ["id", "stn_no", "district", "stn_name", "1", "2", "lat", "lon", "3", "4", "5", "6", "7", "8", \
 			"9", "10", "11", "12", "13", "14", "15", "16"]	
 
-	df = pd.read_csv("/short/eg3/ab4502/ExtremeWind/aws/daily_aus_full/DC02D_StnDet_999999999643799.txt",\
+	df = pd.read_csv("/g/data/eg3/ab4502/ExtremeWind/obs/aws/daily_aus_full/DC02D_StnDet_999999999643799.txt",\
 		names=names, header=0)
 
 	#Dict to map station names to
@@ -488,4 +543,15 @@ def get_aus_stn_info():
 
 if __name__ == "__main__":
 
-	to_points()
+	if len(sys.argv) > 1:
+		start_year = int(sys.argv[1])
+		end_year = int(sys.argv[2])
+	if len(sys.argv) > 3:
+		variable = sys.argv[3]
+
+	loc_id, points = get_aus_stn_info()
+	#points = np.array(points)[np.in1d(loc_id, ["Darwin","Adelaide","Woomera","Sydney"])]
+	#loc_id = ["Darwin","Adelaide","Woomera","Sydney"]
+
+	to_points_loop(loc_id,points,"erai_"+str(start_year)+"_"+str(end_year),\
+			start_year,end_year,variables=["ml_cape","wg10"])

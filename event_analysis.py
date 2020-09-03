@@ -14,10 +14,85 @@ import matplotlib.pyplot as plt
 from sklearn.linear_model import LogisticRegression
 from sklearn.model_selection import train_test_split
 from sklearn.preprocessing import MinMaxScaler
+from sklearn.metrics import roc_curve, auc
+from sklearn.utils import resample
 import multiprocessing
 import glob
 import xarray as xr
 from obs_read import read_clim_ind
+
+def auc_test():
+
+	#For the ten candidate variables (11 including both S03 and S06) chosen, calculate their ability to separate 1) convective and 
+	# non convective gusts (for MLCAPE, MLEL, SRHE) and 2) Severe convective gusts and non-severe convective gusts (Umean06, S03,
+	# S06, LR36, LR-Freezing, MHGT, Qmean01, Qmean-subcloud)
+
+	#Do this by calculating the AUC, with confidence intervals attained by bootstrapping.
+
+	era5, df_aws_era5, df_sta_era5 = optimise_pss("/g/data/eg3/ab4502/ExtremeWind/points/era5_allvars_2005_2018.pkl",\
+                         T=1000, compute=False, l_thresh=2, is_pss="hss", model_name="era5",\
+                         time="floor") 
+	barra, df_aws_barra, df_sta_barra = optimise_pss("/g/data/eg3/ab4502/ExtremeWind/points/barra_allvars_2005_2018_2.pkl",\
+                         T=1000, compute=False, l_thresh=2, is_pss="hss", model_name="barra_fc",\
+                         time="floor") 
+	df_aws_era5["is_lightning"] = (df_aws_era5["lightning"] >= 2)*1
+	df_aws_barra["is_lightning"] = (df_aws_barra["lightning"] >= 2)*1
+	df_aws_era5.loc[(df_aws_era5["lightning"] >= 2) & ~(df_aws_era5["is_conv_aws"]==1), "is_conv_aws_cond_light"] = 0
+	df_aws_barra.loc[(df_aws_barra["lightning"] >= 2) & ~(df_aws_barra["is_conv_aws"]==1), "is_conv_aws_cond_light"] = 0
+	
+	vlist1 = ["ml_el","eff_el","ml_cape","dcape","srhe_left","Uwindinf","lr13","lr36","rhmin13","U1","Umean06","Umean03","dpd850"]
+	vlist2 = ["ml_el","eff_el","ml_cape","dcape","srhe_left","Uwindinf","lr13","lr36","rhmin13","U1","Umean06","Umean03","dpd850"]
+	#vlist1 = ["ml_cape", "ml_el", "srhe_left"]
+	#vlist2 = ["Umean06", "s03", "s06", "lr36", "lr_freezing", "mhgt", "qmean01", "qmeansubcloud"]
+	df1 = pd.DataFrame(columns=["era5_auc","era5_ci","barra_auc","barra_ci"], index=vlist1)
+	df2 = pd.DataFrame(columns=["era5_auc","era5_ci","barra_auc","barra_ci"], index=vlist2)
+
+	N=1000
+
+	for v in vlist1:
+		print(v)
+		a, c1, c2 = calc_auc((df_aws_era5), v, "is_conv_aws", N)
+		df1.loc[v, "era5_auc"] = a; df1.loc[v, "era5_ci"] = "["+str(round(c1,3)) + ", " + str(round(c2, 3))+"]"
+
+		a, c1, c2 = calc_auc((df_sta_era5), v, "is_sta", N)
+		df2.loc[v, "era5_auc"] = a; df2.loc[v, "era5_ci"] = "["+str(round(c1,3)) + ", " + str(round(c2, 3))+"]"
+
+		a, c1, c2 = calc_auc((df_aws_barra), v, "is_conv_aws", N)
+		df1.loc[v, "barra_auc"] = a; df1.loc[v, "barra_ci"] = "["+str(round(c1,3)) + ", " + str(round(c2, 3))+"]"
+
+		a, c1, c2 = calc_auc((df_sta_barra), v, "is_sta", N)
+		df2.loc[v, "barra_auc"] = a; df2.loc[v, "barra_ci"] = "["+str(round(c1,3)) + ", " + str(round(c2, 3))+"]"
+
+	#for v in vlist1:
+	#	print(v)
+	#	a, c1, c2 = calc_auc(df_aws_era5, v, "is_lightning", N)
+	#	df1.loc[v, "era5_auc"] = a; df1.loc[v, "era5_ci"] = "["+str(round(c1,3)) + ", " + str(round(c2, 3))+"]"
+
+	#	a, c1, c2 = calc_auc(df_aws_barra, v, "is_lightning", N)
+	#	df1.loc[v, "barra_auc"] = a; df1.loc[v, "barra_ci"] = "["+str(round(c1,3)) + ", " + str(round(c2, 3))+"]"
+
+	#for v in vlist2:
+	#	print(v)
+	#	a, c1, c2 = calc_auc(df_aws_era5.dropna(subset=["is_conv_aws_cond_light"]), v, "is_conv_aws_cond_light", N)
+	#	df2.loc[v, "era5_auc"] = a; df2.loc[v, "era5_ci"] = "["+str(round(c1,3)) + ", " + str(round(c2, 3))+"]"
+
+#		a, c1, c2 = calc_auc(df_aws_barra.dropna(subset=["is_conv_aws_cond_light"]), v, "is_conv_aws_cond_light", N)
+#		df2.loc[v, "barra_auc"] = a; df2.loc[v, "barra_ci"] = "["+str(round(c1,3)) + ", " + str(round(c2, 3))+"]"
+
+	df1.to_csv("/g/data/eg3/ab4502/ExtremeWind/skill_scores/scw_aws_auc.csv")
+	df2.to_csv("/g/data/eg3/ab4502/ExtremeWind/skill_scores/scw_sta_auc.csv")
+
+def calc_auc(df, v, event, N=100):
+	if v in ["mhgt","qmean01","qmeansubcloud","dpd850"]:
+		df[event] = np.where(df[event]==1, 0, 1)
+	fpr, tpr, thresh = roc_curve(df[event], df[v])
+	auc_val = auc(fpr, tpr)
+	auc_resample = []
+	for i in np.arange(N):
+		temp_df = resample(df[[event, v]])
+		fpr, tpr, _ = roc_curve(temp_df[event], temp_df[v])
+		auc_resample.append(auc(fpr, tpr))
+	return auc_val, np.percentile(auc_resample, 0.5), np.percentile(auc_resample, 99.5)
 
 def diagnostics_aws_compare():
 
@@ -52,7 +127,7 @@ def diagnostics_aws_compare():
 		T=1000, compute=False, l_thresh=2, is_pss="hss", model_name="era5")
 	barra_hss_ceil, temp, temp1 = optimise_pss("/g/data/eg3/ab4502/ExtremeWind/points/"+\
 		"barra_allvars_2005_2018_2.pkl",time="ceil",\
-		T=1000, compute=False, l_thresh=2, is_pss="hss", model_name="barra_fc") 
+		T=1000, compute=False, l_thresh=2, is_pss="hss", model_name="barra_fc_2") 
 	era5_hss_ceil, temp, temp1 = optimise_pss("/g/data/eg3/ab4502/ExtremeWind/points/"+\
 		"era5_allvars_2005_2018.pkl",time="ceil",\
 		T=1000, compute=False, l_thresh=2, is_pss="hss", model_name="era5")
@@ -74,32 +149,32 @@ def diagnostics_aws_compare():
 		plt.subplot(4,2,2*p+1)
 		plt.text(0.05,0.9,label_a[p],transform=plt.gca().transAxes,fontsize=14)
 		if params[p] == "wg10":
-			plt.hist2d(era5_aws_wg.loc[:, "wind_gust"], era5_aws_wg.loc[:, params[p]], cmap=plt.get_cmap("Greys"), \
+			plt.hist2d(era5_aws_wg.loc[:, "wind_gust"], era5_aws_wg.loc[:, params[p]], cmap=plt.get_cmap("YlGnBu"), \
 				norm=matplotlib.colors.SymLogNorm(1),\
 				vmax=10000, bins=[20,bins[p]], range = [[0,40],ylims[p]])
 			plt.plot(era5_aws_wg.loc[(era5_aws_wg["wind_gust"]>=25) & (era5_aws_wg["lightning"]>=2), "wind_gust"], \
-				era5_aws_wg.loc[(era5_aws_wg["wind_gust"]>=25) & (era5_aws_wg["lightning"]>=2), params[p]], "rx",\
+				era5_aws_wg.loc[(era5_aws_wg["wind_gust"]>=25) & (era5_aws_wg["lightning"]>=2), params[p]], "kx",\
 				markersize=4)
-			plt.gca().axhline(era5_hss_ceil.loc[params[p], "threshold_conv_aws"])
-			plt.text(10, era5_hss_ceil.loc[params[p], "threshold_conv_aws"], \
+			plt.gca().axhline(era5_hss_ceil.loc[params[p], "threshold_conv_aws"], color="k", linestyle="--")
+			plt.text(15, era5_hss_ceil.loc[params[p], "threshold_conv_aws"], \
 				str(round(era5_hss_ceil.loc[params[p], "threshold_conv_aws"], 2) ),\
-				va="top", color="tab:blue")
+				va="top", color="k")
 		else:
-			plt.hist2d(era5_aws_p.loc[:, "wind_gust"], era5_aws_p.loc[:, params[p]], cmap=plt.get_cmap("Greys"), \
+			plt.hist2d(era5_aws_p.loc[:, "wind_gust"], era5_aws_p.loc[:, params[p]], cmap=plt.get_cmap("YlGnBu"), \
 				norm=matplotlib.colors.SymLogNorm(1),\
 				vmax=10000, bins=[20,bins[p]], range = [[0,40],ylims[p]])
 			plt.plot(era5_aws_p.loc[(era5_aws_p["wind_gust"]>=25) & (era5_aws_p["lightning"]>=2), "wind_gust"], \
-				era5_aws_p.loc[(era5_aws_p["wind_gust"]>=25) & (era5_aws_p["lightning"]>=2), params[p]], "rx",\
+				era5_aws_p.loc[(era5_aws_p["wind_gust"]>=25) & (era5_aws_p["lightning"]>=2), params[p]], "kx",\
 				markersize=4)
-			plt.gca().axhline(era5_hss_floor.loc[params[p], "threshold_conv_aws"])
+			plt.gca().axhline(era5_hss_floor.loc[params[p], "threshold_conv_aws"], color="k", linestyle="--")
 			if params[p] == "mlcape*s06":
-				plt.text(10, era5_hss_floor.loc[params[p], "threshold_conv_aws"], \
+				plt.text(15, era5_hss_floor.loc[params[p], "threshold_conv_aws"], \
 					str(int(round(era5_hss_floor.loc[params[p], "threshold_conv_aws"]) )),\
-					va="top", color="tab:blue")
+					va="top", color="k")
 			else:
-				plt.text(10, era5_hss_floor.loc[params[p], "threshold_conv_aws"], \
+				plt.text(15, era5_hss_floor.loc[params[p], "threshold_conv_aws"], \
 					str(round(era5_hss_floor.loc[params[p], "threshold_conv_aws"], 2) ),\
-					va="top", color="tab:blue")
+					va="top", color="k")
 		if is_log[p]:
 			plt.yscale("symlog",linthreshy=is_log[p])
 
@@ -114,32 +189,32 @@ def diagnostics_aws_compare():
 		plt.subplot(4,2,2*p+2)
 		plt.text(0.05,0.9,label_b[p],transform=plt.gca().transAxes,fontsize=14)
 		if params[p] == "wg10":
-			plt.hist2d(barra_aws_wg.loc[:, "wind_gust"], barra_aws_wg.loc[:, params[p]], cmap=plt.get_cmap("Greys"), \
+			plt.hist2d(barra_aws_wg.loc[:, "wind_gust"], barra_aws_wg.loc[:, params[p]], cmap=plt.get_cmap("YlGnBu"), \
 				norm=matplotlib.colors.SymLogNorm(1),\
 				vmax=10000, bins=[20,bins[p]], range = [[0,40],ylims[p]])
 			plt.plot(barra_aws_wg.loc[(barra_aws_wg["wind_gust"]>=25) & (barra_aws_wg["lightning"]>=2), "wind_gust"], \
-				barra_aws_wg.loc[(barra_aws_wg["wind_gust"]>=25) & (barra_aws_wg["lightning"]>=2), params[p]], "rx",\
+				barra_aws_wg.loc[(barra_aws_wg["wind_gust"]>=25) & (barra_aws_wg["lightning"]>=2), params[p]], "kx",\
 				markersize=4)
-			plt.gca().axhline(barra_hss_ceil.loc[params[p], "threshold_conv_aws"])
-			plt.text(10, barra_hss_ceil.loc[params[p], "threshold_conv_aws"], \
+			plt.gca().axhline(barra_hss_ceil.loc[params[p], "threshold_conv_aws"], linestyle="--", color="k")
+			plt.text(15, barra_hss_ceil.loc[params[p], "threshold_conv_aws"], \
 				str(round(barra_hss_ceil.loc[params[p], "threshold_conv_aws"], 2) ),\
-				va="top", color="tab:blue")
+				va="top", color="k")
 		else:
-			plt.hist2d(barra_aws_p.loc[:, "wind_gust"], barra_aws_p.loc[:, params[p]], cmap=plt.get_cmap("Greys"), \
+			plt.hist2d(barra_aws_p.loc[:, "wind_gust"], barra_aws_p.loc[:, params[p]], cmap=plt.get_cmap("YlGnBu"), \
 				norm=matplotlib.colors.SymLogNorm(1),\
 				vmax=10000, bins=[20,bins[p]], range = [[0,40],ylims[p]])
 			plt.plot(barra_aws_p.loc[(barra_aws_p["wind_gust"]>=25) & (barra_aws_p["lightning"]>=2), "wind_gust"], \
-				barra_aws_p.loc[(barra_aws_p["wind_gust"]>=25) & (barra_aws_p["lightning"]>=2), params[p]], "rx",\
+				barra_aws_p.loc[(barra_aws_p["wind_gust"]>=25) & (barra_aws_p["lightning"]>=2), params[p]], "kx",\
 				markersize=4)
-			plt.gca().axhline(barra_hss_floor.loc[params[p], "threshold_conv_aws"])
+			plt.gca().axhline(barra_hss_floor.loc[params[p], "threshold_conv_aws"], linestyle="--", color="k")
 			if params[p] == "mlcape*s06":
-				plt.text(10, barra_hss_floor.loc[params[p], "threshold_conv_aws"], \
+				plt.text(15, barra_hss_floor.loc[params[p], "threshold_conv_aws"], \
 					str(int(round(barra_hss_floor.loc[params[p], "threshold_conv_aws"]) )),\
-					va="top", color="tab:blue")
+					va="top", color="k")
 			else:
-				plt.text(10, barra_hss_floor.loc[params[p], "threshold_conv_aws"], \
+				plt.text(15, barra_hss_floor.loc[params[p], "threshold_conv_aws"], \
 					str(round(barra_hss_floor.loc[params[p], "threshold_conv_aws"], 2) ),\
-					va="top", color="tab:blue")
+					va="top", color="k")
 		if is_log[p]:
 			plt.yscale("symlog",linthreshy=is_log[p])
 	    
@@ -703,27 +778,27 @@ def create_threshold_variable(variable, threshold, model, event=None, predictors
 						model+"_"+variable+"_6hr_"+str(threshold)+"_daily.nc",\
 					mode = "w",\
 					format = "NETCDF4")
-		mjo_active_da = xr.DataArray( dims = ("time","lat","lon"),\
-			data = np.concatenate(out_mjo_active),\
-			coords = {"lat":ds.lat.values,"lon":ds.lon.values,\
-				"time":np.concatenate(mjo_active_times)},\
-			name = variable,\
-			attrs = {"mjo_days":mjo_active_days, "threshold":threshold} ).to_netcdf(\
-					path = "/g/data/eg3/ab4502/ExtremeWind/aus/threshold_data/"+\
-						model+"_"+variable+"_6hr_"+str(threshold)+"_mjo_active.nc",\
-					mode = "w",\
-					format = "NETCDF4")
+		#mjo_active_da = xr.DataArray( dims = ("time","lat","lon"),\
+			#data = np.concatenate(out_mjo_active),\
+			#coords = {"lat":ds.lat.values,"lon":ds.lon.values,\
+				#"time":np.concatenate(mjo_active_times)},\
+			#name = variable,\
+			#attrs = {"mjo_days":mjo_active_days, "threshold":threshold} ).to_netcdf(\
+					#path = "/g/data/eg3/ab4502/ExtremeWind/aus/threshold_data/"+\
+						#model+"_"+variable+"_6hr_"+str(threshold)+"_mjo_active.nc",\
+					#mode = "w",\
+					#format = "NETCDF4")
 
-		mjo_inactive_da = xr.DataArray( dims = ("time","lat","lon"),\
-			data = np.concatenate(out_mjo_inactive),\
-			coords = {"lat":ds.lat.values,"lon":ds.lon.values,\
-				"time":np.concatenate(mjo_inactive_times)},\
-			name = variable,\
-			attrs = {"mjo_days":mjo_inactive_days, "threshold":threshold} ).to_netcdf(\
-					path = "/g/data/eg3/ab4502/ExtremeWind/aus/threshold_data/"+\
-						model+"_"+variable+"_6hr_"+str(threshold)+"_mjo_inactive.nc",\
-					mode = "w",\
-					format = "NETCDF4")
+		#mjo_inactive_da = xr.DataArray( dims = ("time","lat","lon"),\
+			#data = np.concatenate(out_mjo_inactive),\
+			#coords = {"lat":ds.lat.values,"lon":ds.lon.values,\
+				#"time":np.concatenate(mjo_inactive_times)},\
+			#name = variable,\
+			#attrs = {"mjo_days":mjo_inactive_days, "threshold":threshold} ).to_netcdf(\
+					#path = "/g/data/eg3/ab4502/ExtremeWind/aus/threshold_data/"+\
+						#model+"_"+variable+"_6hr_"+str(threshold)+"_mjo_inactive.nc",\
+					#mode = "w",\
+					#format = "NETCDF4")
 		
 
 def plot_hail_envs():
@@ -2003,5 +2078,7 @@ if __name__ == "__main__":
 		#	predictors=predictors)
 
 	else:	
-		create_mean_variable("cape",native=True, native_dir="cape")
+		#create_mean_variable("cape",native=True, native_dir="cape")
 		#compare_obs_soundings()
+		diagnostics_aws_compare()
+		#auc_test()

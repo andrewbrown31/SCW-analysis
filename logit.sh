@@ -3,11 +3,10 @@
 #PBS -P eg3
 #PBS -q express
 #PBS -l walltime=24:00:00,mem=128GB 
-#PBS -l ncpus=16
+#PBS -l ncpus=1
 #PBS -o /home/548/ab4502/working/ExtremeWind/jobs/messages/logit.o
 #PBS -e /home/548/ab4502/working/ExtremeWind/jobs/messages/logit.e
-#PBS -l storage=gdata/eg3+gdata/ub4+gdata/ma05
-#PBS -l place=pack:exclhost
+#PBS -lstorage=gdata/eg3
 
 source activate wrfpython3.6
 

@@ -19,7 +19,7 @@ from scipy.stats import spearmanr as spr
 import matplotlib
 from event_analysis import optimise_pss
 
-def reviewer_response():
+def hss_function():
 
 	era5, df_aws_era5, df_sta_era5 = optimise_pss("/g/data/eg3/ab4502/ExtremeWind/points/era5_allvars_2005_2018.pkl",\
                          T=1000, compute=False, l_thresh=2, is_pss="hss", model_name="era5_v2",\
@@ -2431,8 +2431,8 @@ if __name__ == "__main__":
 
 	#plot_candidate_variable_kde()
 	#plot_ranked_hss()
-	obs_versus_mod_plot()
+	#obs_versus_mod_plot()
 	#plot_candidate_kde_logit_exclude()
 	#sta_versus_aws()
-	#reviewer_response()
+	hss_function()
 

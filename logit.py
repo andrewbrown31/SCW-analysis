@@ -498,16 +498,11 @@ def colin_test():
 	logit_mod = logit.fit(df_aws[preds], df_aws[event])
 	df4 = pd.DataFrame({"VIF":vifs, "coefs":np.squeeze(logit_mod.coef_)}, index=preds)
 
-	#print(pd.concat([df1, df2, df3, df4], axis=1))
 	(pd.concat([df1, df2], axis=1)).to_csv("/g/data/eg3/ab4502/ExtremeWind/skill_scores/vif_barra_aws.csv", float_format="%.2e")
 
 	#Test CV HSS scores
 	preds = ["ml_el","Umean06","lr36","rhmin13","dcape","U1"]
-	#barra_aws = logit_predictor_test("barra", "is_conv_aws", preds, "t_totals", 16)
-	preds = ["ml_el","Umean06","lr36","rhmin13","dcape"]
-	#barra_aws = logit_predictor_test("barra", "is_conv_aws", preds, "t_totals", 16)
-	preds = ["ml_el","Umean06","rhmin13","dcape"]
-	#barra_aws = logit_predictor_test("barra", "is_conv_aws", preds, "t_totals", 16)
+	barra_aws = logit_predictor_test("barra", "is_conv_aws", preds, "t_totals", 16)
 
 	#STA
 	preds = ["ml_cape","Umean06","srhe_left","lr13","eff_el"]

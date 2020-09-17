@@ -1443,8 +1443,8 @@ if __name__ == "__main__":
 		s010 = get_shear_hgt(sfc_ua, sfc_va, np.copy(sfc_hgt), 0, 10000, terrain)
 		s13 = get_shear_hgt(sfc_ua, sfc_va, np.copy(sfc_hgt), 1000, 3000, terrain)
 		s36 = get_shear_hgt(sfc_ua, sfc_va, np.copy(sfc_hgt), 3000, 6000, terrain)
-		ebwd = get_shear_hgt(sfc_va, sfc_va, np.copy(sfc_hgt), np.nanmin(eff_hgt,axis=0),\
-					(mu_el - np.nanmin(eff_hgt,axis=0) ) / 2 + np.nanmin(eff_hgt,axis=0),\
+		ebwd = get_shear_hgt(sfc_ua, sfc_va, np.copy(sfc_hgt), np.nanmin(eff_hgt,axis=0),\
+					(mu_el *0.5 ),\
 					terrain)
 		srh01_left, srh01_right = get_srh(sfc_ua, sfc_va, np.copy(sfc_hgt), 0, 1000, terrain)
 		srh03_left, srh03_right = get_srh(sfc_ua, sfc_va, np.copy(sfc_hgt), 0, 3000, terrain)

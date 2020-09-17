@@ -445,9 +445,6 @@ def read_convective_wind_gusts():
 
 	#An INCOMPLETE_MONTH flag is raised at a station if for a given month, less than 90% of days are recorded
 
-
-	#EDIT: REMOVED DISTRICT (between lon and height)
-
 	#Set csv column names
 	names = ["record_id","stn_no","stn_name","locality", "state","lat","lon","height","date_str",\
 		"wind_gust","quality","wind_dir", "wind_dir_quality", "max_gust_str_lt", \
@@ -492,8 +489,6 @@ def read_convective_wind_gusts():
 	df["year"] = df.date_str.str.slice(6,10).astype("int")
 	df["month"] = df.date_str.str.slice(3,5).astype("int")
 	df["day_lt"] = df.date_str.str.slice(0,2).astype("int")
-	#df["daily_date_lt"] = [dt.datetime(df["year"][i], df["month"][i], df["day_lt"][i]) \
-	#			for i in np.arange(df.shape[0])]
 	df["daily_date_lt"] = pd.to_datetime({"year":df["year"],"month":df["month"],"day":df["day_lt"]})
 
 	#For each month/station, see whether greater than 90% of the month has data. Create a new column with this
@@ -513,8 +508,6 @@ def read_convective_wind_gusts():
 	df.loc[df["max_gust_str_lt"].isna(),"max_gust_str_lt"] = "0000"
 	df["hour_lt"] = df.max_gust_str_lt.str.slice(0,2).astype("int")
 	df["min_lt"] = df.max_gust_str_lt.str.slice(2,4).astype("int")
-	#df["gust_time_lt"] = [dt.datetime(df["year"][i], df["month"][i], df["day_lt"][i], \
-	#			df["hour_lt"][i], df["min_lt"][i]) for i in np.arange(df.shape[0])]
 	df["gust_time_lt"] = pd.to_datetime({"year":df["year"], "month":df["month"], "day":df["day_lt"],\
 			"hour":df["hour_lt"], "minute":df["min_lt"]})
 
@@ -543,9 +536,7 @@ def read_convective_wind_gusts():
 
 	#For each gust from 2005-2015, get lightning information. Data is 6 hourly, and has been binned temporally
 	# centred on the time stamp, and spatially into a 0.25 degree grid
-	#lightning = load_lightning(domain="aus", daily=False, smoothing=True).set_index(\
-	#		["date","loc_id"]).reset_index("loc_id")
-	lightning = read_lightning("lightning_aus_50", rad = 50, dmax = False, smoothing=True, loc_id=loc_id, points=points).\
+	lightning = read_lightning("lightning_aus_50", rad = 50, dmax = False, loc_id=loc_id, points=points).\
 			set_index(["date","loc_id"]).reset_index("loc_id")
 
 	#Convert the AWS date-time object to UTC. Needs to be done separately for each station (different time zones)
@@ -591,13 +582,6 @@ def read_convective_wind_gusts():
 	df["hourly_time_utc"] = pd.DatetimeIndex(temp_time.round("1H"))
 	df["hourly_floor_utc"] = pd.DatetimeIndex(temp_time.floor("1H"))
 	df["hourly_ceil_utc"] = pd.DatetimeIndex(temp_time.ceil("1H"))
-    
-	#Drop duplicates which are formed by the same gust being recorded at the end of one day (e.g. 23:50 LT)
-	# and the start of the next day (e.g. 02:00 LT), which then are given the same time when 
-	# converted to UTC and placed at the most recent analysis time (e.g. 12:00 UTC)
-	#Keep the entry with the highest wind gust
-	#df = df.sort_values("wind_gust", ascending=False).drop_duplicates(\
-	#		subset=["an_date","stn_name"]).sort_index() 
 
 	#Insert TC flag from TC dataframe
 	tc_affected_df["tc_affected"] = 1
@@ -606,20 +590,13 @@ def read_convective_wind_gusts():
 	df["tc_affected"] = np.where(np.isnan(df["tc_affected"]), 0, 1)
 
 	#Combine lightning and AWS data
-	#df = pd.concat([df.set_index(["an_date","stn_name"]), \
-	#	lightning_resampled.set_index(["loc_id"],append=True)[["lightning_prev", "lightning_next"]]], \
-	#	axis=1)
-	#df.loc[df["prev_or_next"]=="prev", "lightning_next"] = np.nan
-	#df.loc[df["prev_or_next"]=="next", "lightning_prev"] = np.nan
-	#df["lightning"] = df["lightning_prev"].combine_first(df["lightning_next"])
-	#df = df.dropna(subset=["wind_gust","lightning"])
 	df = pd.merge(df, lightning[["lightning","loc_id"]], how="left", right_on=["date","loc_id"], \
 		left_on=["an_date","stn_name"])
 
 	#Add STA. Limit to one STA report per day by creating an "is_sta" flag, and masking duplicates
 	print("ADDING STA REPORTS...")
 	df = verify_sta(df)
-	df["is_sta"] = (~(df.sta_date.isna()))*1
+	df["is_sta"] = (~(df.sta_date_ceil.isna()))*1
 	i = df.duplicated(subset=["sta_daily_date","stn_name"])
 	df.loc[i, "is_sta"] = 0
 	
@@ -630,7 +607,7 @@ def read_convective_wind_gusts():
 	df[["stn_name","an_date","state","lat","lon","height","wind_gust","wind_dir","year","month",\
 		"day_lt","hour_lt","min_lt","daily_date_utc","gust_time_lt","gust_time_utc", "hourly_time_utc",\
 		"hourly_floor_utc","hourly_ceil_utc","tc_affected","lightning","incomplete_month",\
-		"sta_wind","sta_wind_id","sta_date","sta_daily_date","is_sta"]].\
+		"sta_wind","sta_wind_id","sta_date","sta_date_floor","sta_date_ceil","sta_daily_date","is_sta"]].\
 		to_pickle("/g/data/eg3/ab4502/ExtremeWind/obs/aws/convective_wind_gust_aus_2005_2018.pkl")
 
 	return df
@@ -927,9 +904,8 @@ def read_non_synoptic_wind_gusts():
 
 	return df_full
 
-def read_lightning(fname, rad = 100, dmax = False, smoothing=True, loc_id=None, points=None):
-	#Read Andrew Dowdy's lightning dataset for a list of points. Either nearest point (smoothing = False) or 
-	# sum over +/- 1 degree in lat/lon
+def read_lightning(fname, rad = 100, dmax = False, loc_id=None, points=None):
+	#Read Andrew Dowdy's lightning dataset for a list of points.
 	if (loc_id is None) | (points is None):
 		loc_id,points = get_aus_stn_info()
 	
@@ -963,7 +939,7 @@ def read_lightning(fname, rad = 100, dmax = False, smoothing=True, loc_id=None, 
 				"loc_id":loc_id[p],"date":time_dt,"lon":points[p][0],\
 				"lat":points[p][1]})
 			df = df.append(temp_df)
-	df.to_pickle("/g/data/eg3/ab4502/ExtremeWind/ad_data/"+fname+"_smoothed.pkl")
+	df.to_pickle("/g/data/eg3/ab4502/ExtremeWind/ad_data/"+fname+".pkl")
 
 	if dmax:
 
@@ -977,10 +953,7 @@ def read_lightning(fname, rad = 100, dmax = False, smoothing=True, loc_id=None, 
 			df_daily = pd.concat([df_daily,temp_df])
 		df_daily = df_daily.set_index("loc_id",append=True)
 
-		if smoothing:
-			df_daily.to_pickle("/g/data/eg3/ab4502/ExtremeWind/ad_data/lightning_aus_smoothed_daily.pkl")
-		else:
-			df_daily.to_pickle("/g/data/eg3/ab4502/ExtremeWind/ad_data/lightning_aus_daily.pkl")
+		df_daily.to_pickle("/g/data/eg3/ab4502/ExtremeWind/ad_data/lightning_aus_daily.pkl")
 
 	return df
 
@@ -1148,7 +1121,9 @@ def read_sta():
 			engine="python")
 
 	temp_date = pd.DatetimeIndex( pd.to_datetime(sta["Date/Time"], format="%d/%m/%Y %H:%M") )
-	sta["date"] = temp_date.round("1H")
+	sta["sta_date"] = temp_date
+	sta["date_floor"] = temp_date.floor("1H")
+	sta["date_ceil"] = temp_date.ceil("1H")
 	sta["daily_date"] = pd.to_datetime({"year":temp_date.year, "month":temp_date.month, \
 			"day":temp_date.day})
 
@@ -1183,12 +1158,14 @@ def verify_sta(df):
 		points.append((lon,lat))
 	stn_info = pd.DataFrame({"stn_name":loc_id, "lon":lon_list, "lat":lat_list})
 	
-	#For each STA report, find station locations within one degree lat and lon (from the 
+	#For each STA report, find station locations within 50 km (from the 
 	# passed AWS dataframe). Assign the report with that station name. If there is more than 
 	# one station, take the one with minimum distance
 	sta_stn = []
 	sta_wind_id = []
 	sta_date = []
+	sta_date_floor = []
+	sta_date_ceil = []
 	sta_daily_date = []
 	sta_wind = []
 	for i in np.arange(0,sta.shape[0]):
@@ -1203,12 +1180,14 @@ def verify_sta(df):
 			for j in np.arange(dist[dist<=50].shape[0]):
 				sta_stn.append(temp.iloc[j].stn_name)
 				sta_wind_id.append(sta["Wind ID"][i])
-				sta_date.append(sta["date"][i])
+				sta_date.append(sta["sta_date"][i])
+				sta_date_floor.append(sta["date_floor"][i])
+				sta_date_ceil.append(sta["date_ceil"][i])
 				sta_daily_date.append(sta["daily_date"][i])
 				sta_wind.append(sta["Max Gust speed"][i])
 
-	sta_stn = pd.DataFrame({"stn_name":sta_stn, "sta_wind":sta_wind, "sta_date":sta_date, \
-		"sta_wind_id":sta_wind_id, "sta_daily_date":sta_daily_date}).\
+	sta_stn = pd.DataFrame({"stn_name":sta_stn, "sta_wind":sta_wind, "sta_date_floor":sta_date_floor, "sta_date_ceil":sta_date_ceil, \
+		"sta_date":sta_date,"sta_wind_id":sta_wind_id, "sta_daily_date":sta_daily_date}).\
 		sort_values("sta_wind", ascending=False).\
 		drop_duplicates(["stn_name","sta_daily_date"])
 
@@ -1288,12 +1267,12 @@ if __name__ == "__main__":
 	#df.to_csv("/home/548/ab4502/working/ExtremeWind/data_obs_"+\
 	#	"Nov2012"+".csv",float_format="%.3f")
 	
-	#read_convective_wind_gusts()
+	read_convective_wind_gusts()
 
 	#df = read_lightning(False)
 	#read_aws_daily_aus()
 	#df = read_upperair_obs(dt.datetime(2005,1,1),dt.datetime(2018,12,31),\
 	 #   "UA_wrfpython", "wrfpython")
-	df = read_upperair_obs(dt.datetime(2005,1,1),dt.datetime(2018,12,31), \
-	    "UA_sharppy", "sharppy")
+	#df = read_upperair_obs(dt.datetime(2005,1,1),dt.datetime(2018,12,31), \
+	 #   "UA_sharppy", "sharppy")
 

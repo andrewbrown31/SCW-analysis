@@ -311,7 +311,6 @@ def main():
 		sfc_thetae_unit = mpcalc.equivalent_potential_temperature(sfc_p_unit,sfc_ta_unit,sfc_dp_unit)
 		sfc_q = np.array(sfc_q_unit)
 		sfc_hur = np.array(sfc_hur_unit)
-		#sfc_wb = sfc_ta - (1/3 * (sfc_ta - sfc_dp))
 		sfc_wb = np.array(wrf.wetbulb( sfc_p_3d*100, sfc_ta+273.15, sfc_q, units="degC"))
 
 		#Calculate mixed-layer parcel indices, based on avg sfc-100 hPa AGL layer parcel.
@@ -370,13 +369,6 @@ def main():
 		lcl[(sfc_p_3d > ps[t]) | (sfc_p_3d<(ps[t]-500))] = np.nan
 		el[(sfc_p_3d > ps[t]) | (sfc_p_3d<(ps[t]-500))] = np.nan
 		#Get maximum (in the vertical), and get cin, lfc, lcl for the same parcel
-		#mu_cape_inds = np.nanargmax(cape,axis=0)
-		#mu_cape = mu_cape_inds.choose(cape)
-		#mu_cin = mu_cape_inds.choose(cin)
-		#mu_lfc = mu_cape_inds.choose(lfc)
-		#mu_lcl = mu_cape_inds.choose(lcl)
-		#mu_el = mu_cape_inds.choose(el)
-		#muq = mu_cape_inds.choose(sfc_q)
 		mu_cape_inds = np.tile(np.nanargmax(cape,axis=0), (cape.shape[0],1,1))
 		mu_cape = np.take_along_axis(cape, mu_cape_inds, 0)[0]
 		mu_cin = np.take_along_axis(cin, mu_cape_inds, 0)[0]
@@ -478,7 +470,7 @@ def main():
 			#Define DCAPE as the area between the moist adiabat of a descending parcel 
 			# and the environmental temperature (w/o virtual temperature correction). 
 			#Starting parcel chosen by the pressure level with minimum thetae below 
-			# 300 hPa
+			# 400 hPa AGL
 
 			if mdl_lvl:
 				sfc_thetae300 = np.copy(sfc_thetae_unit)
@@ -504,9 +496,6 @@ def main():
 				sfc_p300 = sfc_p_3d[np.concatenate([[1100], p]) >= 300]
 				sfc_thetae300[(ps[t] - sfc_p300) > 400] = np.nan 
 				sfc_thetae300[(sfc_p300 > ps[t])] = np.nan 
-				#dcape = np.nanargmin(sfc_thetae300, axis=0).choose(dcape)
-				#ddraft_temp = tas[t] - \
-				#	np.nanargmin(sfc_thetae300, axis=0).choose(ddraft_temp)
 				dcape_inds = np.tile(np.nanargmin(sfc_thetae300, axis=0), \
 					    (sfc_thetae300.shape[0],1,1) )
 				dcape = np.take_along_axis(dcape, dcape_inds, 0)[0]
@@ -561,9 +550,8 @@ def main():
 		s010 = get_shear_hgt(sfc_ua, sfc_va, np.copy(sfc_hgt), 0, 10000, terrain)
 		s13 = get_shear_hgt(sfc_ua, sfc_va, np.copy(sfc_hgt), 1000, 3000, terrain)
 		s36 = get_shear_hgt(sfc_ua, sfc_va, np.copy(sfc_hgt), 3000, 6000, terrain)
-		ebwd = get_shear_hgt(sfc_va, sfc_va, np.copy(sfc_hgt), np.nanmin(eff_hgt,axis=0),\
-					(mu_el - np.nanmin(eff_hgt,axis=0) ) / 2 + np.nanmin(eff_hgt,axis=0),\
-					terrain)
+		ebwd = get_shear_hgt(sfc_ua, sfc_va, np.copy(sfc_hgt), np.nanmin(eff_hgt,axis=0),\
+					(mu_el * 0.5), terrain)
 		srh01_left, srh01_right = get_srh(sfc_ua, sfc_va, np.copy(sfc_hgt), 0, 1000, terrain)
 		srh03_left, srh03_right = get_srh(sfc_ua, sfc_va, np.copy(sfc_hgt), 0, 3000, terrain)
 		srh06_left, srh06_right = get_srh(sfc_ua, sfc_va, np.copy(sfc_hgt), 0, 6000, terrain)

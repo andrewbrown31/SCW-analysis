@@ -125,60 +125,63 @@ def plot_candidate_variable_kde():
 	#For a list of "candidate variables", defined below, plot kde functions for all times, measured events, and reported events
 	matplotlib.rcParams.update({'font.size': 14})
 	pss_df, barra_df_aws, barra_df_sta = optimise_pss("/g/data/eg3/ab4502/ExtremeWind/points/"+\
-		"barra_allvars_2005_2018_2.pkl", T=1000, compute=False, l_thresh=2,\
-		is_pss="hss", model_name="barra_fc") 
+		"barra_allvars_2005_2018.pkl", T=1000, compute=False, l_thresh=2,\
+		is_pss="hss", model_name="barra_fc_v3") 
 	pss_df, era5_df_aws, era5_df_sta = optimise_pss("/g/data/eg3/ab4502/ExtremeWind/points/"+\
-		"era5_allvars_2005_2018.pkl", T=1000, compute=False, l_thresh=2,\
-		is_pss="hss", model_name="era5") 
+		"era5_allvars_v2_2005_2018.pkl", T=1000, compute=False, l_thresh=2,\
+		is_pss="hss", model_name="era5_v3") 
 	#variables = ["lr36","lr_freezing","mhgt","ml_cape","ml_el","qmean01","qmeansubcloud","s06","srhe_left","Umean06"]
-	variables = ["ml_el","eff_el","ml_cape","dcape","srhe_left","Uwindinf","lr13","lr36","rhmin13","dpd850","U1","Umean06","Umean03"]
-	xlims = {"lr36":[2,10], "lr_freezing":[2,15], "mhgt":[0,6000], "ml_cape":[0,2000], "ml_el":[0,16000], \
-		    "qmean01":[0,25], "qmeansubcloud":[0,25], "s06":[0,60], "srhe_left":[0,200], "Umean06":[0,45],\
-		    "rhmin13":[0,100], "dpd850":[0,30], "U1":[0,30],\
-		    "lr13":[0,12], "dcape":[0,2500], "eff_el":[0,16000], "Uwindinf":[0,25], "Umean03":[0,45]}
-	titles = {"lr36":"LR36","lr_freezing":"LR-Freezing","mhgt":"MHGT","ml_cape":"MLCAPE","ml_el":"MLEL","qmean01":"Qmean01",\
-		    "qmeansubcloud":"Qmean-Subcloud","s06":"S06","srhe_left":"SRHE","Umean06":"Umean06",\
-		    "rhmin13":"RHMin13", "dpd850":"DPD850", "U1":"U1",\
-		    "lr13":"LR13", "dcape":"DCAPE", "eff_el":"Eff-EL", "Uwindinf":"Uwindinf", "Umean03":"Umean03"}
+	#variables = ["ml_el","eff_el","ml_cape","dcape","srhe_left","Uwindinf","lr13","lr36","rhmin13","dpd850","U1","Umean06","Umean03"]
+	variables = ["ml_el","ml_cape","sb_cape","eff_lcl","eff_cin","srhe_left","lr13","lr36","rhmin01","rhmin03","dpd700","scld","Umean06","Umean03","U1"]
+	xlims = {"lr36":[2,10], "lr_freezing":[2,15], "mhgt":[0,6000], "ml_cape":[0,2000], "ml_el":[0,16000], "sb_cape":[0,2000],"eff_cin":[0,300],\
+		    "qmean01":[0,25], "qmeansubcloud":[0,25], "scld":[0,30], "srhe_left":[0,200], "Umean06":[0,45],\
+		    "rhmin03":[0,100], "dpd850":[0,30], "U1":[0,30],"eff_lcl":[0,4000],"q_melting":[0,8],"dpd700":[0,30],"rhmin01":[0,100],\
+		    "lr13":[0,12], "dcape":[0,2500], "eff_el":[0,16000], "Uwindinf":[0,25], "Umean03":[0,45],"Umean800_600":[0,45]}
+	titles = {"lr36":"LR36","lr_freezing":"LR-Freezing","mhgt":"MHGT","ml_cape":"MLCAPE","ml_el":"MLEL","qmean01":"Qmean01","eff_lcl":"Eff-LCL",\
+		    "qmeansubcloud":"Qmean-Subcloud","scld":"SCLD","srhe_left":"SRHE","Umean06":"Umean06",\
+		    "rhmin03":"RHMin03", "dpd850":"DPD850", "U1":"U1","Umean800_600":"Umean800-600","dpd700":"DPD700","rhmin01":"RHMin01","q_melting":"Q-melting",\
+		    "lr13":"LR13", "dcape":"DCAPE", "eff_el":"Eff-EL", "Uwindinf":"Uwindinf", "Umean03":"Umean03","sb_cape":"SBCAPE","eff_cin":"Eff-CIN"}
 	units = {"lr36":"deg km$^{-1}$","lr_freezing":"deg km$^{-1}$","mhgt":"m","ml_cape":"J kg$^{-1}$","ml_el":"m","qmean01":"g kg$^{-1}$",\
-		    "qmeansubcloud":"g kg$^{-1}$","s06":"m s$^{-1}$","srhe_left":"m$^{2}$ s$^{-1}$","Umean06":"m s$^{-1}$",\
-		    "rhmin13":"%", "dpd850":"deg C", "U1":"m s$^{-1}$",\
-		    "lr13":"deg km$^{-1}$", "dcape":"J kg$^{-1}$", "eff_el":"m", "Uwindinf":"m s$^{-1}$", "Umean03":"m s$^{-1}$"}
+		    "qmeansubcloud":"g kg$^{-1}$","scld":"m s$^{-1}$","srhe_left":"m$^{2}$ s$^{-1}$","Umean06":"m s$^{-1}$","eff_lcl":"m","rhmin01":"%",\
+		    "rhmin03":"%", "dpd850":"deg C", "U1":"m s$^{-1}$","dpd700":"deg C", "q_melting":"g kg$^{-1}$", "Umean800_600":"m s$^{-1}$",\
+		    "lr13":"deg km$^{-1}$", "dcape":"J kg$^{-1}$", "eff_el":"m", "Uwindinf":"m s$^{-1}$", "Umean03":"m s$^{-1}$",\
+		    "sb_cape":"J kg$^{-1}$","eff_cin":"J kg$^{-1}$"}
 	#Fix lr_freezing in era5
 	era5_df_sta.loc[era5_df_sta["lr_freezing"]>barra_df_sta["lr_freezing"].max(),"lr_freezing"] = barra_df_sta["lr_freezing"].max()
 	era5_df_aws.loc[era5_df_aws["lr_freezing"]>barra_df_aws["lr_freezing"].max(),"lr_freezing"] = barra_df_aws["lr_freezing"].max()
 
 	cnt=1
 	plt.figure(figsize=[12,14])
-	plt.subplots_adjust(top=0.97, bottom=0.15, hspace=0.85, wspace=0.3, right=0.95)
+	plt.subplots_adjust(top=0.97, bottom=0.15, hspace=0.9, wspace=0.3, right=0.95)
 	matplotlib.rcParams.update({'font.size': 14})
 	for v in variables:
 		print(v)
 
 		#Plot dist for 1) Non-convective gusts 2) Non-severe convective gusts and 3) SCW
 
-		ax1 = plt.subplot(7,2,cnt)
+		ax1 = plt.subplot(8,2,cnt)
+		barra_df_aws[barra_df_aws["is_conv_aws"]==1][v].plot(kind="kde", color="r", linestyle="-", ind=np.linspace(xlims[v][0], xlims[v][1], 1000), label="Severe convective gust (BARRA)")
+		era5_df_aws[era5_df_aws["is_conv_aws"]==1][v].plot(kind="kde", color="b", linestyle="-", ind=np.linspace(xlims[v][0], xlims[v][1], 1000), label="Severe convective gust (ERA5)")
+		barra_df_aws[(barra_df_aws["lightning"]>=2) & (barra_df_aws["wind_gust"]<25)][v].plot(kind="kde", color="r", linestyle="--", ind=np.linspace(xlims[v][0], xlims[v][1], 1000), label="Non-severe convective gust (BARRA)")
+		era5_df_aws[(era5_df_aws["lightning"]>=2) & (era5_df_aws["wind_gust"]<25)][v].plot(kind="kde", color="b", linestyle="--", ind=np.linspace(xlims[v][0], xlims[v][1], 1000), label="Non-severe convective gust (ERA5)")
 		barra_df_aws[barra_df_aws["lightning"]<2][v].plot(kind="kde", color="r", linestyle=":", ind=np.linspace(xlims[v][0], xlims[v][1], 1000),\
 			label="Non-convective gusts (BARRA)")
-		barra_df_aws[(barra_df_aws["lightning"]>=2) & (barra_df_aws["wind_gust"]<25)][v].plot(kind="kde", color="r", linestyle="--", ind=np.linspace(xlims[v][0], xlims[v][1], 1000), label="Non-severe convective gust (BARRA)")
-		barra_df_aws[barra_df_aws["is_conv_aws"]==1][v].plot(kind="kde", color="r", linestyle="-", ind=np.linspace(xlims[v][0], xlims[v][1], 1000), label="Severe convective gust (BARRA)")
 
 		era5_df_aws[era5_df_aws["lightning"]<2][v].plot(kind="kde", color="b", linestyle=":", ind=np.linspace(xlims[v][0], xlims[v][1], 1000),\
 			label="Non-convective gusts (ERA5)")
-		era5_df_aws[(era5_df_aws["lightning"]>=2) & (era5_df_aws["wind_gust"]<25)][v].plot(kind="kde", color="b", linestyle="--", ind=np.linspace(xlims[v][0], xlims[v][1], 1000), label="Non-severe convective gust (ERA5)")
-		era5_df_aws[era5_df_aws["is_conv_aws"]==1][v].plot(kind="kde", color="b", linestyle="-", ind=np.linspace(xlims[v][0], xlims[v][1], 1000), label="Severe convective gust (ERA5)")
 
 
 		plt.xlim(xlims[v][0], xlims[v][1])
-		if v in ["ml_cape","srhe_left","Uwindinf"]:
+		if v in ["ml_cape","srhe_left","Uwindinf","eff_lcl","eff_cin","sb_cape"]:
 			plt.yscale("log")
 
 		ax1.yaxis.set_major_formatter(FormatStrFormatter('%.1e'))
 
 		if (cnt % 2) == 0:
 			ax1.set_ylabel("")
-		if cnt == 13:
-			ax1.legend(loc="lower center", bbox_to_anchor=(1.75,-0.4), fancybox=True, ncol=1, edgecolor="k", fontsize="small")
+		if cnt == 15:
+			ax1.legend(loc="lower center", bbox_to_anchor=(1.75,-0.6), fancybox=True, ncol=1, edgecolor="k", fontsize="small")
+			#ax1.legend(loc="lower center", bbox_to_anchor=(-0.2,-1.5), fancybox=True, ncol=3, edgecolor="k", fontsize="small")
 		plt.title(titles[v], size=14)
 		ax1.tick_params(labelsize=12)
 
@@ -186,6 +189,13 @@ def plot_candidate_variable_kde():
 			ax1.set_yticks([1e-5, 1e-4, 1e-3, 1e-2])
 		elif v in ["srhe_left"]:
 			ax1.set_yticks([1e-6, 1e-4, 1e-2, 1e-0])
+		elif v in ["eff_lcl"]:
+			ax1.set_yticks([1e-4, 1e-3, 1e-2])
+		elif v in ["eff_cin"]:
+			ax1.set_yticks([1e-8, 1e-6, 1e-4, 1e-2])
+			ax1.set_ylim([1e-9, 1])
+		elif v in ["sb_cape"]:
+			ax1.set_yticks([1e-5, 1e-4, 1e-3, 1e-2])
 		elif v in ["Uwindinf"]:
 			ax1.set_yticks([1e-3, 1e-2, 1e-1, 1e-0])
 		else:
@@ -203,7 +213,7 @@ def plot_candidate_variable_kde():
 	for v in variables:
 		#Plot diff between lightning and lightning w/measured gust
 
-		ax2=plt.subplot(7,2,cnt)
+		ax2=plt.subplot(8,2,cnt)
 		barra_df_aws[barra_df_aws["lightning"] >= 2][v].plot(kind="kde", color="k", linestyle="-", ind=np.linspace(xlims[v][0], xlims[v][1], 1000),  label="Lightning (BARRA)")
 		era5_df_aws[era5_df_aws["lightning"] >= 2][v].plot(kind="kde", color="k", linestyle="--", ind=np.linspace(xlims[v][0], xlims[v][1], 1000), label="Lightning (ERA5)")
 		barra_df_aws[barra_df_aws["is_conv_aws_cond_light"]==1][v].plot(kind="kde", color="g", linestyle="-", ind=np.linspace(xlims[v][0], xlims[v][1], 1000), label="Measured SCW (BARRA)")
@@ -291,7 +301,7 @@ def plot_candidate_kde_logit_exclude():
 
 
 	matplotlib.rcParams.update({'font.size': 12})
-	model = pd.read_pickle("/g/data/eg3/ab4502/ExtremeWind/points/era5_allvars_2005_2018.pkl")
+	model = pd.read_pickle("/g/data/eg3/ab4502/ExtremeWind/points/era5_allvars_v2_2005_2018.pkl")
 	obs = pd.read_pickle("/g/data/eg3/ab4502/ExtremeWind/obs/aws/convective_wind_gust_aus_2005_2018.pkl")
 	df_sta = pd.merge(obs[["stn_name","wind_gust","hourly_floor_utc","tc_affected","lightning","is_sta"]],\
 		    model, how="left",left_on=["stn_name","hourly_floor_utc"], right_on=["loc_id","time"])
@@ -299,42 +309,36 @@ def plot_candidate_kde_logit_exclude():
 	df_sta = df_sta[df_sta.tc_affected==0]
 	df_aws = df_aws[df_aws.tc_affected==0]
 	z_aws = \
-		    2.1e-4*df_aws["ml_el"] \
+		    2.5e-4*df_aws["ml_el"] \
 		    + 2.1e-1*df_aws["Umean03"]\
-		    +1.3e-0*df_aws["lr13"] \
-		    -1.7e-1*df_aws["dpd850"] \
-		    + 2.1e-2*df_aws["srhe_left"] - 11
-	z_sta = \
-		    1.3e-3*df_sta["ml_cape"] \
-		    + 1.6e-1*df_sta["Umean06"]\
-		    +2.2e-2*df_sta["srhe_left"] \
-		    +4.0e-1*df_sta["lr13"] \
-		    + 1.1e-1*df_sta["Uwindinf"] - 5.2
+		    +6.0e-4*df_aws["eff_lcl"] \
+		    - 2.0e-1*df_aws["dpd700"]\
+		    +7.7e-1*df_aws["lr36"] \
+		    - 1.8e-2*df_aws["rhmin01"] - 6.3
 	df_aws["logit"] = (( 1 / (1 + np.exp(-z_aws))) >= 0.81)*1
-	df_sta["logit"] = (( 1 / (1 + np.exp(-z_sta))) >= 0.66)*1
 	df_aws["is_conv_aws"] = ((df_aws["lightning"]>=2) & (df_aws["wind_gust"]>=25))*1
 
-	df_sta.loc[df_sta["lr_freezing"]>20,"lr_freezing"] = np.nan
 	df_aws.loc[df_aws["lr_freezing"]>20,"lr_freezing"] = np.nan
-	variables = ["ml_el","eff_el","ml_cape","dcape","srhe_left","Uwindinf","lr13","lr36","rhmin13","dpd850","U1","Umean06","Umean03"]
-	xlims = {"lr36":[2,10], "lr_freezing":[2,15], "mhgt":[0,6000], "ml_cape":[0,2000], "ml_el":[0,16000], \
-		    "qmean01":[0,25], "qmeansubcloud":[0,25], "s06":[0,60], "srhe_left":[0,175], "Umean06":[0,45],\
-		    "rhmin13":[0,100], "dpd850":[0,30], "U1":[0,30],\
-		    "lr13":[0,12], "dcape":[0,2500], "eff_el":[0,16000], "Uwindinf":[0,20], "Umean03":[0,45]}
-	titles = {"lr36":"LR36","lr_freezing":"LR-Freezing","mhgt":"MHGT","ml_cape":"MLCAPE","ml_el":"MLEL","qmean01":"Qmean01",\
+	variables = ["ml_el","ml_cape","sb_cape","eff_lcl","eff_cin","srhe_left","lr13","lr36","q_melting","rhmin01","rhmin03","dpd700","Umean06","Umean03","U1"]
+	xlims = {"lr36":[2,10], "lr_freezing":[2,15], "mhgt":[0,6000], "ml_cape":[0,2000], "ml_el":[0,16000], "sb_cape":[0,2000],"eff_cin":[0,300],\
+		    "qmean01":[0,25], "qmeansubcloud":[0,25], "s06":[0,60], "srhe_left":[0,200], "Umean06":[0,45],\
+		    "rhmin03":[0,100], "dpd850":[0,30], "U1":[0,30],"eff_lcl":[0,4000],"q_melting":[0,8],"dpd700":[0,30],"rhmin01":[0,100],\
+		    "lr13":[0,12], "dcape":[0,2500], "eff_el":[0,16000], "Uwindinf":[0,25], "Umean03":[0,45],"Umean800_600":[0,45]}
+	titles = {"lr36":"LR36","lr_freezing":"LR-Freezing","mhgt":"MHGT","ml_cape":"MLCAPE","ml_el":"MLEL","qmean01":"Qmean01","eff_lcl":"Eff-LCL",\
 		    "qmeansubcloud":"Qmean-Subcloud","s06":"S06","srhe_left":"SRHE","Umean06":"Umean06",\
-		    "rhmin13":"RHMin13", "dpd850":"DPD850", "U1":"U1",\
-		    "lr13":"LR13", "dcape":"DCAPE", "eff_el":"Eff-EL", "Uwindinf":"Uwindinf", "Umean03":"Umean03"}
+		    "rhmin03":"RHMin03", "dpd850":"DPD850", "U1":"U1","Umean800_600":"Umean800-600","dpd700":"DPD700","rhmin01":"RHMin01","q_melting":"Q-melting",\
+		    "lr13":"LR13", "dcape":"DCAPE", "eff_el":"Eff-EL", "Uwindinf":"Uwindinf", "Umean03":"Umean03","sb_cape":"SBCAPE","eff_cin":"Eff-CIN"}
 	units = {"lr36":"deg km$^{-1}$","lr_freezing":"deg km$^{-1}$","mhgt":"m","ml_cape":"J kg$^{-1}$","ml_el":"m","qmean01":"g kg$^{-1}$",\
-		    "qmeansubcloud":"g kg$^{-1}$","s06":"m s$^{-1}$","srhe_left":"m$^{2}$ s$^{-1}$","Umean06":"m s$^{-1}$",\
-		    "rhmin13":"%", "dpd850":"deg C", "U1":"m s$^{-1}$",\
-		    "lr13":"deg km$^{-1}$", "dcape":"J kg$^{-1}$", "eff_el":"m", "Uwindinf":"m s$^{-1}$", "Umean03":"m s$^{-1}$"}
+		    "qmeansubcloud":"g kg$^{-1}$","s06":"m s$^{-1}$","srhe_left":"m$^{2}$ s$^{-1}$","Umean06":"m s$^{-1}$","eff_lcl":"m","rhmin01":"%",\
+		    "rhmin03":"%", "dpd850":"deg C", "U1":"m s$^{-1}$","dpd700":"deg C", "q_melting":"g kg$^{-1}$", "Umean800_600":"m s$^{-1}$",\
+		    "lr13":"deg km$^{-1}$", "dcape":"J kg$^{-1}$", "eff_el":"m", "Uwindinf":"m s$^{-1}$", "Umean03":"m s$^{-1}$",\
+		    "sb_cape":"J kg$^{-1}$","eff_cin":"J kg$^{-1}$"}
 	plt.figure(figsize=[12,14])
 	cnt=1
 	for p in variables:
-		plt.subplot(7,2,cnt)
+		plt.subplot(8,2,cnt)
 		ax=plt.gca()
-		if p in ["ml_cape","srhe_left","Uwindinf"]:
+		if p in ["ml_cape","srhe_left","Uwindinf","eff_lcl","eff_cin","sb_cape"]:
 			ax.set_yscale("log")
 		df_aws.query("logit==0").query("is_conv_aws==1")[p].plot(kind="kde", color="tab:blue",ind=np.linspace(xlims[p][0], xlims[p][1], 1000), label="Non-identified SCW")
 		df_aws.query("logit==0").query("wind_gust<25").query("lightning>=2")[p].plot(kind="kde",color="tab:blue",linestyle="--",ind=np.linspace(xlims[p][0], xlims[p][1], 1000),label="Non-identified non-severe convective gust")
@@ -347,6 +351,13 @@ def plot_candidate_kde_logit_exclude():
 			ax.set_yticks([1e-5, 1e-4, 1e-3, 1e-2])
 		elif p in ["srhe_left"]:
 			ax.set_yticks([1e-6, 1e-4, 1e-2, 1e-0])
+		elif p in ["eff_lcl"]:
+			ax.set_yticks([1e-4, 1e-3, 1e-2])
+		elif p in ["eff_cin"]:
+			ax.set_yticks([1e-8, 1e-6, 1e-4, 1e-2])
+			ax.set_ylim([1e-9, 1])
+		elif p in ["sb_cape"]:
+			ax.set_yticks([1e-5, 1e-4, 1e-3, 1e-2])
 		elif p in ["Uwindinf"]:
 			ax.set_yticks([1e-3, 1e-2, 1e-1, 1e-0])
 		else:
@@ -354,8 +365,8 @@ def plot_candidate_kde_logit_exclude():
 		if cnt in [2,4,6,8,10]:
 			plt.ylabel("")
 		ax.yaxis.set_major_formatter(FormatStrFormatter('%.1e'))
-		if cnt == 13:
-			ax.legend(loc="lower center", bbox_to_anchor=(1.75,-0.4), fancybox=True, ncol=1, edgecolor="k", fontsize="small")
+		if cnt == 15:
+			ax.legend(loc="lower center", bbox_to_anchor=(1.75,-0.6), fancybox=True, ncol=1, edgecolor="k", fontsize="small")
 		cnt=cnt+1
 	plt.subplots_adjust(top=0.97, bottom=0.15, hspace=0.85, wspace=0.3, right=0.95)
 	plt.savefig("figA2.png",bbox_inches="tight")
@@ -428,15 +439,21 @@ def plot_ranked_hss():
 
 	ver=2
 
-	era5, df_aws_era5, df_sta_era5 = optimise_pss("/g/data/eg3/ab4502/ExtremeWind/points/era5_allvars_2005_2018.pkl",\
-                         T=1000, compute=False, l_thresh=2, is_pss="hss", model_name="era5",\
+	era5, df_aws_era5, df_sta_era5 = optimise_pss("/g/data/eg3/ab4502/ExtremeWind/points/era5_allvars_v2_2005_2018.pkl",\
+                         T=1000, compute=False, l_thresh=2, is_pss="hss", model_name="era5_v4",\
                          time="floor") 
-	barra, df_aws_barra, df_sta_barra = optimise_pss("/g/data/eg3/ab4502/ExtremeWind/points/barra_allvars_2005_2018_2.pkl",\
-                         T=1000, compute=False, l_thresh=2, is_pss="hss", model_name="barra_fc",\
+	barra, df_aws_barra, df_sta_barra = optimise_pss("/g/data/eg3/ab4502/ExtremeWind/points/barra_allvars_2005_2018.pkl",\
+                         T=1000, compute=False, l_thresh=2, is_pss="hss", model_name="barra_fc_v4",\
                          time="floor") 
+	era5_c, _,_= optimise_pss("/g/data/eg3/ab4502/ExtremeWind/points/era5_allvars_v2_2005_2018.pkl",\
+                         T=1000, compute=False, l_thresh=2, is_pss="hss", model_name="era5_v4",\
+                         time="ceil") 
+	barra_c, _,_ = optimise_pss("/g/data/eg3/ab4502/ExtremeWind/points/barra_allvars_2005_2018.pkl",\
+                         T=1000, compute=False, l_thresh=2, is_pss="hss", model_name="barra_fc_v4",\
+                         time="ceil") 
 	hss = pd.merge(era5, barra, how="outer", suffixes=("_era5","_barra"), left_index=True, right_index=True) 
 	renames = {"ship":"SHIP", "k_index":"K-index", "ml_cape":"MLCAPE", "srhe_left":"SRHE", \
-                 "ml_el":"MLEL", "mu_cape":"MUCAPE", "eff_cape":"Eff-CAPE", "sb_cape":"SBCAPE", \
+                 "ml_el":"MLEL", "mu_cape":"MUCAPE", "eff_cape":"Eff-CAPE", "sb_cape":"SBCAPE", "eff_lcl":"Eff-LCL",\
                  "wmsi_ml":"WMSI", "dcp":"DCP", "mlcape*s06":"MLCS6", "eff_sherb":"SHERBE", "ebwd":"EBWD",\
                  "mu_el":"MUEL", "eff_el":"Eff-EL", "sb_el":"SBEL", "mucape*s06":"MUCS6", "sweat":"SWEAT",\
                  "Umean800_600":"Umean800-600", "Ust_left":"Ust", "sherb":"SHERB", "t_totals":"T-totals", \
@@ -450,6 +467,10 @@ def plot_ranked_hss():
                  "wbz":"WBZ","sfc_thetae":"Sfc-ThetaE","q1":"Q1","te_diff":"TED","rhmin13":"RHMin03","Uwindinf":"Uwindinf",\
 		"Umean06":"Umean06","U3":"U3","U500":"U500","U6":"U6","Umean03":"Umean03","U1":"U1"} 
 	hss = hss.rename(index=renames) 
+	hss.loc["WindGust10","pss_conv_aws_barra"] = barra_c.loc["wg10","pss_conv_aws"]
+	hss.loc["WindGust10","pss_conv_aws_era5"] = era5_c.loc["wg10","pss_conv_aws"]
+	hss.loc["WindGust10","pss_sta_barra"] = barra_c.loc["wg10","pss_sta"]
+	hss.loc["WindGust10","pss_sta_era5"] = era5_c.loc["wg10","pss_sta"]
 	df_sta_era5 = df_sta_era5.loc[:,list(renames.keys()) + ["is_sta"]].rename(columns=renames).reset_index().drop(columns="index") 
 	df_aws_era5 = df_aws_era5.loc[:,list(renames.keys()) + ["is_conv_aws","lightning","is_conv_aws_cond_light"]].rename(columns=renames).reset_index().drop(columns="index") 
 	df_sta_barra = df_sta_barra.loc[:,list(renames.keys()) + ["is_sta"]].rename(columns=renames).reset_index().drop(columns="index") 
@@ -938,9 +959,9 @@ def obs_versus_mod_compute(model):
 	from obs_read import read_aws_half_hourly as read_aws
 
 	#Other settings
-	dir_data = "obs"  #or "obs"
+	dir_data = "obs"
 	names = {"is_conv_aws":"Measured", "is_sta":"Reported", "t_totals":"T-Totals",\
-		"dcp":"DCP", "model_aws":"logistic eq. (measured)",\
+		"dcp":"DCP", "model_aws":"logistic eq. (measured)","mlcape*s06":"MLCS6",\
 		"model_sta":"logistic eq. (reported)"}
 	data = "hourly"
 
@@ -948,6 +969,7 @@ def obs_versus_mod_compute(model):
 	l_thresh = 2
 	df = pd.read_pickle("/g/data/eg3/ab4502/ExtremeWind/obs/aws/"+\
 		    "convective_wind_gust_aus_2005_2018.pkl")
+	df = df[df.tc_affected==0]
 	df.loc[:, "is_conv_aws"] = np.where((df.wind_gust >= 25) & (df.lightning >= l_thresh) &\
 		    (df.tc_affected==0), 1, 0)
 	df.loc[:, "is_sta"] = np.where((df.is_sta == 1) & (df.tc_affected==0), 1, 0)
@@ -957,10 +979,9 @@ def obs_versus_mod_compute(model):
 	if model == "ERA5":
 	    pss_df, mod_aws, mod_sta = optimise_pss("/g/data/eg3/ab4502/ExtremeWind/"+\
 		    "points/era5_allvars_v2_2005_2018.pkl",\
-		    T=1000, compute=False, l_thresh=2, is_pss="hss", model_name="era5_v2")
+		    T=1000, compute=False, l_thresh=2, is_pss="hss", model_name="era5_v3")
 	    #CONV AWS
-	    #aws_predictors = ["lr36","mhgt","ml_el","qmean01","srhe_left","Umean06"]
-	    aws_predictors = ["ml_el","Umean03","lr13","dpd850","srhe_left"]
+	    aws_predictors = ["ml_el","Umean03","eff_lcl","dpd700","lr36","rhmin01"]
 	    logit = LogisticRegression(class_weight="balanced", solver="liblinear",\
 		max_iter=1000)
 	    logit_mod_aws = logit.fit(mod_aws[aws_predictors], mod_aws["is_conv_aws"])
@@ -968,13 +989,12 @@ def obs_versus_mod_compute(model):
 	    mod_aws.loc[:, "model"] = ((p >= 0.81)) * 1
 	    mod_aws["month"] = pd.DatetimeIndex(mod_aws["time"]).month
 	    #STA
-	    #sta_predictors = ["lr36","ml_cape","srhe_left","Umean06"]
-	    sta_predictors = ["ml_cape","Umean06","srhe_left","lr13","Uwindinf","Umeanwindinf"]
+	    sta_predictors = ["ml_cape","Umean06","srhe_left","lr13"]
 	    logit = LogisticRegression(class_weight="balanced", solver="liblinear",\
 		max_iter=1000)
 	    logit_mod_sta = logit.fit(mod_sta[sta_predictors], mod_sta["is_sta"])
 	    p = logit_mod_sta.predict_proba(mod_sta[sta_predictors])[:,1]
-	    mod_sta.loc[:, "model_sta"] = ((p >= 0.66)) * 1
+	    mod_sta.loc[:, "model_sta"] = ((p >= 0.68)) * 1
 	    mod_sta["month"] = pd.DatetimeIndex(mod_sta["time"]).month
 	    #Hourly data
 	    mod_hourly = pd.read_pickle("/g/data/eg3/ab4502/ExtremeWind/points/"+\
@@ -989,36 +1009,36 @@ def obs_versus_mod_compute(model):
 	    p_aws = logit_mod_aws.predict_proba(mod_hourly[aws_predictors])[:,1]
 	    p_sta = logit_mod_sta.predict_proba(mod_hourly[sta_predictors])[:,1]
 	    p_thresh_aws = 0.81
-	    p_thresh_sta = 0.66
+	    p_thresh_sta = 0.68
 	    thresh_t_totals = 48.1
+	    thresh_mlcs6 = 5669
 	    thresh_dcp = 0.04
 	    mod_hourly["model_aws"] = p_aws
 	    mod_hourly["model_sta"] = p_sta
 	    label = ["d)","e)","f)"]
+	    p_list = ["model_aws","model_sta","dcp","t_totals"]
 	elif model == "BARRA":
 	    pss_df, mod_aws, mod_sta = optimise_pss("/g/data/eg3/ab4502/ExtremeWind/"+\
-		    "points/barra_allvars_2005_2018_2.pkl",\
-		    T=1000, compute=False, l_thresh=2, is_pss="hss", model_name="barra_fc")
+		    "points/barra_allvars_2005_2018.pkl",\
+		    T=1000, compute=False, l_thresh=2, is_pss="hss", model_name="barra_fc_v3")
 	    #CONV AWS
-	    #aws_predictors = ["lr36","lr_freezing","ml_el","s06","srhe_left","Umean06"]
-	    aws_predictors = ["ml_el","Umean06","lr13","rhmin13","lr36","dcape","U1"]
+	    aws_predictors = ["eff_lcl","U1","sb_cape","lr13","rhmin03","lr36","eff_cin"]
 	    logit = LogisticRegression(class_weight="balanced", solver="liblinear",\
 		max_iter=1000)
 	    logit_mod_aws = logit.fit(mod_aws[aws_predictors], mod_aws["is_conv_aws"])
 	    p = logit_mod_aws.predict_proba(mod_aws[aws_predictors])[:,1]
-	    mod_aws.loc[:, "model"] = ((p >= 0.85)) * 1
+	    mod_aws.loc[:, "model"] = ((p >= 0.84)) * 1
 	    mod_aws["month"] = pd.DatetimeIndex(mod_aws["time"]).month
 	    #STA
-	    #sta_predictors = ["lr36","lr_freezing","mhgt","ml_el","s06","srhe_left","Umean06"]
-	    sta_predictors = ["ml_cape","lr13","lr36","eff_el","srhe_left","Umean06","rhmin01"]
+	    sta_predictors = ["ml_cape","Umean06","eff_lcl","scld"]
 	    logit = LogisticRegression(class_weight="balanced", solver="liblinear",\
 		max_iter=1000)
 	    logit_mod_sta = logit.fit(mod_sta[sta_predictors], mod_sta["is_sta"])
 	    p = logit_mod_sta.predict_proba(mod_sta[sta_predictors])[:,1]
-	    mod_sta.loc[:, "model_sta"] = ((p >= 0.69)) * 1
+	    mod_sta.loc[:, "model_sta"] = ((p >= 0.73)) * 1
 	    mod_sta["month"] = pd.DatetimeIndex(mod_sta["time"]).month
 	    #Hourly data
-	    mod_hourly = pd.read_pickle("/g/data/eg3/ab4502/ExtremeWind/points/barra_allvars_2005_2018_2.pkl").dropna()
+	    mod_hourly = pd.read_pickle("/g/data/eg3/ab4502/ExtremeWind/points/barra_allvars_2005_2018.pkl").dropna()
 	    #wind direction data
 	    if dir_data == "model":
 		    mod_dir = pd.read_pickle("/g/data/eg3/ab4502/ExtremeWind/points/barra_wind_dir_2005_2018_2.pkl")
@@ -1028,19 +1048,21 @@ def obs_versus_mod_compute(model):
 		    mod_hourly = mod_hourly.dropna()
 	    p_aws = logit_mod_aws.predict_proba(mod_hourly[aws_predictors])[:,1]
 	    p_sta = logit_mod_sta.predict_proba(mod_hourly[sta_predictors])[:,1]
-	    p_thresh_aws = 0.85
-	    p_thresh_sta = 0.69
-	    thresh_t_totals = 49.2
-	    thresh_dcp = 0.03
+	    p_thresh_aws = 0.84
+	    p_thresh_sta = 0.76
+	    thresh_t_totals = 48.91
+	    thresh_mlcs6 = 12778
+	    thresh_dcp = 0.04
 	    mod_hourly["model_aws"] = p_aws
 	    mod_hourly["model_sta"] = p_sta
+	    p_list = ["model_aws","model_sta","mlcape*s06","t_totals"]
 
 	thresh = {"model_aws":p_thresh_aws, "model_sta":p_thresh_sta, "t_totals":thresh_t_totals,\
-		"dcp":thresh_dcp, "is_conv_aws":1, "is_sta":1}
+		"mlcape*s06":thresh_mlcs6, "is_conv_aws":1, "is_sta":1, "dcp":thresh_dcp}
 
 	#Plot seasonal and diurnal cycle using hourly reanalysis data, overwriting the "diurnal_df"
 	# and "monthly_df" dataframes
-	df["aws_hour"] = pd.DatetimeIndex(df.gust_time_lt).round("H").hour
+	df["aws_hour"] = pd.DatetimeIndex(df.gust_time_lt).round("H").hour	
 	df["sta_hour"] = pd.DatetimeIndex(utc_to_lt(\
 	    df.rename(columns={"sta_date":"time","stn_name":"loc_id"})).time).round("H").hour
 	df["month"] = pd.DatetimeIndex(df.gust_time_lt).month
@@ -1058,12 +1080,11 @@ def obs_versus_mod_compute(model):
 		    rename(columns={1:"Reported"})
 	month_df = pd.concat([aws_month, sta_month], axis=1)
 	diurnal_df = pd.concat([aws_hr, sta_hr], axis=1).replace(np.nan, 0)
-	mod_hourly = utc_to_lt(mod_hourly)
-	mod_hourly["month"] = pd.DatetimeIndex(mod_hourly.time).month
-	mod_hourly["hour"] = pd.DatetimeIndex(mod_hourly.time).hour
-	#mod_hourly["hour"] = mod_hourly.time.hour
-	for p in ["model_aws","model_sta","dcp","t_totals"]:
-		temp_df = mod_hourly.loc[mod_hourly[p] >= thresh[p]]
+	mod_hourly_lt = utc_to_lt(mod_hourly)
+	mod_hourly_lt["month"] = pd.DatetimeIndex(mod_hourly_lt.time).month
+	mod_hourly_lt["hour"] = pd.DatetimeIndex(mod_hourly_lt.time).hour
+	for p in p_list:
+		temp_df = mod_hourly_lt.loc[mod_hourly_lt[p] >= thresh[p]]
 		month_df.loc[:, model+" "+names[p]] = \
 		    temp_df["month"].value_counts().sort_index()
 		diurnal_df.loc[:, model+" "+names[p]] = \
@@ -1077,7 +1098,7 @@ def obs_versus_mod_compute(model):
 	#Distributions of wind direction
 	if dir_data == "obs":
 		aws = read_aws()
-		aws["time"] = pd.DatetimeIndex(aws["time"]) + dt.timedelta(hours=-1)
+		#aws["time"] = pd.DatetimeIndex(aws["time"]) + dt.timedelta(hours=-1)
 		mod_hourly = pd.merge(mod_hourly, aws, left_on=["loc_id","time"], \
 			right_on=["stn_name","time"], how="right").dropna()
 	arr = ["N","NNE","NE","ENE","E","ESE", "SE", "SSE","S","SSW","SW","WSW","W","WNW","NW","NNW"]
@@ -1090,7 +1111,7 @@ def obs_versus_mod_compute(model):
 	sta_wd = pd.DataFrame(np.unique(sta_wd, return_counts=True)).T.set_index(0).\
 		    rename(columns={1:"Reported"}).reindex(arr)
 	wind_dir_df = pd.concat([aws_wd, sta_wd], axis=1)
-	for p in ["model_aws","model_sta","dcp","t_totals"]:
+	for p in p_list:
 		temp = (mod_hourly[mod_hourly[p]>=thresh[p]]["wind_dir"] / 22.5 + 0.5).mod(16).\
 			dropna().astype(int)
 		temp_wd = [arr[temp.iloc[i]] for i in np.arange(temp.shape[0])]
@@ -2427,12 +2448,91 @@ def degToCompass(num):
 		arr=["N","NNE","NE","ENE","E","ESE", "SE", "SSE","S","SSW","SW","WSW","W","WNW","NW","NNW"]
 		return(arr[(val % 16)])
 
+def plot_candidate_variable_kde_sta():
+
+	#For a list of "candidate variables", defined below, plot kde functions for all times, measured events, and reported events
+	matplotlib.rcParams.update({'font.size': 14})
+	pss_df, barra_df_aws, barra_df_sta = optimise_pss("/g/data/eg3/ab4502/ExtremeWind/points/"+\
+		"barra_allvars_2005_2018.pkl", T=1000, compute=False, l_thresh=2,\
+		is_pss="hss", model_name="barra_fc_v3") 
+	pss_df, era5_df_aws, era5_df_sta = optimise_pss("/g/data/eg3/ab4502/ExtremeWind/points/"+\
+		"era5_allvars_v2_2005_2018.pkl", T=1000, compute=False, l_thresh=2,\
+		is_pss="hss", model_name="era5_v3") 
+	variables = ["ml_el","ml_cape","sb_cape","eff_lcl","eff_cin","srhe_left","lr13","lr36","rhmin01","rhmin03","dpd700","scld","Umean06","Umean03","U1"]
+	xlims = {"lr36":[2,10], "lr_freezing":[2,15], "mhgt":[0,6000], "ml_cape":[0,2000], "ml_el":[0,16000], "sb_cape":[0,2000],"eff_cin":[0,300],\
+		    "qmean01":[0,25], "qmeansubcloud":[0,25], "scld":[0,30], "srhe_left":[0,200], "Umean06":[0,45],\
+		    "rhmin03":[0,100], "dpd850":[0,30], "U1":[0,30],"eff_lcl":[0,4000],"q_melting":[0,8],"dpd700":[0,30],"rhmin01":[0,100],\
+		    "lr13":[0,12], "dcape":[0,2500], "eff_el":[0,16000], "Uwindinf":[0,25], "Umean03":[0,45],"Umean800_600":[0,45]}
+	titles = {"lr36":"LR36","lr_freezing":"LR-Freezing","mhgt":"MHGT","ml_cape":"MLCAPE","ml_el":"MLEL","qmean01":"Qmean01","eff_lcl":"Eff-LCL",\
+		    "qmeansubcloud":"Qmean-Subcloud","scld":"SCLD","srhe_left":"SRHE","Umean06":"Umean06",\
+		    "rhmin03":"RHMin03", "dpd850":"DPD850", "U1":"U1","Umean800_600":"Umean800-600","dpd700":"DPD700","rhmin01":"RHMin01","q_melting":"Q-melting",\
+		    "lr13":"LR13", "dcape":"DCAPE", "eff_el":"Eff-EL", "Uwindinf":"Uwindinf", "Umean03":"Umean03","sb_cape":"SBCAPE","eff_cin":"Eff-CIN"}
+	units = {"lr36":"deg km$^{-1}$","lr_freezing":"deg km$^{-1}$","mhgt":"m","ml_cape":"J kg$^{-1}$","ml_el":"m","qmean01":"g kg$^{-1}$",\
+		    "qmeansubcloud":"g kg$^{-1}$","scld":"m s$^{-1}$","srhe_left":"m$^{2}$ s$^{-1}$","Umean06":"m s$^{-1}$","eff_lcl":"m","rhmin01":"%",\
+		    "rhmin03":"%", "dpd850":"deg C", "U1":"m s$^{-1}$","dpd700":"deg C", "q_melting":"g kg$^{-1}$", "Umean800_600":"m s$^{-1}$",\
+		    "lr13":"deg km$^{-1}$", "dcape":"J kg$^{-1}$", "eff_el":"m", "Uwindinf":"m s$^{-1}$", "Umean03":"m s$^{-1}$",\
+		    "sb_cape":"J kg$^{-1}$","eff_cin":"J kg$^{-1}$"}
+	#Fix lr_freezing in era5
+	era5_df_sta.loc[era5_df_sta["lr_freezing"]>barra_df_sta["lr_freezing"].max(),"lr_freezing"] = barra_df_sta["lr_freezing"].max()
+	era5_df_aws.loc[era5_df_aws["lr_freezing"]>barra_df_aws["lr_freezing"].max(),"lr_freezing"] = barra_df_aws["lr_freezing"].max()
+
+	cnt=1
+	plt.figure(figsize=[12,14])
+	plt.subplots_adjust(top=0.97, bottom=0.15, hspace=0.9, wspace=0.3, right=0.95)
+	matplotlib.rcParams.update({'font.size': 14})
+	for v in variables:
+		print(v)
+
+		#Plot dist for 1) Non-convective gusts 2) Non-severe convective gusts and 3) SCW
+
+		ax1 = plt.subplot(8,2,cnt)
+		barra_df_aws[barra_df_aws["is_conv_aws"]==1][v].plot(kind="kde", color="r", linestyle="-", ind=np.linspace(xlims[v][0], xlims[v][1], 1000), label="Measured SCW (BARRA)")
+		era5_df_aws[era5_df_aws["is_conv_aws"]==1][v].plot(kind="kde", color="b", linestyle="-", ind=np.linspace(xlims[v][0], xlims[v][1], 1000), label="Measured SCW (ERA5)")
+		barra_df_sta[barra_df_sta["is_sta"]==1][v].plot(kind="kde", color="r", linestyle="--", ind=np.linspace(xlims[v][0], xlims[v][1], 1000), label="Reported SCW (BARRA)")
+		era5_df_sta[era5_df_sta["is_sta"]==1][v].plot(kind="kde", color="b", linestyle="--", ind=np.linspace(xlims[v][0], xlims[v][1], 1000), label="Reported SCW (ERA5)")
+
+
+		plt.xlim(xlims[v][0], xlims[v][1])
+		if v in ["ml_cape","srhe_left","Uwindinf","eff_lcl","eff_cin","sb_cape"]:
+			plt.yscale("log")
+
+		ax1.yaxis.set_major_formatter(FormatStrFormatter('%.1e'))
+
+		if (cnt % 2) == 0:
+			ax1.set_ylabel("")
+		if cnt == 15:
+			ax1.legend(loc="lower center", bbox_to_anchor=(1.75,-0.6), fancybox=True, ncol=1, edgecolor="k", fontsize="small")
+			#ax1.legend(loc="lower center", bbox_to_anchor=(-0.2,-1.5), fancybox=True, ncol=3, edgecolor="k", fontsize="small")
+		plt.title(titles[v], size=14)
+		ax1.tick_params(labelsize=12)
+
+		if v in ["ml_cape"]:
+			ax1.set_yticks([1e-5, 1e-4, 1e-3, 1e-2])
+		elif v in ["srhe_left"]:
+			ax1.set_yticks([1e-6, 1e-4, 1e-2, 1e-0])
+		elif v in ["eff_lcl"]:
+			ax1.set_yticks([1e-4, 1e-3, 1e-2])
+		elif v in ["eff_cin"]:
+			ax1.set_yticks([1e-8, 1e-6, 1e-4, 1e-2])
+			ax1.set_ylim([1e-9, 1])
+		elif v in ["sb_cape"]:
+			ax1.set_yticks([1e-5, 1e-4, 1e-3, 1e-2])
+		elif v in ["Uwindinf"]:
+			ax1.set_yticks([1e-3, 1e-2, 1e-1, 1e-0])
+		else:
+			ax1.locator_params(axis='y', nbins=6)
+
+		plt.xlabel(units[v]+"\n", size=10)
+
+		cnt = cnt + 1
+	plt.savefig("figA4.png",bbox_inches="tight")
+
 if __name__ == "__main__":
 
 	#plot_candidate_variable_kde()
 	#plot_ranked_hss()
 	#obs_versus_mod_plot()
-	#plot_candidate_kde_logit_exclude()
+	plot_candidate_variable_kde_sta()
 	#sta_versus_aws()
-	hss_function()
+	#hss_function()
 

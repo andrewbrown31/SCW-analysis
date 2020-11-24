@@ -63,14 +63,11 @@ def main():
 	parser.add_argument("--outname",help="Name of saved output. In the form *outname*_*t1*_*t2*.nc. Default behaviour is the model name",default=None)
 	parser.add_argument("--is_dcape",help="Should DCAPE be calculated? (1 or 0. Default is 1)",default=1)
 	parser.add_argument("--al33",help="Should data be gathered from al33? Default is False, and data is gathered from r87. If True, then group is required",default="False")
-	parser.add_argument("--params",help="Should the full set of convective parameters be calculated (full) or just a reduced set (reduced)",default="full")
+	parser.add_argument("--params",help="Should the full set of convective parameters be calculated (full), a reduced set (reduced) or a minimum (min)",default="full")
 	args = parser.parse_args()
 
 	#Parse arguments from cmd line and set up inputs (date region model)
-	if args.params == "full":
-		full_params = True
-	else:
-		full_params = False
+	params = args.params
 	model = args.m
 	region = args.r
 	t1 = args.t1
@@ -93,6 +90,8 @@ def main():
 		start_lat = -38; end_lat = -26; start_lon = 132; end_lon = 142
 	elif region == "aus":
 		start_lat = -44.525; end_lat = -9.975; start_lon = 111.975; end_lon = 156.275
+	elif region == "global":
+		start_lat = -70; end_lat = 70; start_lon = -180; end_lon = 179.75
 	else:
 		raise ValueError("INVALID REGION\n")
 	domain = [start_lat,end_lat,start_lon,end_lon]
@@ -117,7 +116,7 @@ def main():
 	print("LOADING DATA...")
 	if model == "erai":
 		ta,temp1,hur,hgt,terrain,p,ps,wap,ua,va,uas,vas,tas,ta2d,\
-			cp,wg10,mod_cape,lon,lat,date_list = \
+			cp,tp,wg10,mod_cape,lon,lat,date_list = \
 			read_erai(domain,time)
 		cp = cp.astype("float32", order="C")
 		mod_cape = mod_cape.astype("float32", order="C")
@@ -147,7 +146,7 @@ def main():
 		    "BNU-ESM"]:
 		#Check that t1 and t2 are in the same year
 		year = np.arange(int(t1[0:4]), int(t2[0:4])+1)
-		ta, hur, hgt, terrain, p_3d, ps, ua, va, uas, vas, tas, ta2d, lon, lat, \
+		ta, hur, hgt, terrain, p_3d, ps, ua, va, uas, vas, tas, ta2d, tp, lon, lat, \
 		    date_list = read_cmip(model, experiment, \
 		    ensemble, year, domain, cmip_ver=5, al33=al33, group=group, ver6hr=ver6hr, ver3hr=ver3hr)
 		wap = np.zeros(hgt.shape)
@@ -187,11 +186,11 @@ def main():
 
 	gc.collect()
 
-	if full_params:
+	if params=="full":
 		param = np.array(["ml_cape", "mu_cape", "sb_cape", "ml_cin", "sb_cin", "mu_cin",\
 			"ml_lcl", "mu_lcl", "sb_lcl", "eff_cape", "eff_cin", "eff_lcl",\
-			"lr01", "lr03", "lr13", "lr36", "lr24", "lr_freezing","lr_subcloud",\
-			"qmean01", "qmean03", "qmean06", \
+			"lr01", "lr03", "lr13", "lr36", "lr24", "lr_freezing","lr_subcloud","lr700_500",\
+			"qmean01", "qmean03", "qmean06", "muq", "ta500","ta850","dp850",\
 			"qmeansubcloud", "q_melting", "q1", "q3", "q6",\
 			"rhmin01", "rhmin03", "rhmin13", \
 			"rhminsubcloud", "tei", "wbz", \
@@ -217,20 +216,19 @@ def main():
 			\
 			"F10", "Fn10", "Fs10", "icon10", "vgt10", "conv10", "vo10",\
 				])
-	else:
+	elif params == "reduced":
 		param = np.array(["ml_cape", "mu_cape", "sb_cape", "ml_cin", "sb_cin", "mu_cin",\
 			"ml_lcl", "mu_lcl", "sb_lcl", "eff_cape", "eff_cin", "eff_lcl",\
-			"lr36", "lr_freezing","lr_subcloud",\
-			"qmean01",  \
-			"qmeansubcloud",\
-			"mhgt", "mu_el", "ml_el", "sb_el", "eff_el", \
+			"lr36", "lr13","lr700_500",\
+			"qmean01","rhmin01","rhmin03","dpd700",  "muq",\
+			"mhgt", "ta500", "mu_el", "ml_el", "sb_el", "eff_el", \
 			"pwat", "t_totals", \
 			"dcape", \
 			\
-			"srhe_left", "srh03_left", \
-			"ebwd", "s06", "s03", \
-			"U10", \
-			"Umean800_600", "Umean06", \
+			"srhe_left", "srh01_left", \
+			"ebwd", "s06", "s03", "scld",\
+			"U10", "U1", \
+			"Umean800_600", "Umean06", "Umean03",\
 			"wg10",\
 			\
 			"dcp", "stp_cin_left", "stp_fixed_left",\
@@ -240,16 +238,19 @@ def main():
 			"convgust_wet", "convgust_dry", "windex",\
 			"gustex", "mmp", \
 			"wndg","sweat","k_index"\
+
 				])
+	elif params == "min":
+		param = np.array(["mu_cape", "mu_cin", "muq", "s06", "lr700_500", "mhgt", "ta500"])
 
 
-	if model != "era5":
+	if model not in ["era5","erai"]:
 		param = np.concatenate([param, ["omega01", "omega03", "omega06", \
 			"maxtevv", "mosh", "moshe"]])
 	else:
-		param = np.concatenate([param, ["cp"]])
-	if model == "erai":
-		param = np.concatenate([param, ["cape","cp","cape*s06"]])
+		param = np.concatenate([param, ["mod_cape","cp","mod_cape*s06"]])
+
+	print(param)
 
 	#Set output array
 	output_data = np.zeros((ps.shape[0], ps.shape[1], ps.shape[2], len(param)))
@@ -309,6 +310,8 @@ def main():
 			sfc_ta_unit,sfc_p_unit)
 		sfc_theta_unit = mpcalc.potential_temperature(sfc_p_unit,sfc_ta_unit)
 		sfc_thetae_unit = mpcalc.equivalent_potential_temperature(sfc_p_unit,sfc_ta_unit,sfc_dp_unit)
+		sfc_thetae = np.array(mpcalc.equivalent_potential_temperature(ps[t]*units.units.hectopascals,tas[t]*units.units.degC,\
+				    ta2d[t]*units.units.degC))
 		sfc_q = np.array(sfc_q_unit)
 		sfc_hur = np.array(sfc_hur_unit)
 		sfc_wb = np.array(wrf.wetbulb( sfc_p_3d*100, sfc_ta+273.15, sfc_q, units="degC"))
@@ -363,11 +366,11 @@ def main():
 		lcl = cape3d.data[3]
 		el = cape3d.data[4]
 		#Mask values which are below the surface and above 500 hPa AGL
-		cape[(sfc_p_3d > ps[t]) | (sfc_p_3d<(ps[t]-500))] = np.nan
-		cin[(sfc_p_3d > ps[t]) | (sfc_p_3d<(ps[t]-500))] = np.nan
-		lfc[(sfc_p_3d > ps[t]) | (sfc_p_3d<(ps[t]-500))] = np.nan
-		lcl[(sfc_p_3d > ps[t]) | (sfc_p_3d<(ps[t]-500))] = np.nan
-		el[(sfc_p_3d > ps[t]) | (sfc_p_3d<(ps[t]-500))] = np.nan
+		cape[(sfc_p_3d > ps[t]) | (sfc_p_3d<(ps[t]-350))] = np.nan
+		cin[(sfc_p_3d > ps[t]) | (sfc_p_3d<(ps[t]-350))] = np.nan
+		lfc[(sfc_p_3d > ps[t]) | (sfc_p_3d<(ps[t]-350))] = np.nan
+		lcl[(sfc_p_3d > ps[t]) | (sfc_p_3d<(ps[t]-350))] = np.nan
+		el[(sfc_p_3d > ps[t]) | (sfc_p_3d<(ps[t]-350))] = np.nan
 		#Get maximum (in the vertical), and get cin, lfc, lcl for the same parcel
 		mu_cape_inds = np.tile(np.nanargmax(cape,axis=0), (cape.shape[0],1,1))
 		mu_cape = np.take_along_axis(cape, mu_cape_inds, 0)[0]
@@ -375,7 +378,7 @@ def main():
 		mu_lfc = np.take_along_axis(lfc, mu_cape_inds, 0)[0]
 		mu_lcl = np.take_along_axis(lcl, mu_cape_inds, 0)[0]
 		mu_el = np.take_along_axis(el, mu_cape_inds, 0)[0]
-		muq = np.take_along_axis(sfc_q, mu_cape_inds, 0)[0]
+		muq = np.take_along_axis(sfc_q, mu_cape_inds, 0)[0] * 1000
 
 		#Now get surface based CAPE. Simply the CAPE defined by parcel 
 		#with surface properties
@@ -418,12 +421,14 @@ def main():
 		lr13 = get_lr_hgt(sfc_ta,np.copy(sfc_hgt),1000,3000,terrain)
 		lr24 = get_lr_hgt(sfc_ta,np.copy(sfc_hgt),2000,4000,terrain)
 		lr36 = get_lr_hgt(sfc_ta,np.copy(sfc_hgt),3000,6000,terrain)
-		lr_freezing = get_lr_hgt(sfc_ta,np.copy(sfc_hgt),0,"freezing",terrain)
 		lr_subcloud = get_lr_hgt(sfc_ta,np.copy(sfc_hgt),0,ml_lcl,terrain)
 		lr850_670 = get_lr_p(ta[t], p_3d, hgt[t], 850, 670)
 		lr750_500 = get_lr_p(ta[t], p_3d, hgt[t], 750, 500)
 		lr700_500 = get_lr_p(ta[t], p_3d, hgt[t], 700, 500)
 		melting_hgt = get_t_hgt(sfc_ta,np.copy(sfc_hgt),0,terrain)
+		melting_hgt = np.where((melting_hgt < 0) | (np.isnan(melting_hgt)), 0, melting_hgt)
+		lr_freezing = get_lr_hgt(sfc_ta,np.copy(sfc_hgt),0,melting_hgt,terrain)
+		lr_freezing = np.where((melting_hgt < 0) | (np.isnan(melting_hgt)), 0, lr_freezing)
 		hwb0 = get_var_hgt(np.flipud(sfc_wb),np.flipud(np.copy(sfc_hgt)),0,terrain)
 		rhmean01 = get_mean_var_hgt(np.copy(sfc_hur),np.copy(sfc_hgt),0,1000,terrain,True,np.copy(sfc_p_3d))
 		rhmean03 = get_mean_var_hgt(np.copy(sfc_hur),np.copy(sfc_hgt),0,3000,terrain,True,np.copy(sfc_p_3d))
@@ -438,26 +443,28 @@ def main():
 		qmean36 = get_mean_var_hgt(np.copy(sfc_q),np.copy(sfc_hgt),3000,6000,terrain,True,np.copy(sfc_p_3d)) * 1000
 		qmeansubcloud = get_mean_var_hgt(np.copy(sfc_q),np.copy(sfc_hgt),0,ml_lcl,terrain,True,np.copy(sfc_p_3d)) * 1000
 		q_melting = get_var_hgt_lvl(np.copy(sfc_q), np.copy(sfc_hgt), melting_hgt, terrain) * 1000
+		q_melting = np.where((melting_hgt < 0) | (np.isnan(melting_hgt)),\
+			get_var_hgt_lvl(np.copy(sfc_q), np.copy(sfc_hgt), 0, terrain) * 100, q_melting)
 		q1 = get_var_hgt_lvl(np.copy(sfc_q), np.copy(sfc_hgt), 1000, terrain) * 1000
 		q3 = get_var_hgt_lvl(np.copy(sfc_q), np.copy(sfc_hgt), 3000, terrain) * 1000
 		q6 = get_var_hgt_lvl(np.copy(sfc_q), np.copy(sfc_hgt), 6000, terrain) * 1000
-		sfc_thetae = get_var_hgt_lvl(np.array(sfc_thetae_unit), np.copy(sfc_hgt), 0, terrain)
 		rhmin01 = get_min_var_hgt(np.copy(sfc_hur), np.copy(sfc_hgt), 0, 1000, terrain)
 		rhmin03 = get_min_var_hgt(np.copy(sfc_hur), np.copy(sfc_hgt), 0, 3000, terrain)
 		rhmin06 = get_min_var_hgt(np.copy(sfc_hur), np.copy(sfc_hgt), 0, 6000, terrain)
 		rhmin13 = get_min_var_hgt(np.copy(sfc_hur), np.copy(sfc_hgt), 1000, 3000, terrain)
 		rhmin36 = get_min_var_hgt(np.copy(sfc_hur), np.copy(sfc_hgt), 3000, 6000, terrain)
 		rhminsubcloud = get_min_var_hgt(np.copy(sfc_hur), np.copy(sfc_hgt), 0, ml_lcl, terrain)
-		v_totals = get_var_p_lvl(np.copy(sfc_ta), sfc_p_3d, 850) - \
-				get_var_p_lvl(np.copy(sfc_ta), sfc_p_3d, 500)
-		c_totals = get_var_p_lvl(np.copy(sfc_dp), sfc_p_3d, 850) - \
-				get_var_p_lvl(np.copy(sfc_ta), sfc_p_3d, 500)
+		ta850 = get_var_p_lvl(np.copy(sfc_ta), sfc_p_3d, 850)
+		ta500 = get_var_p_lvl(np.copy(sfc_ta), sfc_p_3d, 500)
+		dp850 = get_var_p_lvl(np.copy(sfc_dp), sfc_p_3d, 850)
+		v_totals = ta850 - ta500
+		c_totals = dp850 - ta500
 		t_totals = v_totals + c_totals
 		pwat = get_pwat(sfc_q, np.copy(sfc_p_3d))
 		if model != "era5":
 			maxtevv = maxtevv_fn(np.array(sfc_thetae_unit), np.copy(sfc_wap), np.copy(sfc_hgt), terrain)
 		te_diff = thetae_diff(np.array(sfc_thetae_unit), np.copy(sfc_hgt), terrain)
-		tei = tei_fn(np.array(sfc_thetae_unit), sfc_p_3d, ps[t], np.copy(sfc_hgt), terrain)
+		tei = tei_fn(np.array(sfc_thetae_unit), sfc_thetae, sfc_p_3d, ps[t], np.copy(sfc_hgt), terrain)
 		dpd850 = get_var_p_lvl(np.copy(sfc_ta), sfc_p_3d, 850) - \
 				get_var_p_lvl(np.copy(sfc_dp), sfc_p_3d, 850)
 		dpd700 = get_var_p_lvl(np.copy(sfc_ta), sfc_p_3d, 700) - \
@@ -509,9 +516,9 @@ def main():
 		#Winds
 		winds_start = dt.datetime.now()
 		umeanwindinf = get_mean_var_hgt(sfc_ua, np.copy(sfc_hgt), np.nanmin(eff_hgt,axis=0), \
-					np.nanmax(eff_hgt,axis=0),0,False,sfc_p_3d)
+					np.nanmax(eff_hgt,axis=0),0,True,sfc_p_3d)
 		vmeanwindinf = get_mean_var_hgt(sfc_va, np.copy(sfc_hgt), np.nanmin(eff_hgt,axis=0),\
-					np.nanmax(eff_hgt,axis=0),0,False,sfc_p_3d)
+					np.nanmax(eff_hgt,axis=0),0,True,sfc_p_3d)
 		umean01 = get_mean_var_hgt(sfc_ua, np.copy(sfc_hgt), 0, 1000, terrain, mass_weighted=True, p3d=np.copy(sfc_p_3d))
 		vmean01 = get_mean_var_hgt(sfc_va, np.copy(sfc_hgt), 0, 1000, terrain, mass_weighted=True, p3d=np.copy(sfc_p_3d))
 		umean03 = get_mean_var_hgt(sfc_ua, np.copy(sfc_hgt), 0, 3000, terrain, mass_weighted=True, p3d=np.copy(sfc_p_3d))
@@ -521,14 +528,15 @@ def main():
 		umean800_600 = get_mean_var_p(ua[t], p_3d, 800, 600, ps[t], mass_weighted=True)
 		vmean800_600 = get_mean_var_p(va[t], p_3d, 800, 600, ps[t], mass_weighted=True)
 		Umeanwindinf = np.sqrt( (umeanwindinf**2) + (vmeanwindinf**2) )
+		Umeanwindinf = np.where(np.isnan(Umeanwindinf), 0, Umeanwindinf)
 		Umean01 = np.sqrt( (umean01**2) + (vmean01**2) )
 		Umean03 = np.sqrt( (umean03**2) + (vmean03**2) )
 		Umean06 = np.sqrt( (umean06**2) + (vmean06**2) )
 		Umean800_600 = np.sqrt( (umean800_600**2) + (vmean800_600**2) )
-		uwindinf = get_var_hgt_lvl(sfc_ua, np.copy(sfc_hgt), eff_avg_hgt, terrain)
-		vwindinf = get_var_hgt_lvl(sfc_va, np.copy(sfc_hgt), eff_avg_hgt, terrain)
-		u10 = get_var_hgt_lvl(sfc_ua, np.copy(sfc_hgt), 10, terrain)
-		v10 = get_var_hgt_lvl(sfc_va, np.copy(sfc_hgt), 10, terrain)
+		uwindinf = get_var_hgt_lvl(sfc_ua, np.copy(sfc_hgt), np.nanmax(eff_hgt,axis=0), 0)
+		vwindinf = get_var_hgt_lvl(sfc_va, np.copy(sfc_hgt), np.nanmax(eff_hgt,axis=0), 0)
+		u10 = uas[t]
+		v10 = vas[t]
 		u500 = get_var_p_lvl(np.copy(sfc_ua), sfc_p_3d, 500)
 		v500 = get_var_p_lvl(np.copy(sfc_va), sfc_p_3d, 500)
 		u1 = get_var_hgt_lvl(sfc_ua, np.copy(sfc_hgt), 1000, terrain) 
@@ -550,13 +558,13 @@ def main():
 		s010 = get_shear_hgt(sfc_ua, sfc_va, np.copy(sfc_hgt), 0, 10000, terrain)
 		s13 = get_shear_hgt(sfc_ua, sfc_va, np.copy(sfc_hgt), 1000, 3000, terrain)
 		s36 = get_shear_hgt(sfc_ua, sfc_va, np.copy(sfc_hgt), 3000, 6000, terrain)
-		ebwd = get_shear_hgt(sfc_ua, sfc_va, np.copy(sfc_hgt), np.nanmin(eff_hgt,axis=0),\
-					(mu_el * 0.5), terrain)
+		ebwd = get_shear_hgt(sfc_ua, sfc_va, np.copy(sfc_hgt), np.nanmin(eff_hgt,axis=0)-terrain,\
+					(mu_el * 0.5), 0)
 		srh01_left, srh01_right = get_srh(sfc_ua, sfc_va, np.copy(sfc_hgt), 0, 1000, terrain)
 		srh03_left, srh03_right = get_srh(sfc_ua, sfc_va, np.copy(sfc_hgt), 0, 3000, terrain)
 		srh06_left, srh06_right = get_srh(sfc_ua, sfc_va, np.copy(sfc_hgt), 0, 6000, terrain)
 		srhe_left, srhe_right = get_srh(sfc_ua, sfc_va, np.copy(sfc_hgt), \
-						np.nanmin(eff_hgt,axis=0), np.nanmax(eff_hgt,axis=0), terrain)
+						np.nanmin(eff_hgt,axis=0), np.nanmax(eff_hgt,axis=0), 0)
 		ust_right, vst_right, ust_left, vst_left = \
 			get_storm_motion(sfc_ua, sfc_va, np.copy(sfc_hgt), terrain)
 		sru01_right = umean01 - ust_right
@@ -601,11 +609,11 @@ def main():
 		windex = 5. * np.power( (melting_hgt/1000.) * Rq * (np.power( lr_freezing,2) - 30. + \
 				qmean01 - 2. * q_melting), 0.5)
 		windex[np.isnan(windex)] = 0
-		gustex = (0.5 * windex) + (0.5 * Umean06)
+		gustex = (0.5 * windex) + (0.5 * (U500*1.944))
 		hmi = lr850_670 + dpd850 - dpd670
 		wmsi_ml = (ml_cape * te_diff) / 1000
 		dmi = lr750_500 + dpd700 - dpd500
-		mwpi_ml = (ml_cape / 100.) + (lr850_670 + dpd850 - dpd670)
+		mwpi_ml = (sb_cape / 1000.) + (lr850_670/5. + ((dpd850 - dpd670)/5.))
 		wmpi = np.sqrt( np.power(melting_hgt,2) * (lr_freezing / 1000. - 5.5e-3) + \
 				melting_hgt * (q1 - 1.5*q_melting) / 3.) /5.
 		dmi[dmi<0] = 0
@@ -622,24 +630,25 @@ def main():
 			moshe[moshe<0] = 0
 			mosh = ((lr03 - 4.)/4.) * ((s01 - 8)/10.) * ((maxtevv + 10.)/9.)
 			mosh[mosh<0] = 0
+		t500 = get_var_p_lvl(sfc_ta, sfc_p_3d, 500)
 		ship = get_ship(np.copy(mu_cape), np.copy(muq), np.copy(s06), np.copy(lr700_500), \
-				get_var_p_lvl(sfc_ta, sfc_p_3d, 500), np.copy(melting_hgt) )
-		scp, scp_fixed = get_supercell_pot(mu_cape, np.copy(srhe_left), np.copy(srh01_left), np.copy(ebwd),\
+				np.copy(t500), np.copy(melting_hgt) )
+		scp, scp_fixed = get_supercell_pot(np.copy(mu_cape), np.copy(srhe_left), np.copy(srh01_left), np.copy(ebwd),\
 					np.copy(s06) )
 		sherb, eff_sherb = get_sherb(np.copy(s03), np.copy(ebwd), np.copy(lr03), np.copy(lr700_500))
-		k_index = get_var_p_lvl(np.copy(sfc_ta), sfc_p_3d, 850) \
-			- get_var_p_lvl(np.copy(sfc_ta), sfc_p_3d, 500) \
+		k_index = (get_var_p_lvl(np.copy(sfc_ta), sfc_p_3d, 850) \
+			- get_var_p_lvl(np.copy(sfc_ta), sfc_p_3d, 500)) \
 			+ get_var_p_lvl(np.copy(sfc_dp), sfc_p_3d, 850) - (dpd700)
 		k_index[k_index<0] = 0
 		mlcs6 = ml_cape * np.power(s06, 1.67)
 		mucs6 = mu_cape * np.power(s06, 1.67)
 		sbcs6 = sb_cape * np.power(s06, 1.67)
 		effcs6 = eff_cape * np.power(s06, 1.67)
-		if model == "erai":
+		if model in ["erai","era5"]:
 			cs6 = mod_cape[t] * np.power(s06, 1.67)
-		wndg = get_wndg(np.copy(ml_cape), np.copy(ml_cin), np.copy(lr03), sfc_ua, sfc_va, np.copy(sfc_hgt), terrain,\
+		wndg = get_wndg(np.copy(ml_cape), np.copy(ml_cin), np.copy(lr03), np.copy(sfc_ua), np.copy(sfc_va), np.copy(sfc_hgt), terrain,\
 			np.copy(sfc_p_3d))
-		sweat = get_sweat(np.copy(sfc_p_3d), np.copy(sfc_dp), np.copy(t_totals), sfc_ua, sfc_va)
+		sweat = get_sweat(np.copy(sfc_p_3d), np.copy(sfc_dp), np.copy(t_totals), np.copy(sfc_ua), np.copy(sfc_va))
 		mmp = get_mmp(sfc_ua, sfc_va, np.copy(mu_cape), sfc_ta, np.copy(sfc_hgt), terrain, np.copy(sfc_p_3d))
 		dmgwind = (dcape/800.) * (Uwindinf / 8.)
 		dmgwind_fixed = (dcape/800.) * (Umean800_600 / 8.)
@@ -650,75 +659,85 @@ def main():
 		mburst[mburst<0] = 0
 		convgust_wet = np.sqrt( (Umean800_600**2) + (np.sqrt(2*dcape))**2 )
 		convgust_dry = np.sqrt( (Umean800_600**2) + (np.sqrt(dcape))**2 )
-		dcp = (dcape / 980.) * (mu_cape / 2000.) * (s06 / 20.) * (Umean06 / 16.)
+		dcp = (dcape / 980.) * (mu_cape / 2000.) * ( (s06*1.944) / 20.) * ((Umean06*1.944) / 16.)
 	
 		#Fill output
-		output = fill_output(output, t, param, ps, "ml_cape", ml_cape)
-		output = fill_output(output, t, param, ps, "mu_cape", mu_cape)
-		output = fill_output(output, t, param, ps, "eff_cape", eff_cape)
-		output = fill_output(output, t, param, ps, "sb_cape", sb_cape)
-		output = fill_output(output, t, param, ps, "ml_cin", ml_cin)
-		output = fill_output(output, t, param, ps, "mu_cin", mu_cin)
-		output = fill_output(output, t, param, ps, "eff_cin", eff_cin)
-		output = fill_output(output, t, param, ps, "sb_cin", sb_cin)
-		output = fill_output(output, t, param, ps, "ml_lcl", ml_lcl)
-		output = fill_output(output, t, param, ps, "mu_lcl", mu_lcl)
-		output = fill_output(output, t, param, ps, "eff_lcl", eff_lcl)
-		output = fill_output(output, t, param, ps, "sb_lcl", sb_lcl)
-		output = fill_output(output, t, param, ps, "ml_el", ml_el)
-		output = fill_output(output, t, param, ps, "mu_el", mu_el)
-		output = fill_output(output, t, param, ps, "eff_el", eff_el)
-		output = fill_output(output, t, param, ps, "sb_el", sb_el)
-		output = fill_output(output, t, param, ps, "lr36", lr36)
-		output = fill_output(output, t, param, ps, "lr_freezing", lr_freezing)
-		output = fill_output(output, t, param, ps, "lr_subcloud", lr_subcloud)
-		output = fill_output(output, t, param, ps, "qmean01", qmean01)
-		output = fill_output(output, t, param, ps, "qmeansubcloud", qmeansubcloud)
-		output = fill_output(output, t, param, ps, "mhgt", melting_hgt)
-		output = fill_output(output, t, param, ps, "pwat", pwat)
-		output = fill_output(output, t, param, ps, "dcape", dcape)
-		output = fill_output(output, t, param, ps, "srh03_left", srh03_left)
-		output = fill_output(output, t, param, ps, "srhe_left", srhe_left)
-		output = fill_output(output, t, param, ps, "s03", s03)
-		output = fill_output(output, t, param, ps, "s06", s06)
-		output = fill_output(output, t, param, ps, "ebwd", ebwd)
-		output = fill_output(output, t, param, ps, "Umean06", Umean06)
-		output = fill_output(output, t, param, ps, "Umean800_600", Umean800_600)
-		output = fill_output(output, t, param, ps, "wg10", wg10[t])
-		output = fill_output(output, t, param, ps, "U10", U10)
-		output = fill_output(output, t, param, ps, "stp_cin_left", stp_cin_left)
-		output = fill_output(output, t, param, ps, "stp_fixed_left", stp_fixed_left)
-		output = fill_output(output, t, param, ps, "windex", windex)
-		output = fill_output(output, t, param, ps, "gustex", gustex)
-		output = fill_output(output, t, param, ps, "ship", ship)
-		output = fill_output(output, t, param, ps, "scp", scp)
-		output = fill_output(output, t, param, ps, "scp_fixed", scp_fixed)
-		output = fill_output(output, t, param, ps, "k_index", k_index)
-		output = fill_output(output, t, param, ps, "mlcape*s06", mlcs6)
-		output = fill_output(output, t, param, ps, "mucape*s06", mucs6)
-		output = fill_output(output, t, param, ps, "sbcape*s06", sbcs6)
-		output = fill_output(output, t, param, ps, "effcape*s06", effcs6)
-		output = fill_output(output, t, param, ps, "wndg", wndg)
-		output = fill_output(output, t, param, ps, "sweat", sweat)
-		output = fill_output(output, t, param, ps, "mmp", mmp)
-		output = fill_output(output, t, param, ps, "convgust_wet", convgust_wet)
-		output = fill_output(output, t, param, ps, "convgust_dry", convgust_dry)
-		output = fill_output(output, t, param, ps, "dcp", dcp)
-		output = fill_output(output, t, param, ps, "dmgwind", dmgwind)
-		output = fill_output(output, t, param, ps, "dmgwind_fixed", dmgwind_fixed)
-		output = fill_output(output, t, param, ps, "t_totals", t_totals)
-	    
-		if full_params:
-			if model == "erai":
-				output = fill_output(output, t, param, ps, "cape*s06", cs6)
+		if (params == "min") | (params == "full") | (params == "reduced"):
+			output = fill_output(output, t, param, ps, "mu_cape", mu_cape)
+			output = fill_output(output, t, param, ps, "mu_cin", mu_cin)
+			output = fill_output(output, t, param, ps, "muq", muq)
+			output = fill_output(output, t, param, ps, "s06", s06)
+			output = fill_output(output, t, param, ps, "lr700_500", lr700_500)
+			output = fill_output(output, t, param, ps, "ta500", ta500)
+			output = fill_output(output, t, param, ps, "mhgt", melting_hgt)
 			if (model == "erai") | (model == "era5"):
 				output = fill_output(output, t, param, ps, "cp", cp[t])
-			if model == "erai":
-				output = fill_output(output, t, param, ps, "cape", mod_cape[t])
+				output = fill_output(output, t, param, ps, "mod_cape", mod_cape[t])
+				output = fill_output(output, t, param, ps, "mod_cape*s06", cs6)
 
+		if (params == "reduced") | (params == "full"):
+			output = fill_output(output, t, param, ps, "ml_cape", ml_cape)
+			output = fill_output(output, t, param, ps, "eff_cape", eff_cape)
+			output = fill_output(output, t, param, ps, "sb_cape", sb_cape)
+			output = fill_output(output, t, param, ps, "ml_cin", ml_cin)
+			output = fill_output(output, t, param, ps, "eff_cin", eff_cin)
+			output = fill_output(output, t, param, ps, "sb_cin", sb_cin)
+			output = fill_output(output, t, param, ps, "ml_lcl", ml_lcl)
+			output = fill_output(output, t, param, ps, "mu_lcl", mu_lcl)
+			output = fill_output(output, t, param, ps, "eff_lcl", eff_lcl)
+			output = fill_output(output, t, param, ps, "sb_lcl", sb_lcl)
+			output = fill_output(output, t, param, ps, "ml_el", ml_el)
+			output = fill_output(output, t, param, ps, "mu_el", mu_el)
+			output = fill_output(output, t, param, ps, "eff_el", eff_el)
+			output = fill_output(output, t, param, ps, "sb_el", sb_el)
+			output = fill_output(output, t, param, ps, "lr13", lr13)
+			output = fill_output(output, t, param, ps, "lr36", lr36)
+			output = fill_output(output, t, param, ps, "muq", muq)
+			output = fill_output(output, t, param, ps, "qmean01", qmean01)
+			output = fill_output(output, t, param, ps, "pwat", pwat)
+			output = fill_output(output, t, param, ps, "dcape", dcape)
+			output = fill_output(output, t, param, ps, "srh01_left", srh01_left)
+			output = fill_output(output, t, param, ps, "srhe_left", srhe_left)
+			output = fill_output(output, t, param, ps, "s03", s03)
+			output = fill_output(output, t, param, ps, "ebwd", ebwd)
+			output = fill_output(output, t, param, ps, "Umean06", Umean06)
+			output = fill_output(output, t, param, ps, "Umean800_600", Umean800_600)
+			output = fill_output(output, t, param, ps, "wg10", wg10[t])
+			output = fill_output(output, t, param, ps, "U10", U10)
+			output = fill_output(output, t, param, ps, "stp_cin_left", stp_cin_left)
+			output = fill_output(output, t, param, ps, "stp_fixed_left", stp_fixed_left)
+			output = fill_output(output, t, param, ps, "windex", windex)
+			output = fill_output(output, t, param, ps, "gustex", gustex)
+			output = fill_output(output, t, param, ps, "ship", ship)
+			output = fill_output(output, t, param, ps, "scp", scp)
+			output = fill_output(output, t, param, ps, "scp_fixed", scp_fixed)
+			output = fill_output(output, t, param, ps, "k_index", k_index)
+			output = fill_output(output, t, param, ps, "mlcape*s06", mlcs6)
+			output = fill_output(output, t, param, ps, "mucape*s06", mucs6)
+			output = fill_output(output, t, param, ps, "sbcape*s06", sbcs6)
+			output = fill_output(output, t, param, ps, "effcape*s06", effcs6)
+			output = fill_output(output, t, param, ps, "wndg", wndg)
+			output = fill_output(output, t, param, ps, "sweat", sweat)
+			output = fill_output(output, t, param, ps, "mmp", mmp)
+			output = fill_output(output, t, param, ps, "convgust_wet", convgust_wet)
+			output = fill_output(output, t, param, ps, "convgust_dry", convgust_dry)
+			output = fill_output(output, t, param, ps, "dcp", dcp)
+			output = fill_output(output, t, param, ps, "dmgwind", dmgwind)
+			output = fill_output(output, t, param, ps, "dmgwind_fixed", dmgwind_fixed)
+			output = fill_output(output, t, param, ps, "t_totals", t_totals)
+			output = fill_output(output, t, param, ps, "rhmin01", rhmin01)
+			output = fill_output(output, t, param, ps, "rhmin03", rhmin03)
+			output = fill_output(output, t, param, ps, "dpd700", dpd700)
+			output = fill_output(output, t, param, ps, "scld", scld)
+			output = fill_output(output, t, param, ps, "Umean03", Umean03)
+			output = fill_output(output, t, param, ps, "U1", U1)
+	    
+		if params == "full":
+			output = fill_output(output, t, param, ps, "lr_freezing", lr_freezing)
+			output = fill_output(output, t, param, ps, "lr_subcloud", lr_subcloud)
+			output = fill_output(output, t, param, ps, "qmeansubcloud", qmeansubcloud)
 			output = fill_output(output, t, param, ps, "lr01", lr01)
 			output = fill_output(output, t, param, ps, "lr03", lr03)
-			output = fill_output(output, t, param, ps, "lr13", lr13)
 			output = fill_output(output, t, param, ps, "lr24", lr24)
 			output = fill_output(output, t, param, ps, "wbz", hwb0)
 			output = fill_output(output, t, param, ps, "qmean03", qmean03)
@@ -728,35 +747,31 @@ def main():
 			output = fill_output(output, t, param, ps, "q3", q3)
 			output = fill_output(output, t, param, ps, "q6", q6)
 			output = fill_output(output, t, param, ps, "sfc_thetae", sfc_thetae)
-			output = fill_output(output, t, param, ps, "rhmin01", rhmin01)
-			output = fill_output(output, t, param, ps, "rhmin03", rhmin03)
 			output = fill_output(output, t, param, ps, "rhmin13", rhmin13)
 			output = fill_output(output, t, param, ps, "rhminsubcloud", rhminsubcloud)
+			output = fill_output(output, t, param, ps, "ta850", ta850)
+			output = fill_output(output, t, param, ps, "dp850", dp850)
 			output = fill_output(output, t, param, ps, "v_totals", v_totals)
 			output = fill_output(output, t, param, ps, "c_totals", c_totals)
 			output = fill_output(output, t, param, ps, "te_diff", te_diff)
 			output = fill_output(output, t, param, ps, "tei", tei)
-			output = fill_output(output, t, param, ps, "dpd700", dpd700)
 			output = fill_output(output, t, param, ps, "dpd850", dpd850)
 			output = fill_output(output, t, param, ps, "ddraft_temp", ddraft_temp)
 			output = fill_output(output, t, param, ps, "Umeanwindinf", Umeanwindinf)
 			output = fill_output(output, t, param, ps, "Umean01", Umean01)
-			output = fill_output(output, t, param, ps, "Umean03", Umean03)
 			output = fill_output(output, t, param, ps, "Uwindinf", Uwindinf)
 			output = fill_output(output, t, param, ps, "U500", U500)
-			output = fill_output(output, t, param, ps, "U1", U1)
 			output = fill_output(output, t, param, ps, "U3", U3)
 			output = fill_output(output, t, param, ps, "U6", U6)
 			output = fill_output(output, t, param, ps, "Ust_left", Ust_left)
 			output = fill_output(output, t, param, ps, "Usr01_left", Usr01_left)
 			output = fill_output(output, t, param, ps, "Usr03_left", Usr03_left)
 			output = fill_output(output, t, param, ps, "Usr06_left", Usr06_left)
-			output = fill_output(output, t, param, ps, "scld", scld)
 			output = fill_output(output, t, param, ps, "s01", s01)
 			output = fill_output(output, t, param, ps, "s010", s010)
 			output = fill_output(output, t, param, ps, "s13", s13)
 			output = fill_output(output, t, param, ps, "s36", s36)
-			output = fill_output(output, t, param, ps, "srh01_left", srh01_left)
+			output = fill_output(output, t, param, ps, "srh03_left", srh03_left)
 			output = fill_output(output, t, param, ps, "srh06_left", srh06_left)
 
 			output = fill_output(output, t, param, ps, "F10", F10)
@@ -787,8 +802,6 @@ def main():
 				output = fill_output(output, t, param, ps, "omega06", omega06)
 
 		output_data[t] = output
-
-
 
 	print("SAVING DATA...")
 	param_out = []

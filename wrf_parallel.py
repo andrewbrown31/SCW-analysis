@@ -99,30 +99,30 @@ def get_eff_cape(cape, cin, sfc_p_3d, sfc_ta, sfc_hgt, sfc_q, ps, terrain):
 	#Define "average" conditions over the effective layer. For air temp and water vapour,
 	# the pressure-weighted average is used. For height and pressure, use the halfway point. 
 	#If the layer is of one-level depth, use that layer's conditions
-	eff_avg_p = (np.nanmin(eff_p,axis=0) + np.nanmax(eff_p,axis=0)) / 2
-	eff_avg_hgt = (np.nanmin(eff_hgt,axis=0) + np.nanmax(eff_hgt,axis=0)) / 2
-	eff_avg_ta = trapz_int3d(sfc_ta, sfc_p_3d, eff_cape_cond)
-	eff_avg_q = trapz_int3d(sfc_q, sfc_p_3d, eff_cape_cond)
-	
-	#If no effective layer is defined at a lat/lon point, assign the surface conditions as 
-	# effective conditions, for use in the CAPE routine (these points are not used later anyway)
-	eff_avg_p = np.where(np.isnan(eff_avg_p),\
-		np.ma.masked_where(~((sfc_p_3d==ps)),\
-		sfc_p_3d).max(axis=0).filled(0)\
-		,eff_avg_p).astype(np.float32)
-	eff_avg_hgt = np.where(np.isnan(eff_avg_p),\
-		np.ma.masked_where(~((sfc_p_3d==ps)),\
-		sfc_hgt).max(axis=0).filled(0)\
-		,eff_avg_hgt).astype(np.float32)
-	eff_avg_ta = np.where(np.isnan(eff_avg_p),\
-		np.ma.masked_where(~((sfc_p_3d==ps)),\
-		sfc_ta).max(axis=0).filled(0)\
-		,eff_avg_ta).astype(np.float32)
-	eff_avg_q = np.where(np.isnan(eff_avg_p),\
-		np.ma.masked_where(~((sfc_p_3d==ps)),\
-		sfc_q).max(axis=0).filled(0)\
-		,eff_avg_q).astype(np.float32)
+	eff_avg_p = ((np.nanmin(eff_p,axis=0) + np.nanmax(eff_p,axis=0)) / 2).astype(np.float32)
+	eff_avg_hgt = ((np.nanmin(eff_hgt,axis=0) + np.nanmax(eff_hgt,axis=0)) / 2).astype(np.float32)
+	eff_avg_ta = trapz_int3d(sfc_ta, sfc_p_3d, eff_cape_cond).astype(np.float32)
+	eff_avg_q = trapz_int3d(sfc_q, sfc_p_3d, eff_cape_cond).astype(np.float32)
 
+	#So that the wrf-python code behaves nicely, fill the points with no effective layer, using surface conditions.
+	#These points will be masked later
+	eff_avg_p = np.where(np.isnan(eff_avg_p),\
+               np.ma.masked_where(~((sfc_p_3d==ps)),\
+               sfc_p_3d).max(axis=0).filled(0)\
+               ,eff_avg_p).astype(np.float32)
+	eff_avg_hgt = np.where(np.isnan(eff_avg_p),\
+               np.ma.masked_where(~((sfc_p_3d==ps)),\
+               sfc_hgt).max(axis=0).filled(0)\
+               ,eff_avg_hgt).astype(np.float32)
+	eff_avg_ta = np.where(np.isnan(eff_avg_p),\
+               np.ma.masked_where(~((sfc_p_3d==ps)),\
+               sfc_ta).max(axis=0).filled(0)\
+               ,eff_avg_ta).astype(np.float32)
+	eff_avg_q = np.where(np.isnan(eff_avg_p),\
+               np.ma.masked_where(~((sfc_p_3d==ps)),\
+               sfc_q).max(axis=0).filled(0)\
+               ,eff_avg_q).astype(np.float32)
+	
 	#Insert the effective layer conditions into the bottom of the 3d arrays pressure-level arrays
 	eff_ta_arr = np.insert(sfc_ta,0,eff_avg_ta,axis=0)
 	eff_q_arr = np.insert(sfc_q,0,eff_avg_q,axis=0)
@@ -154,7 +154,7 @@ def get_eff_cape(cape, cin, sfc_p_3d, sfc_ta, sfc_hgt, sfc_q, ps, terrain):
 	eff_el = np.ma.masked_where(~((eff_ta_arr==eff_avg_ta) & \
 		(eff_p3d_arr==eff_avg_p)),cape3d_effavg.data[4]).max(axis=0).filled(0)
 
-	#Finally, mask points where there is no effective layer
+	#Finally, make sure to mask points where there is no effective layer
 	eff_cape[eff_cape_cond.sum(axis=0) == 0] = 0
 	eff_cin[eff_cape_cond.sum(axis=0) == 0] = 0
 	eff_lfc[eff_cape_cond.sum(axis=0) == 0] = 0
@@ -254,11 +254,6 @@ def get_shear_p(u,v,p,p_bot,p_top,lev,uas=None,vas=None):
 	#p [levels,lat,lon]
 	#p_bot and p_top given in hPa
 	#p_bot can also be given as "sfc" to use 10 m winds
-
-	if p_bot < 1000:
-		ValueError("Bottom pressure level can't be below bottom model level (1000 hPa)")
-	if p_bot > 100:
-		ValueError("Top pressure level can't be above top model level (100 hPa)")
 
 	if u.ndim == 1:
 		if p_bot == "sfc":
@@ -367,11 +362,11 @@ def get_tornado_pot(mlcin, mllcl, sblcl, bwd6, ebwd, sbcape, mlcape, srh, esrh):
 
 	mllcl_term = ( (2000. - mllcl) / 1000.) 
 	mllcl_term[mllcl<1000] = 1
-	mllcl_term[mllcl>1000] = 0
+	mllcl_term[mllcl>2000] = 0
 
 	sblcl_term = ( (2000. - sblcl) / 1000.) 
 	sblcl_term[sblcl<1000] = 1
-	sblcl_term[sblcl>1000] = 0
+	sblcl_term[sblcl>2000] = 0
 
 	bwd6[bwd6 > 30] = 30
 	bwd6[bwd6 < 12.5] = 12.5
@@ -494,8 +489,8 @@ def get_sweat(sfc_p3d, dp, t_totals, u, v):
 	term2 = np.copy(t_totals)
 	term2 = 20 * (term2 - 49)
 	term2[t_totals<49] = 0
-	term3 = 2.*U850
-	term4 = U500
+	term3 = 2.*(U850*1.944)
+	term4 = U500 * 1.944
 	term5 = 125.*(np.sin(np.deg2rad(dir500-dir850)) + 0.2)
 
 	term1[term1<0] = 0
@@ -510,8 +505,6 @@ def get_sweat(sfc_p3d, dp, t_totals, u, v):
 	term5[(U850 >= 7.71) & (U500 >= 7.71)] = 0
 
 	return term1 + term2 + term3 + term4 + term5
-
-	
 	
 def get_supercell_pot(mucape,srhe,srh01,ebwd,s06):
 	#From EWD. MUCAPE approximated by treating each vertical grid point as a parcel, 
@@ -564,25 +557,16 @@ def get_lr_hgt(t,hgt,hgt_bot,hgt_top,terrain):
 
 	hgt = hgt - terrain
 
-	if hgt_top == "freezing":
-		hgt_top = get_t_hgt(t,hgt,0,0)
-		t_top = np.zeros(hgt_top.shape)
-		t_bot = wrf.interplevel(t,hgt,float(hgt_bot),meta=False)
+	if t.ndim == 1:
+		t_bot = np.interp(hgt_bot,hgt,t)
+		t_top = np.interp(hgt_top,hgt,t)
+	else:
+		t_bot = wrf.interplevel(t,hgt,hgt_bot,meta=False)
 		t_bot[hgt[0] >= hgt_bot] = t[0,hgt[0] >= hgt_bot]
 		t_bot[(np.where(hgt==hgt_bot))[1],(np.where(hgt==hgt_bot))[2]] = t[hgt==hgt_bot]
-
-	else:
-
-		if t.ndim == 1:
-			t_bot = np.interp(hgt_bot,hgt,t)
-			t_top = np.interp(hgt_top,hgt,t)
-		else:
-			t_bot = wrf.interplevel(t,hgt,hgt_bot,meta=False)
-			t_bot[hgt[0] >= hgt_bot] = t[0,hgt[0] >= hgt_bot]
-			t_bot[(np.where(hgt==hgt_bot))[1],(np.where(hgt==hgt_bot))[2]] = t[hgt==hgt_bot]
-			t_top = wrf.interplevel(t,hgt,hgt_top,meta=False)
-			t_top[hgt[-1] <= hgt_top] = t[-1,hgt[-1] <= hgt_top]
-			t_top[(np.where(hgt==hgt_top))[1],(np.where(hgt==hgt_top))[2]] = t[hgt==hgt_top]
+		t_top = wrf.interplevel(t,hgt,hgt_top,meta=False)
+		t_top[hgt[-1] <= hgt_top] = t[-1,hgt[-1] <= hgt_top]
+		t_top[(np.where(hgt==hgt_top))[1],(np.where(hgt==hgt_top))[2]] = t[hgt==hgt_top]
 
 	return np.squeeze(- (t_top - t_bot) / ((hgt_top - hgt_bot)/1000))
 
@@ -711,7 +695,7 @@ def thetae_diff(te, hgt, terrain):
 
 	return te_diff
 
-def tei_fn(te, p3d, ps, hgt, terrain):
+def tei_fn(te, sfc_te, p3d, ps, hgt, terrain):
 
 	#Return theta-e index. Defined by SPC as diff between sfc thetae and min thetae in sfc to 400 hPa AGL layer.
 	#Note that SHARPpy has reverted to diff between max and min thetae in same layer, to get closer to SPC
@@ -720,7 +704,6 @@ def tei_fn(te, p3d, ps, hgt, terrain):
 	te[p3d > ps] = np.nan
 	te[p3d < (ps - 400)] = np.nan
 	min_te = np.nanmin(te, axis=0)
-	sfc_te = get_var_hgt_lvl(te, hgt, 0, terrain)
 	tei = sfc_te - min_te
 	tei[tei < 0] = 0
 

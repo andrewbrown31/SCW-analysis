@@ -69,7 +69,7 @@ def hss_function():
 	plt.gca().grid()
 	plt.legend()
 	plt.subplots_adjust(bottom=0.3)
-	plt.savefig("hss_function.png", bbox_inches="tight")
+	plt.savefig("figA4.eps", bbox_inches="tight", dpi=300)
 
 def utc_to_lt(df):
 
@@ -132,18 +132,19 @@ def plot_candidate_variable_kde():
 		is_pss="hss", model_name="era5_v3") 
 	#variables = ["lr36","lr_freezing","mhgt","ml_cape","ml_el","qmean01","qmeansubcloud","s06","srhe_left","Umean06"]
 	#variables = ["ml_el","eff_el","ml_cape","dcape","srhe_left","Uwindinf","lr13","lr36","rhmin13","dpd850","U1","Umean06","Umean03"]
-	variables = ["ml_el","ml_cape","sb_cape","eff_lcl","eff_cin","srhe_left","lr13","lr36","rhmin01","rhmin03","dpd700","scld","Umean06","Umean03","U1"]
+	#variables = ["ml_el","ml_cape","sb_cape","eff_lcl","eff_cin","srhe_left","lr13","lr36","rhmin01","rhmin03","dpd700","scld","Umean06","Umean03","U1"]
+	variables = ["ml_el","ml_cape","eff_lcl","ebwd","srhe_left","lr13","q_melting","rhmin13","rhmin03","Umean800_600","Umean03","Umean06"]
 	xlims = {"lr36":[2,10], "lr_freezing":[2,15], "mhgt":[0,6000], "ml_cape":[0,2000], "ml_el":[0,16000], "sb_cape":[0,2000],"eff_cin":[0,300],\
-		    "qmean01":[0,25], "qmeansubcloud":[0,25], "scld":[0,30], "srhe_left":[0,200], "Umean06":[0,45],\
-		    "rhmin03":[0,100], "dpd850":[0,30], "U1":[0,30],"eff_lcl":[0,4000],"q_melting":[0,8],"dpd700":[0,30],"rhmin01":[0,100],\
+		    "qmean01":[0,25], "qmeansubcloud":[0,25], "ebwd":[0,30], "srhe_left":[0,200], "Umean06":[0,45],\
+		    "rhmin13":[0,100], "dpd850":[0,30], "U1":[0,30],"eff_lcl":[0,4000],"q_melting":[0,8],"dpd700":[0,30],"rhmin03":[0,100],\
 		    "lr13":[0,12], "dcape":[0,2500], "eff_el":[0,16000], "Uwindinf":[0,25], "Umean03":[0,45],"Umean800_600":[0,45]}
 	titles = {"lr36":"LR36","lr_freezing":"LR-Freezing","mhgt":"MHGT","ml_cape":"MLCAPE","ml_el":"MLEL","qmean01":"Qmean01","eff_lcl":"Eff-LCL",\
-		    "qmeansubcloud":"Qmean-Subcloud","scld":"SCLD","srhe_left":"SRHE","Umean06":"Umean06",\
-		    "rhmin03":"RHMin03", "dpd850":"DPD850", "U1":"U1","Umean800_600":"Umean800-600","dpd700":"DPD700","rhmin01":"RHMin01","q_melting":"Q-melting",\
+		    "qmeansubcloud":"Qmean-Subcloud","ebwd":"EBWD","srhe_left":"SRHE","Umean06":"Umean06",\
+		    "rhmin13":"RHMin13", "dpd850":"DPD850", "U1":"U1","Umean800_600":"Umean800-600","dpd700":"DPD700","rhmin03":"RHMin03","q_melting":"Q-melting",\
 		    "lr13":"LR13", "dcape":"DCAPE", "eff_el":"Eff-EL", "Uwindinf":"Uwindinf", "Umean03":"Umean03","sb_cape":"SBCAPE","eff_cin":"Eff-CIN"}
 	units = {"lr36":"deg km$^{-1}$","lr_freezing":"deg km$^{-1}$","mhgt":"m","ml_cape":"J kg$^{-1}$","ml_el":"m","qmean01":"g kg$^{-1}$",\
-		    "qmeansubcloud":"g kg$^{-1}$","scld":"m s$^{-1}$","srhe_left":"m$^{2}$ s$^{-1}$","Umean06":"m s$^{-1}$","eff_lcl":"m","rhmin01":"%",\
-		    "rhmin03":"%", "dpd850":"deg C", "U1":"m s$^{-1}$","dpd700":"deg C", "q_melting":"g kg$^{-1}$", "Umean800_600":"m s$^{-1}$",\
+		    "qmeansubcloud":"g kg$^{-1}$","ebwd":"m s$^{-1}$","srhe_left":"m$^{2}$ s$^{-1}$","Umean06":"m s$^{-1}$","eff_lcl":"m","rhmin03":"%",\
+		    "rhmin13":"%", "dpd850":"deg C", "U1":"m s$^{-1}$","dpd700":"deg C", "q_melting":"g kg$^{-1}$", "Umean800_600":"m s$^{-1}$",\
 		    "lr13":"deg km$^{-1}$", "dcape":"J kg$^{-1}$", "eff_el":"m", "Uwindinf":"m s$^{-1}$", "Umean03":"m s$^{-1}$",\
 		    "sb_cape":"J kg$^{-1}$","eff_cin":"J kg$^{-1}$"}
 	#Fix lr_freezing in era5
@@ -151,7 +152,7 @@ def plot_candidate_variable_kde():
 	era5_df_aws.loc[era5_df_aws["lr_freezing"]>barra_df_aws["lr_freezing"].max(),"lr_freezing"] = barra_df_aws["lr_freezing"].max()
 
 	cnt=1
-	plt.figure(figsize=[12,14])
+	plt.figure(figsize=[12,12])
 	plt.subplots_adjust(top=0.97, bottom=0.15, hspace=0.9, wspace=0.3, right=0.95)
 	matplotlib.rcParams.update({'font.size': 14})
 	for v in variables:
@@ -159,7 +160,7 @@ def plot_candidate_variable_kde():
 
 		#Plot dist for 1) Non-convective gusts 2) Non-severe convective gusts and 3) SCW
 
-		ax1 = plt.subplot(8,2,cnt)
+		ax1 = plt.subplot(6,2,cnt)
 		barra_df_aws[barra_df_aws["is_conv_aws"]==1][v].plot(kind="kde", color="r", linestyle="-", ind=np.linspace(xlims[v][0], xlims[v][1], 1000), label="Severe convective gust (BARRA)")
 		era5_df_aws[era5_df_aws["is_conv_aws"]==1][v].plot(kind="kde", color="b", linestyle="-", ind=np.linspace(xlims[v][0], xlims[v][1], 1000), label="Severe convective gust (ERA5)")
 		barra_df_aws[(barra_df_aws["lightning"]>=2) & (barra_df_aws["wind_gust"]<25)][v].plot(kind="kde", color="r", linestyle="--", ind=np.linspace(xlims[v][0], xlims[v][1], 1000), label="Non-severe convective gust (BARRA)")
@@ -172,16 +173,16 @@ def plot_candidate_variable_kde():
 
 
 		plt.xlim(xlims[v][0], xlims[v][1])
-		if v in ["ml_cape","srhe_left","Uwindinf","eff_lcl","eff_cin","sb_cape"]:
+		if v in ["ml_cape","srhe_left","Uwindinf","eff_lcl","eff_cin","sb_cape","ebwd"]:
 			plt.yscale("log")
 
 		ax1.yaxis.set_major_formatter(FormatStrFormatter('%.1e'))
 
 		if (cnt % 2) == 0:
 			ax1.set_ylabel("")
-		if cnt == 15:
-			ax1.legend(loc="lower center", bbox_to_anchor=(1.75,-0.6), fancybox=True, ncol=1, edgecolor="k", fontsize="small")
-			#ax1.legend(loc="lower center", bbox_to_anchor=(-0.2,-1.5), fancybox=True, ncol=3, edgecolor="k", fontsize="small")
+		if cnt == 12:
+			#ax1.legend(loc="lower center", bbox_to_anchor=(1.75,-0.6), fancybox=True, ncol=1, edgecolor="k", fontsize="small")
+			ax1.legend(loc="lower center", bbox_to_anchor=(-0.2,-1.5), fancybox=True, ncol=3, edgecolor="k", fontsize="small")
 		plt.title(titles[v], size=14)
 		ax1.tick_params(labelsize=12)
 
@@ -196,6 +197,8 @@ def plot_candidate_variable_kde():
 			ax1.set_ylim([1e-9, 1])
 		elif v in ["sb_cape"]:
 			ax1.set_yticks([1e-5, 1e-4, 1e-3, 1e-2])
+		elif v in ["ebwd"]:
+			ax1.set_yticks([1e-3, 1e-2, 1e-1, 1e-0])
 		elif v in ["Uwindinf"]:
 			ax1.set_yticks([1e-3, 1e-2, 1e-1, 1e-0])
 		else:
@@ -204,7 +207,7 @@ def plot_candidate_variable_kde():
 		plt.xlabel(units[v]+"\n", size=10)
 
 		cnt = cnt + 1
-	plt.savefig("fig6.png",bbox_inches="tight")
+	plt.savefig("fig4.eps", bbox_inches="tight", dpi=300)
  
 	plt.figure(figsize=[12,9])
 	cnt=1
@@ -430,6 +433,177 @@ def add_confidence_bounds(hss, df, event, out_name, N, M=100):
 		out_name+"_lower":np.percentile(np.stack(resampled_hss), 2.5, axis=0)}, index=v)
 	return pd.concat([hss, hss_bounds], axis=1)
 
+def plot_ranked_hss_proximity_test_barra():
+
+	#For ERA5, test the proximity definition by testing a range of different spatial/temporal definitions
+	import matplotlib
+	matplotlib.rcParams.update({'font.size': 14})
+
+	era5_floor, df_aws_era5, df_sta_era5 = optimise_pss("/g/data/eg3/ab4502/ExtremeWind/points/era5_allvars_v3_2005_2018.pkl",\
+                         T=1000, compute=False, l_thresh=2, is_pss="hss", model_name="era5_v5",\
+                         time="floor") 
+	barra_floor, df_aws_barra, df_sta_barra = optimise_pss("/g/data/eg3/ab4502/ExtremeWind/points/barra_allvars_v3_2005_2018.pkl",\
+                         T=1000, compute=False, l_thresh=2, is_pss="hss", model_name="barra_fc_v5",\
+                         time="floor") 
+	barra_ceil, df_aws_barra, df_sta_barra = optimise_pss("/g/data/eg3/ab4502/ExtremeWind/points/barra_allvars_v3_2005_2018.pkl",\
+                         T=1000, compute=False, l_thresh=2, is_pss="hss", model_name="barra_fc_v5",\
+                         time="ceil") 
+	barra_floor2, df_aws_barra, df_sta_barra = optimise_pss("/g/data/eg3/ab4502/ExtremeWind/points/barra_allvars_v3_2005_2018.pkl",\
+                         T=1000, compute=False, l_thresh=2, is_pss="hss", model_name="barra_fc_v5",\
+                         time="floor2") 
+	barra_mean_floor, df_aws_barra, df_sta_barra = optimise_pss("/g/data/eg3/ab4502/ExtremeWind/points/barra_rad50km_mean_v3_2005_2018.pkl",\
+                         T=1000, compute=False, l_thresh=2, is_pss="hss", model_name="barra_mean_v5",\
+                         time="floor") 
+	barra_max_floor, df_aws_barra, df_sta_barra = optimise_pss("/g/data/eg3/ab4502/ExtremeWind/points/barra_rad50km_max_v3_2005_2018.pkl",\
+                         T=1000, compute=False, l_thresh=2, is_pss="hss", model_name="barra_max_v5",\
+                         time="floor") 
+	era5_floor = era5_floor.drop("mod_cape*s06").drop("mod_cape")
+	renames = {"ship":"SHIP", "k_index":"K-index", "ml_cape":"MLCAPE", "srhe_left":"SRHE", \
+                 "ml_el":"MLEL", "mu_cape":"MUCAPE", "eff_cape":"Eff-CAPE", "sb_cape":"SBCAPE", "eff_lcl":"Eff-LCL",\
+                 "wmsi_ml":"WMSI", "dcp":"DCP", "mlcape*s06":"MLCS6", "eff_sherb":"SHERBE", "ebwd":"EBWD",\
+                 "mu_el":"MUEL", "eff_el":"Eff-EL", "sb_el":"SBEL", "mucape*s06":"MUCS6", "sweat":"SWEAT",\
+                 "Umean800_600":"Umean800-600", "Ust_left":"Ust", "sherb":"SHERB", "t_totals":"T-totals", \
+                 "scp_fixed":"SCP", "dmgwind_fixed":"DmgWind-Fixed", "lr36":"LR36", "lr_freezing":"LR-Freezing", \
+                 "srh06_left":"SRH06", "s06":"S06", "wg10":"WindGust10", "srh01_left":"SRH01",\
+                 "qmeansubcloud":"Qmeansubcloud", "s010":"S010", "effcape*s06":"Eff-CS6", "mmp":"MMP",\
+                 "sbcape*s06":"SBCS6", "q_melting":"Qmelting", "gustex":"GUSTEX", "pwat":"PWAT",\
+                 "qmean06":"Qmean06","q3":"Q3","qmean03":"Qmean03","s03":"S03",\
+                 "convgust_dry":"ConvGust-Dry","cp":"ConvPrcp","dpd700":"DPD700","Umeanwindinf":"Umeanwindinf",\
+                 "v_totals":"V-Totals","c_totals":"C-Totals","qmean01":"Qmean01","mhgt":"MHGT",\
+                 "wbz":"WBZ","sfc_thetae":"Sfc-ThetaE","q1":"Q1","te_diff":"TED","rhmin13":"RHMin03","Uwindinf":"Uwindinf",\
+		"Umean06":"Umean06","U3":"U3","U500":"U500","U6":"U6","Umean03":"Umean03","U1":"U1"} 
+	ms = 10		
+
+	#Rank skill for event versus non-event
+	plt.figure(figsize=[6,9])
+	plt.subplots_adjust(wspace=0.1,top=0.99,bottom=0.2,left=0.2,right=0.95)
+	sorted_vars = era5_floor.rename(index=renames)["pss_conv_aws"].sort_values(ascending=False).iloc[0:20].index.values
+	ms=10
+
+	plt.subplot(1,2,1)
+	plt.title("Measured events")
+	barra1 = barra_floor.rename(index=renames).loc[sorted_vars,"pss_conv_aws"]
+	plt.plot(barra1.values, np.arange(barra1.shape[0],0,-1), linestyle="none",color="tab:blue", marker="x",label="Most recent hour",ms=ms)
+	barra = barra_ceil.rename(index=renames).loc[sorted_vars,"pss_conv_aws"]
+	plt.plot(barra.values, np.arange(barra1.shape[0],0,-1), linestyle="none",color="tab:blue", marker="D",label="Next hour",ms=ms,mfc="none")
+	barra2 = barra_floor2.rename(index=renames).loc[sorted_vars,"pss_conv_aws"]
+	plt.plot(barra2.values, np.arange(barra2.shape[0],0,-1), linestyle="none",color="tab:blue", marker="o",label="Second most recent hour",mfc="none",ms=ms)
+	#barra3 = barra_max_floor.rename(index=renames).loc[sorted_vars,"pss_conv_aws"]
+	#plt.plot(barra3.values, np.arange(barra3.shape[0],0,-1), linestyle="none",color="tab:blue", marker="s",label="Most recent hour, spatial max",mfc="none",ms=ms)
+	#barra4 = barra_mean_floor.rename(index=renames).loc[sorted_vars,"pss_conv_aws"]
+	#plt.plot(barra4.values, np.arange(barra4.shape[0],0,-1), linestyle="none",color="tab:blue", marker="^",label="Most recent hour, spatial mean",mfc="none",ms=ms)
+	plt.yticks(np.arange(barra1.shape[0],0,-1))
+	plt.gca().set_yticklabels(barra1.index.values.astype(str))
+	plt.gca().tick_params(axis="y",labelrotation=45)
+	plt.gca().grid()
+
+	ax=plt.subplot(1,2,2)
+	plt.title("Reported events")
+	barra1 = barra_floor.rename(index=renames).loc[sorted_vars,"pss_sta"]
+	plt.plot(barra1.values, np.arange(barra1.shape[0],0,-1), linestyle="none",color="tab:blue", marker="x",label="Most recent hour",ms=ms)
+	barra = barra_ceil.rename(index=renames).loc[sorted_vars,"pss_sta"]
+	plt.plot(barra.values, np.arange(barra1.shape[0],0,-1), linestyle="none",color="tab:blue", marker="D",label="Next hour",ms=ms,mfc="none")
+	barra2 = barra_floor2.rename(index=renames).loc[sorted_vars,"pss_sta"]
+	plt.plot(barra2.values, np.arange(barra2.shape[0],0,-1), linestyle="none",color="tab:blue", marker="o",label="Second most recent hour",mfc="none",ms=ms)
+	#barra3 = barra_max_floor.rename(index=renames).loc[sorted_vars,"pss_sta"]
+	#plt.plot(barra3.values, np.arange(barra3.shape[0],0,-1), linestyle="none",color="tab:blue", marker="s",label="Most recent hour, spatial max",mfc="none",ms=ms)
+	#barra4 = barra_mean_floor.rename(index=renames).loc[sorted_vars,"pss_sta"]
+	#plt.plot(barra4.values, np.arange(barra4.shape[0],0,-1), linestyle="none",color="tab:blue", marker="^",label="Most recent hour, spatial mean",mfc="none",ms=ms)
+
+	plt.yticks(np.arange(barra1.shape[0],0,-1))
+	plt.gca().set_yticklabels(barra1.index.values.astype(str))
+	plt.gca().tick_params(axis="y",labelrotation=45)
+	ax.legend(bbox_to_anchor=(-0.3,-0.32),loc=8,fancybox=True,edgecolor="k",ncol=1)
+	plt.gca().grid()
+	plt.subplots_adjust(wspace=0.5)
+	plt.savefig("figA3.eps", bbox_inches="tight", dpi=300)
+
+	
+
+def plot_ranked_hss_proximity_test():
+
+	#For ERA5, test the proximity definition by testing a range of different spatial/temporal definitions
+	import matplotlib
+	matplotlib.rcParams.update({'font.size': 14})
+
+	era5_floor, df_aws_era5, df_sta_era5 = optimise_pss("/g/data/eg3/ab4502/ExtremeWind/points/era5_allvars_v3_2005_2018.pkl",\
+                         T=1000, compute=False, l_thresh=2, is_pss="hss", model_name="era5_v5",\
+                         time="floor") 
+	era5_ceil, df_aws_era5, df_sta_era5 = optimise_pss("/g/data/eg3/ab4502/ExtremeWind/points/era5_allvars_v3_2005_2018.pkl",\
+                         T=1000, compute=False, l_thresh=2, is_pss="hss", model_name="era5_v5",\
+                         time="ceil") 
+	era5_floor2, df_aws_era5, df_sta_era5 = optimise_pss("/g/data/eg3/ab4502/ExtremeWind/points/era5_allvars_v3_2005_2018.pkl",\
+                         T=1000, compute=False, l_thresh=2, is_pss="hss", model_name="era5_v5",\
+                         time="floor2") 
+	era5_mean_floor, df_aws_era5, df_sta_era5 = optimise_pss("/g/data/eg3/ab4502/ExtremeWind/points/era5_rad50km_mean_v3_2005_2018.pkl",\
+                         T=1000, compute=False, l_thresh=2, is_pss="hss", model_name="era5_mean_v5",\
+                         time="floor") 
+	era5_max_floor, df_aws_era5, df_sta_era5 = optimise_pss("/g/data/eg3/ab4502/ExtremeWind/points/era5_rad50km_max_v3_2005_2018.pkl",\
+                         T=1000, compute=False, l_thresh=2, is_pss="hss", model_name="era5_max_v5",\
+                         time="floor") 
+	era5_floor = era5_floor.drop("mod_cape*s06").drop("mod_cape")
+	era5_ceil = era5_ceil.drop("mod_cape*s06").drop("mod_cape")
+	era5_floor2 = era5_floor2.drop("mod_cape*s06").drop("mod_cape")
+	renames = {"ship":"SHIP", "k_index":"K-index", "ml_cape":"MLCAPE", "srhe_left":"SRHE", \
+                 "ml_el":"MLEL", "mu_cape":"MUCAPE", "eff_cape":"Eff-CAPE", "sb_cape":"SBCAPE", "eff_lcl":"Eff-LCL",\
+                 "wmsi_ml":"WMSI", "dcp":"DCP", "mlcape*s06":"MLCS6", "eff_sherb":"SHERBE", "ebwd":"EBWD",\
+                 "mu_el":"MUEL", "eff_el":"Eff-EL", "sb_el":"SBEL", "mucape*s06":"MUCS6", "sweat":"SWEAT",\
+                 "Umean800_600":"Umean800-600", "Ust_left":"Ust", "sherb":"SHERB", "t_totals":"T-totals", \
+                 "scp_fixed":"SCP", "dmgwind_fixed":"DmgWind-Fixed", "lr36":"LR36", "lr_freezing":"LR-Freezing", \
+                 "srh06_left":"SRH06", "s06":"S06", "wg10":"WindGust10", "srh01_left":"SRH01",\
+                 "qmeansubcloud":"Qmeansubcloud", "s010":"S010", "effcape*s06":"Eff-CS6", "mmp":"MMP",\
+                 "sbcape*s06":"SBCS6", "q_melting":"Qmelting", "gustex":"GUSTEX", "pwat":"PWAT",\
+                 "qmean06":"Qmean06","q3":"Q3","qmean03":"Qmean03","s03":"S03",\
+                 "convgust_dry":"ConvGust-Dry","cp":"ConvPrcp","dpd700":"DPD700","Umeanwindinf":"Umeanwindinf",\
+                 "v_totals":"V-Totals","c_totals":"C-Totals","qmean01":"Qmean01","mhgt":"MHGT",\
+                 "wbz":"WBZ","sfc_thetae":"Sfc-ThetaE","q1":"Q1","te_diff":"TED","rhmin13":"RHMin03","Uwindinf":"Uwindinf",\
+		"Umean06":"Umean06","U3":"U3","U500":"U500","U6":"U6","Umean03":"Umean03","U1":"U1"} 
+	ms = 10		
+
+	#Rank skill for event versus non-event
+	plt.figure(figsize=[6,9])
+	plt.subplots_adjust(wspace=0.1,top=0.99,bottom=0.2,left=0.2,right=0.95)
+	sorted_vars = era5_floor.rename(index=renames)["pss_conv_aws"].sort_values(ascending=False).iloc[0:20].index.values
+	ms=10
+
+	plt.subplot(1,2,1)
+	plt.title("Measured events")
+	era1 = era5_floor.rename(index=renames).loc[sorted_vars,"pss_conv_aws"]
+	plt.plot(era1.values, np.arange(era1.shape[0],0,-1), linestyle="none",color="tab:blue", marker="x",label="Most recent hour",ms=ms)
+	era5 = era5_ceil.rename(index=renames).loc[sorted_vars,"pss_conv_aws"]
+	plt.plot(era5.values, np.arange(era1.shape[0],0,-1), linestyle="none",color="tab:blue", marker="D",label="Next hour",ms=ms,mfc="none")
+	era2 = era5_floor2.rename(index=renames).loc[sorted_vars,"pss_conv_aws"]
+	plt.plot(era2.values, np.arange(era2.shape[0],0,-1), linestyle="none",color="tab:blue", marker="o",label="Second most recent hour",mfc="none",ms=ms)
+	#era3 = era5_max_floor.rename(index=renames).loc[sorted_vars,"pss_conv_aws"]
+	#plt.plot(era3.values, np.arange(era3.shape[0],0,-1), linestyle="none",color="tab:blue", marker="s",label="Most recent hour, spatial max",mfc="none",ms=ms)
+	#era4 = era5_mean_floor.rename(index=renames).loc[sorted_vars,"pss_conv_aws"]
+	#plt.plot(era4.values, np.arange(era4.shape[0],0,-1), linestyle="none",color="tab:blue", marker="^",label="Most recent hour, spatial mean",mfc="none",ms=ms)
+	plt.yticks(np.arange(era1.shape[0],0,-1))
+	plt.gca().set_yticklabels(era1.index.values.astype(str))
+	plt.gca().tick_params(axis="y",labelrotation=45)
+	plt.gca().grid()
+
+	ax=plt.subplot(1,2,2)
+	plt.title("Reported events")
+	era1 = era5_floor.rename(index=renames).loc[sorted_vars,"pss_sta"]
+	plt.plot(era1.values, np.arange(era1.shape[0],0,-1), linestyle="none",color="tab:blue", marker="x",label="Most recent hour",ms=ms)
+	era5 = era5_ceil.rename(index=renames).loc[sorted_vars,"pss_sta"]
+	plt.plot(era5.values, np.arange(era1.shape[0],0,-1), linestyle="none",color="tab:blue", marker="D",label="Next hour",ms=ms,mfc="none")
+	era2 = era5_floor2.rename(index=renames).loc[sorted_vars,"pss_sta"]
+	plt.plot(era2.values, np.arange(era2.shape[0],0,-1), linestyle="none",color="tab:blue", marker="o",label="Second most recent hour",mfc="none",ms=ms)
+	#era3 = era5_max_floor.rename(index=renames).loc[sorted_vars,"pss_sta"]
+	#plt.plot(era3.values, np.arange(era3.shape[0],0,-1), linestyle="none",color="tab:blue", marker="s",label="Most recent hour, spatial max",mfc="none",ms=ms)
+	#era4 = era5_mean_floor.rename(index=renames).loc[sorted_vars,"pss_sta"]
+	#plt.plot(era4.values, np.arange(era4.shape[0],0,-1), linestyle="none",color="tab:blue", marker="^",label="Most recent hour, spatial mean",mfc="none",ms=ms)
+
+	plt.yticks(np.arange(era1.shape[0],0,-1))
+	plt.gca().set_yticklabels(era1.index.values.astype(str))
+	plt.gca().tick_params(axis="y",labelrotation=45)
+	ax.legend(bbox_to_anchor=(-0.3,-0.32),loc=8,fancybox=True,edgecolor="k",ncol=1)
+	plt.gca().grid()
+	plt.subplots_adjust(wspace=0.5)
+	plt.savefig("figA2.eps", bbox_inches="tight",dpi=300)
+	
 
 def plot_ranked_hss():
 
@@ -439,18 +613,19 @@ def plot_ranked_hss():
 
 	ver=2
 
-	era5, df_aws_era5, df_sta_era5 = optimise_pss("/g/data/eg3/ab4502/ExtremeWind/points/era5_allvars_v2_2005_2018.pkl",\
-                         T=1000, compute=False, l_thresh=2, is_pss="hss", model_name="era5_v4",\
+	era5, df_aws_era5, df_sta_era5 = optimise_pss("/g/data/eg3/ab4502/ExtremeWind/points/era5_allvars_v3_2005_2018.pkl",\
+                         T=1000, compute=False, l_thresh=2, is_pss="hss", model_name="era5_v5",\
                          time="floor") 
-	barra, df_aws_barra, df_sta_barra = optimise_pss("/g/data/eg3/ab4502/ExtremeWind/points/barra_allvars_2005_2018.pkl",\
-                         T=1000, compute=False, l_thresh=2, is_pss="hss", model_name="barra_fc_v4",\
+	barra, df_aws_barra, df_sta_barra = optimise_pss("/g/data/eg3/ab4502/ExtremeWind/points/barra_allvars_v3_2005_2018.pkl",\
+                         T=1000, compute=False, l_thresh=2, is_pss="hss", model_name="barra_fc_v5",\
                          time="floor") 
-	era5_c, _,_= optimise_pss("/g/data/eg3/ab4502/ExtremeWind/points/era5_allvars_v2_2005_2018.pkl",\
-                         T=1000, compute=False, l_thresh=2, is_pss="hss", model_name="era5_v4",\
+	era5_c, _,_= optimise_pss("/g/data/eg3/ab4502/ExtremeWind/points/era5_allvars_v3_2005_2018.pkl",\
+                         T=1000, compute=False, l_thresh=2, is_pss="hss", model_name="era5_v5",\
                          time="ceil") 
-	barra_c, _,_ = optimise_pss("/g/data/eg3/ab4502/ExtremeWind/points/barra_allvars_2005_2018.pkl",\
-                         T=1000, compute=False, l_thresh=2, is_pss="hss", model_name="barra_fc_v4",\
+	barra_c, _,_ = optimise_pss("/g/data/eg3/ab4502/ExtremeWind/points/barra_allvars_v3_2005_2018.pkl",\
+                         T=1000, compute=False, l_thresh=2, is_pss="hss", model_name="barra_fc_v5",\
                          time="ceil") 
+	era5 = era5.drop("mod_cape*s06").drop("mod_cape")
 	hss = pd.merge(era5, barra, how="outer", suffixes=("_era5","_barra"), left_index=True, right_index=True) 
 	renames = {"ship":"SHIP", "k_index":"K-index", "ml_cape":"MLCAPE", "srhe_left":"SRHE", \
                  "ml_el":"MLEL", "mu_cape":"MUCAPE", "eff_cape":"Eff-CAPE", "sb_cape":"SBCAPE", "eff_lcl":"Eff-LCL",\
@@ -462,7 +637,7 @@ def plot_ranked_hss():
                  "qmeansubcloud":"Qmeansubcloud", "s010":"S010", "effcape*s06":"Eff-CS6", "mmp":"MMP",\
                  "sbcape*s06":"SBCS6", "q_melting":"Qmelting", "gustex":"GUSTEX", "pwat":"PWAT",\
                  "qmean06":"Qmean06","q3":"Q3","qmean03":"Qmean03","s03":"S03",\
-                 "convgust_dry":"ConvGust-Dry","cp":"ConvPrcp","dpd700":"DPD700",\
+                 "convgust_dry":"ConvGust-Dry","cp":"ConvPrcp","dpd700":"DPD700","Umeanwindinf":"Umeanwindinf",\
                  "v_totals":"V-Totals","c_totals":"C-Totals","qmean01":"Qmean01","mhgt":"MHGT",\
                  "wbz":"WBZ","sfc_thetae":"Sfc-ThetaE","q1":"Q1","te_diff":"TED","rhmin13":"RHMin03","Uwindinf":"Uwindinf",\
 		"Umean06":"Umean06","U3":"U3","U500":"U500","U6":"U6","Umean03":"Umean03","U1":"U1"} 
@@ -487,12 +662,12 @@ def plot_ranked_hss():
 	df_aws_barra["is_lightning"] = (df_aws_barra["lightning"] >= 2)*1
 	df_aws_era5.loc[(df_aws_era5["lightning"] >= 2) & ~(df_aws_era5["is_conv_aws"]==1), "is_conv_aws_cond_light"] = 0
 	df_aws_barra.loc[(df_aws_barra["lightning"] >= 2) & ~(df_aws_barra["is_conv_aws"]==1), "is_conv_aws_cond_light"] = 0
-	hss = add_confidence_bounds(hss, df_aws_era5, "is_lightning", "light_era5", 2, M=M)
-	hss = add_confidence_bounds(hss, df_aws_barra, "is_lightning", "light_barra", 2, M=M)
-	hss = add_confidence_bounds(hss, df_aws_era5.dropna(subset=["is_conv_aws_cond_light"]).reset_index().drop(columns="index"),\
-		"is_conv_aws_cond_light", "conv_aws_cond_light_era5", 2, M=M)
-	hss = add_confidence_bounds(hss, df_aws_barra.dropna(subset=["is_conv_aws_cond_light"]).reset_index().drop(columns="index"),\
-		"is_conv_aws_cond_light", "conv_aws_cond_light_barra", 2, M=M)
+	#hss = add_confidence_bounds(hss, df_aws_era5, "is_lightning", "light_era5", 2, M=M)
+	#hss = add_confidence_bounds(hss, df_aws_barra, "is_lightning", "light_barra", 2, M=M)
+	#hss = add_confidence_bounds(hss, df_aws_era5.dropna(subset=["is_conv_aws_cond_light"]).reset_index().drop(columns="index"),\
+	#	"is_conv_aws_cond_light", "conv_aws_cond_light_era5", 2, M=M)
+	#hss = add_confidence_bounds(hss, df_aws_barra.dropna(subset=["is_conv_aws_cond_light"]).reset_index().drop(columns="index"),\
+	#	"is_conv_aws_cond_light", "conv_aws_cond_light_barra", 2, M=M)
 
 	#VERSION 1
 	if ver == 1:
@@ -587,7 +762,7 @@ def plot_ranked_hss():
 			plt.xlabel("HSS")
 			cnt=cnt+1
 		plt.subplots_adjust(wspace=0.1,top=0.99,bottom=0.2,left=0.2,right=0.95)
-		plt.savefig("fig2.png",bbox_inches="tight")
+		plt.savefig("fig2.eps", bbox_inches="tight", dpi=300)
 
 		#Rank skill for lightning versus non-lightning
 		plt.figure(figsize=[6,12])
@@ -978,27 +1153,29 @@ def obs_versus_mod_compute(model):
 	# hourly diagnostics
 	if model == "ERA5":
 	    pss_df, mod_aws, mod_sta = optimise_pss("/g/data/eg3/ab4502/ExtremeWind/"+\
-		    "points/era5_allvars_v2_2005_2018.pkl",\
-		    T=1000, compute=False, l_thresh=2, is_pss="hss", model_name="era5_v3")
+		    "points/era5_allvars_v3_2005_2018.pkl",\
+		    T=1000, compute=False, l_thresh=2, is_pss="hss", model_name="era5_v5")
 	    #CONV AWS
-	    aws_predictors = ["ml_el","Umean03","eff_lcl","dpd700","lr36","rhmin01"]
+	    #aws_predictors = ["ml_el","Umean03","eff_lcl","dpd700","lr36","rhmin01"]
+	    aws_predictors = ["ebwd","Umean800_600","lr13","rhmin13","srhe_left","q_melting","eff_lcl"]
 	    logit = LogisticRegression(class_weight="balanced", solver="liblinear",\
 		max_iter=1000)
 	    logit_mod_aws = logit.fit(mod_aws[aws_predictors], mod_aws["is_conv_aws"])
 	    p = logit_mod_aws.predict_proba(mod_aws[aws_predictors])[:,1]
-	    mod_aws.loc[:, "model"] = ((p >= 0.81)) * 1
+	    mod_aws.loc[:, "model"] = ((p >= 0.83)) * 1
 	    mod_aws["month"] = pd.DatetimeIndex(mod_aws["time"]).month
 	    #STA
-	    sta_predictors = ["ml_cape","Umean06","srhe_left","lr13"]
+	    #sta_predictors = ["ml_cape","Umean06","srhe_left","lr13"]
+	    sta_predictors = ["ml_cape","Umean06","ebwd","lr13"]
 	    logit = LogisticRegression(class_weight="balanced", solver="liblinear",\
 		max_iter=1000)
 	    logit_mod_sta = logit.fit(mod_sta[sta_predictors], mod_sta["is_sta"])
 	    p = logit_mod_sta.predict_proba(mod_sta[sta_predictors])[:,1]
-	    mod_sta.loc[:, "model_sta"] = ((p >= 0.68)) * 1
+	    mod_sta.loc[:, "model_sta"] = ((p >= 0.72)) * 1
 	    mod_sta["month"] = pd.DatetimeIndex(mod_sta["time"]).month
 	    #Hourly data
 	    mod_hourly = pd.read_pickle("/g/data/eg3/ab4502/ExtremeWind/points/"+\
-	    "era5_allvars_v2_2005_2018.pkl").dropna()
+	    "era5_allvars_v3_2005_2018.pkl").dropna()
 	    #wind direction data
 	    if dir_data == "model":
 		    mod_dir = pd.read_pickle("/g/data/eg3/ab4502/ExtremeWind/points/era5_wind_dir_2005_2018.pkl")
@@ -1008,37 +1185,39 @@ def obs_versus_mod_compute(model):
 		    mod_hourly = mod_hourly.dropna()
 	    p_aws = logit_mod_aws.predict_proba(mod_hourly[aws_predictors])[:,1]
 	    p_sta = logit_mod_sta.predict_proba(mod_hourly[sta_predictors])[:,1]
-	    p_thresh_aws = 0.81
-	    p_thresh_sta = 0.68
-	    thresh_t_totals = 48.1
+	    p_thresh_aws = 0.83
+	    p_thresh_sta = 0.72
+	    thresh_t_totals = 48.0
 	    thresh_mlcs6 = 5669
-	    thresh_dcp = 0.04
+	    thresh_dcp = 0.13
 	    mod_hourly["model_aws"] = p_aws
 	    mod_hourly["model_sta"] = p_sta
 	    label = ["d)","e)","f)"]
 	    p_list = ["model_aws","model_sta","dcp","t_totals"]
 	elif model == "BARRA":
 	    pss_df, mod_aws, mod_sta = optimise_pss("/g/data/eg3/ab4502/ExtremeWind/"+\
-		    "points/barra_allvars_2005_2018.pkl",\
-		    T=1000, compute=False, l_thresh=2, is_pss="hss", model_name="barra_fc_v3")
+		    "points/barra_allvars_v3_2005_2018.pkl",\
+		    T=1000, compute=False, l_thresh=2, is_pss="hss", model_name="barra_fc_v5")
 	    #CONV AWS
-	    aws_predictors = ["eff_lcl","U1","sb_cape","lr13","rhmin03","lr36","eff_cin"]
+	    #aws_predictors = ["eff_lcl","U1","sb_cape","lr13","rhmin03","lr36","eff_cin"]
+	    aws_predictors = ["ebwd","lr13","ml_el","Umean03","rhmin03"]
 	    logit = LogisticRegression(class_weight="balanced", solver="liblinear",\
 		max_iter=1000)
 	    logit_mod_aws = logit.fit(mod_aws[aws_predictors], mod_aws["is_conv_aws"])
 	    p = logit_mod_aws.predict_proba(mod_aws[aws_predictors])[:,1]
-	    mod_aws.loc[:, "model"] = ((p >= 0.84)) * 1
+	    mod_aws.loc[:, "model"] = ((p >= 0.83)) * 1
 	    mod_aws["month"] = pd.DatetimeIndex(mod_aws["time"]).month
 	    #STA
-	    sta_predictors = ["ml_cape","Umean06","eff_lcl","scld"]
+	    #sta_predictors = ["ml_cape","Umean06","eff_lcl","scld"]
+	    sta_predictors = ["ebwd","Umean800_600","lr13","rhmin13","ml_el"]
 	    logit = LogisticRegression(class_weight="balanced", solver="liblinear",\
 		max_iter=1000)
 	    logit_mod_sta = logit.fit(mod_sta[sta_predictors], mod_sta["is_sta"])
 	    p = logit_mod_sta.predict_proba(mod_sta[sta_predictors])[:,1]
-	    mod_sta.loc[:, "model_sta"] = ((p >= 0.73)) * 1
+	    mod_sta.loc[:, "model_sta"] = ((p >= 0.75)) * 1
 	    mod_sta["month"] = pd.DatetimeIndex(mod_sta["time"]).month
 	    #Hourly data
-	    mod_hourly = pd.read_pickle("/g/data/eg3/ab4502/ExtremeWind/points/barra_allvars_2005_2018.pkl").dropna()
+	    mod_hourly = pd.read_pickle("/g/data/eg3/ab4502/ExtremeWind/points/barra_allvars_v3_2005_2018.pkl").dropna()
 	    #wind direction data
 	    if dir_data == "model":
 		    mod_dir = pd.read_pickle("/g/data/eg3/ab4502/ExtremeWind/points/barra_wind_dir_2005_2018_2.pkl")
@@ -1048,11 +1227,11 @@ def obs_versus_mod_compute(model):
 		    mod_hourly = mod_hourly.dropna()
 	    p_aws = logit_mod_aws.predict_proba(mod_hourly[aws_predictors])[:,1]
 	    p_sta = logit_mod_sta.predict_proba(mod_hourly[sta_predictors])[:,1]
-	    p_thresh_aws = 0.84
-	    p_thresh_sta = 0.76
-	    thresh_t_totals = 48.91
-	    thresh_mlcs6 = 12778
-	    thresh_dcp = 0.04
+	    p_thresh_aws = 0.83
+	    p_thresh_sta = 0.75
+	    thresh_t_totals = 48.9
+	    thresh_mlcs6 = 12758
+	    thresh_dcp = 0.13
 	    mod_hourly["model_aws"] = p_aws
 	    mod_hourly["model_sta"] = p_sta
 	    p_list = ["model_aws","model_sta","mlcape*s06","t_totals"]
@@ -1204,7 +1383,7 @@ def obs_versus_mod_plot():
 	plt.text(0.05,0.9,"f)",transform=plt.gca().transAxes,fontsize=14)
 
 	plt.subplots_adjust(bottom=0.3, hspace=0.4, wspace=0.3)
-	plt.savefig("fig7.png", bbox_inches="tight")
+	plt.savefig("fig5.eps", bbox_inches="tight", dpi=300)
 	plt.close()
 
 def sta_versus_aws():
@@ -1308,7 +1487,7 @@ def sta_versus_aws():
 	#plt.legend((l1,l2), ("Reported","Measured"))
 	plt.legend(handles=[l1,l2])
 
-	plt.savefig("fig1.png", bbox_inches="tight")
+	plt.savefig("fig1.eps", bbox_inches="tight", dpi=300)
  
 def temporal_dist_plots():
 	#New function to plot diurnal distribution of extreme convective gusts, using the "time of max gust" 
@@ -2453,23 +2632,23 @@ def plot_candidate_variable_kde_sta():
 	#For a list of "candidate variables", defined below, plot kde functions for all times, measured events, and reported events
 	matplotlib.rcParams.update({'font.size': 14})
 	pss_df, barra_df_aws, barra_df_sta = optimise_pss("/g/data/eg3/ab4502/ExtremeWind/points/"+\
-		"barra_allvars_2005_2018.pkl", T=1000, compute=False, l_thresh=2,\
-		is_pss="hss", model_name="barra_fc_v3") 
+		"barra_allvars_v3_2005_2018.pkl", T=1000, compute=False, l_thresh=2,\
+		is_pss="hss", model_name="barra_fc_v5") 
 	pss_df, era5_df_aws, era5_df_sta = optimise_pss("/g/data/eg3/ab4502/ExtremeWind/points/"+\
-		"era5_allvars_v2_2005_2018.pkl", T=1000, compute=False, l_thresh=2,\
-		is_pss="hss", model_name="era5_v3") 
-	variables = ["ml_el","ml_cape","sb_cape","eff_lcl","eff_cin","srhe_left","lr13","lr36","rhmin01","rhmin03","dpd700","scld","Umean06","Umean03","U1"]
+		"era5_allvars_v3_2005_2018.pkl", T=1000, compute=False, l_thresh=2,\
+		is_pss="hss", model_name="era5_v5") 
+	variables = ["ml_el","ml_cape","eff_lcl","ebwd","srhe_left","lr13","q_melting","rhmin13","rhmin03","Umean800_600","Umean03","Umean06"]
 	xlims = {"lr36":[2,10], "lr_freezing":[2,15], "mhgt":[0,6000], "ml_cape":[0,2000], "ml_el":[0,16000], "sb_cape":[0,2000],"eff_cin":[0,300],\
-		    "qmean01":[0,25], "qmeansubcloud":[0,25], "scld":[0,30], "srhe_left":[0,200], "Umean06":[0,45],\
-		    "rhmin03":[0,100], "dpd850":[0,30], "U1":[0,30],"eff_lcl":[0,4000],"q_melting":[0,8],"dpd700":[0,30],"rhmin01":[0,100],\
+		    "qmean01":[0,25], "qmeansubcloud":[0,25], "ebwd":[0,30], "srhe_left":[0,200], "Umean06":[0,45],\
+		    "rhmin13":[0,100], "dpd850":[0,30], "U1":[0,30],"eff_lcl":[0,4000],"q_melting":[0,8],"dpd700":[0,30],"rhmin03":[0,100],\
 		    "lr13":[0,12], "dcape":[0,2500], "eff_el":[0,16000], "Uwindinf":[0,25], "Umean03":[0,45],"Umean800_600":[0,45]}
 	titles = {"lr36":"LR36","lr_freezing":"LR-Freezing","mhgt":"MHGT","ml_cape":"MLCAPE","ml_el":"MLEL","qmean01":"Qmean01","eff_lcl":"Eff-LCL",\
-		    "qmeansubcloud":"Qmean-Subcloud","scld":"SCLD","srhe_left":"SRHE","Umean06":"Umean06",\
-		    "rhmin03":"RHMin03", "dpd850":"DPD850", "U1":"U1","Umean800_600":"Umean800-600","dpd700":"DPD700","rhmin01":"RHMin01","q_melting":"Q-melting",\
+		    "qmeansubcloud":"Qmean-Subcloud","ebwd":"EBWD","srhe_left":"SRHE","Umean06":"Umean06",\
+		    "rhmin13":"RHMin13", "dpd850":"DPD850", "U1":"U1","Umean800_600":"Umean800-600","dpd700":"DPD700","rhmin03":"RHMin03","q_melting":"Q-melting",\
 		    "lr13":"LR13", "dcape":"DCAPE", "eff_el":"Eff-EL", "Uwindinf":"Uwindinf", "Umean03":"Umean03","sb_cape":"SBCAPE","eff_cin":"Eff-CIN"}
 	units = {"lr36":"deg km$^{-1}$","lr_freezing":"deg km$^{-1}$","mhgt":"m","ml_cape":"J kg$^{-1}$","ml_el":"m","qmean01":"g kg$^{-1}$",\
-		    "qmeansubcloud":"g kg$^{-1}$","scld":"m s$^{-1}$","srhe_left":"m$^{2}$ s$^{-1}$","Umean06":"m s$^{-1}$","eff_lcl":"m","rhmin01":"%",\
-		    "rhmin03":"%", "dpd850":"deg C", "U1":"m s$^{-1}$","dpd700":"deg C", "q_melting":"g kg$^{-1}$", "Umean800_600":"m s$^{-1}$",\
+		    "qmeansubcloud":"g kg$^{-1}$","ebwd":"m s$^{-1}$","srhe_left":"m$^{2}$ s$^{-1}$","Umean06":"m s$^{-1}$","eff_lcl":"m","rhmin03":"%",\
+		    "rhmin13":"%", "dpd850":"deg C", "U1":"m s$^{-1}$","dpd700":"deg C", "q_melting":"g kg$^{-1}$", "Umean800_600":"m s$^{-1}$",\
 		    "lr13":"deg km$^{-1}$", "dcape":"J kg$^{-1}$", "eff_el":"m", "Uwindinf":"m s$^{-1}$", "Umean03":"m s$^{-1}$",\
 		    "sb_cape":"J kg$^{-1}$","eff_cin":"J kg$^{-1}$"}
 	#Fix lr_freezing in era5
@@ -2477,7 +2656,7 @@ def plot_candidate_variable_kde_sta():
 	era5_df_aws.loc[era5_df_aws["lr_freezing"]>barra_df_aws["lr_freezing"].max(),"lr_freezing"] = barra_df_aws["lr_freezing"].max()
 
 	cnt=1
-	plt.figure(figsize=[12,14])
+	plt.figure(figsize=[12,12])
 	plt.subplots_adjust(top=0.97, bottom=0.15, hspace=0.9, wspace=0.3, right=0.95)
 	matplotlib.rcParams.update({'font.size': 14})
 	for v in variables:
@@ -2485,7 +2664,7 @@ def plot_candidate_variable_kde_sta():
 
 		#Plot dist for 1) Non-convective gusts 2) Non-severe convective gusts and 3) SCW
 
-		ax1 = plt.subplot(8,2,cnt)
+		ax1 = plt.subplot(6,2,cnt)
 		barra_df_aws[barra_df_aws["is_conv_aws"]==1][v].plot(kind="kde", color="r", linestyle="-", ind=np.linspace(xlims[v][0], xlims[v][1], 1000), label="Measured SCW (BARRA)")
 		era5_df_aws[era5_df_aws["is_conv_aws"]==1][v].plot(kind="kde", color="b", linestyle="-", ind=np.linspace(xlims[v][0], xlims[v][1], 1000), label="Measured SCW (ERA5)")
 		barra_df_sta[barra_df_sta["is_sta"]==1][v].plot(kind="kde", color="r", linestyle="--", ind=np.linspace(xlims[v][0], xlims[v][1], 1000), label="Reported SCW (BARRA)")
@@ -2493,16 +2672,16 @@ def plot_candidate_variable_kde_sta():
 
 
 		plt.xlim(xlims[v][0], xlims[v][1])
-		if v in ["ml_cape","srhe_left","Uwindinf","eff_lcl","eff_cin","sb_cape"]:
+		if v in ["ml_cape","srhe_left","Uwindinf","eff_lcl","eff_cin","sb_cape","ebwd"]:
 			plt.yscale("log")
 
 		ax1.yaxis.set_major_formatter(FormatStrFormatter('%.1e'))
 
 		if (cnt % 2) == 0:
 			ax1.set_ylabel("")
-		if cnt == 15:
-			ax1.legend(loc="lower center", bbox_to_anchor=(1.75,-0.6), fancybox=True, ncol=1, edgecolor="k", fontsize="small")
-			#ax1.legend(loc="lower center", bbox_to_anchor=(-0.2,-1.5), fancybox=True, ncol=3, edgecolor="k", fontsize="small")
+		if cnt == 12:
+			#ax1.legend(loc="lower center", bbox_to_anchor=(1.75,-0.6), fancybox=True, ncol=1, edgecolor="k", fontsize="small")
+			ax1.legend(loc="lower center", bbox_to_anchor=(-0.2,-1.5), fancybox=True, ncol=2, edgecolor="k", fontsize="small")
 		plt.title(titles[v], size=14)
 		ax1.tick_params(labelsize=12)
 
@@ -2517,6 +2696,8 @@ def plot_candidate_variable_kde_sta():
 			ax1.set_ylim([1e-9, 1])
 		elif v in ["sb_cape"]:
 			ax1.set_yticks([1e-5, 1e-4, 1e-3, 1e-2])
+		elif v in ["ebwd"]:
+			ax1.set_yticks([1e-3, 1e-2, 1e-1, 1e-0])
 		elif v in ["Uwindinf"]:
 			ax1.set_yticks([1e-3, 1e-2, 1e-1, 1e-0])
 		else:
@@ -2525,14 +2706,15 @@ def plot_candidate_variable_kde_sta():
 		plt.xlabel(units[v]+"\n", size=10)
 
 		cnt = cnt + 1
-	plt.savefig("figA4.png",bbox_inches="tight")
+	plt.savefig("figA6.eps",bbox_inches="tight",dpi=300)
 
 if __name__ == "__main__":
 
 	#plot_candidate_variable_kde()
-	#plot_ranked_hss()
+	plot_ranked_hss_proximity_test()
+	plot_ranked_hss_proximity_test_barra()
 	#obs_versus_mod_plot()
-	plot_candidate_variable_kde_sta()
+	#plot_candidate_variable_kde_sta()
 	#sta_versus_aws()
 	#hss_function()
 

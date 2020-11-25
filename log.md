@@ -34,7 +34,7 @@ optimise_pss("/g/data/eg3/ab4502/ExtremeWind/points/era5_allvars_2005_2018.pkl",
 optimise_pss("/g/data/eg3/ab4502/ExtremeWind/points/barra_allvars_2005_2018_2.pkl",T=1000, compute=True, l_thresh=2, is_pss="hss", model_name="barra_fc",time="ceil")
 optimise_pss("/g/data/eg3/ab4502/ExtremeWind/points/barra_allvars_2005_2018_2.pkl",T=1000, compute=True, l_thresh=2, is_pss="hss", model_name="barra_fc",time="floor")
 ```
-#### Logistic regression model selection and evaluation (Table 2, 3, A2, A3)
+#### Logistic regression model selection and evaluation (Table 2, 3, A2)
 ```python
 from logit import fwd_selection, logit_explicit_cv, colin_test
 from event_analysis import auc_test

@@ -474,30 +474,20 @@ def colin_test():
 	#BARRA
 	logit = LogisticRegression(class_weight="balanced", solver="liblinear")
 	pss_df, df_aws, df_sta = optimise_pss("/g/data/eg3/ab4502/ExtremeWind/points/"+\
-		"barra_allvars_2005_2018.pkl", T=1000, compute=False, l_thresh=2,\
-		is_pss="hss", model_name="barra_fc_v3")
+		"barra_allvars_v3_2005_2018.pkl", T=1000, compute=False, l_thresh=2,\
+		is_pss="hss", model_name="barra_fc_v5")
 	#Convective AWS
 	event = "is_conv_aws"
-	preds = ["eff_lcl","U1","sb_cape","lr13","rhmin03","lr36","eff_cin"]
+	preds = ["ebwd","lr13","ml_el","Umean03","rhmin03"]
 	vifs = [vif(np.array(df_aws[preds]), i) for i in np.arange(len(preds))]
 	logit_mod = logit.fit(df_aws[preds], df_aws[event])
 	df1 = pd.DataFrame({"VIF":vifs, "coefs":np.squeeze(logit_mod.coef_)}, index=preds)
 	
-	preds = ["eff_lcl","U1","sb_cape","lr13","rhmin03","eff_cin"]
+	preds = ["ebwd","ml_el","Umean03","rhmin03"]
 	vifs = [vif(np.array(df_aws[preds]), i) for i in np.arange(len(preds))]
 	logit_mod = logit.fit(df_aws[preds], df_aws[event])
 	df2 = pd.DataFrame({"VIF":vifs, "coefs":np.squeeze(logit_mod.coef_)}, index=preds)
 	
-	preds = ["ml_el","Umean06","lr36","rhmin13","dcape"]
-	vifs = [vif(np.array(df_aws[preds]), i) for i in np.arange(len(preds))]
-	logit_mod = logit.fit(df_aws[preds], df_aws[event])
-	df3 = pd.DataFrame({"VIF":vifs, "coefs":np.squeeze(logit_mod.coef_)}, index=preds)
-	
-	preds = ["ml_el","Umean06","rhmin13","dcape"]
-	vifs = [vif(np.array(df_aws[preds]), i) for i in np.arange(len(preds))]
-	logit_mod = logit.fit(df_aws[preds], df_aws[event])
-	df4 = pd.DataFrame({"VIF":vifs, "coefs":np.squeeze(logit_mod.coef_)}, index=preds)
-
 	(pd.concat([df1, df2], axis=1)).to_csv("/g/data/eg3/ab4502/ExtremeWind/skill_scores/vif_barra_aws.csv", float_format="%.2e")
 	print(pd.concat([df1, df2], axis=1))
 
@@ -506,7 +496,7 @@ def colin_test():
 	#barra_aws = logit_predictor_test("barra", "is_conv_aws", preds, "t_totals", 16)
 
 	#STA
-	preds = ["ml_cape","Umean06","eff_lcl","scld"]
+	preds = ["ebwd","Umean800_600","lr13","rhmin13","ml_el"]
 	vifs = [vif(np.array(df_aws[preds]), i) for i in np.arange(len(preds))]
 	logit_mod = logit.fit(df_aws[preds], df_aws[event])
 	df1 = pd.DataFrame({"VIF":vifs, "coefs":np.squeeze(logit_mod.coef_)}, index=preds)
@@ -515,14 +505,14 @@ def colin_test():
 
 	#ERA5
 	pss_df, df_aws, df_sta = optimise_pss("/g/data/eg3/ab4502/ExtremeWind/points/"+\
-		"era5_allvars_v2_2005_2018.pkl", T=1000, compute=False, l_thresh=2,\
-		is_pss="hss", model_name="era5")
+		"era5_allvars_v3_2005_2018.pkl", T=1000, compute=False, l_thresh=2,\
+		is_pss="hss", model_name="era5_v5")
 	#Convective AWS
-	preds = ["ml_el","Umean03","eff_lcl","dpd700","lr36","rhmin01"]
+	preds = ["ebwd","Umean800_600","lr13","rhmin13","srhe_left","q_melting","eff_lcl"]
 	vifs = [vif(np.array(df_aws[preds]), i) for i in np.arange(len(preds))]
 	logit_mod = logit.fit(df_aws[preds], df_aws[event])
 	df1 = pd.DataFrame({"VIF":vifs, "coefs":np.squeeze(logit_mod.coef_)}, index=preds)
-	preds = ["ml_el","Umean03","eff_lcl","dpd700","rhmin01"]
+	preds = ["ebwd","Umean800_600","rhmin13","srhe_left","q_melting","eff_lcl"]
 	vifs = [vif(np.array(df_aws[preds]), i) for i in np.arange(len(preds))]
 	logit_mod = logit.fit(df_aws[preds], df_aws[event])
 	df2 = pd.DataFrame({"VIF":vifs, "coefs":np.squeeze(logit_mod.coef_)}, index=preds)
@@ -533,7 +523,7 @@ def colin_test():
 	#era5_aws = logit_predictor_test("era5", "is_sta", preds, "t_totals", 16)
 
 	#STA
-	preds = ["ml_cape","Umean06","srhe_left","lr13"]
+	preds = ["ml_cape","Umean06","ebwd","lr13"]
 	vifs = [vif(np.array(df_aws[preds]), i) for i in np.arange(len(preds))]
 	logit_mod = logit.fit(df_aws[preds], df_aws[event])
 	df1 = pd.DataFrame({"VIF":vifs, "coefs":np.squeeze(logit_mod.coef_)}, index=preds)
@@ -551,12 +541,12 @@ def logit_predictor_test(model, event, preds, param, n_splits):
 	#Load diagnostics/events
 	if model == "era5":
 		pss_df, df_aws, df_sta = optimise_pss("/g/data/eg3/ab4502/ExtremeWind/points/"+\
-			"era5_allvars_v2_2005_2018.pkl", T=1000, compute=False, l_thresh=2,\
-			is_pss="hss", model_name="era5_v3")
+			"era5_allvars_v3_2005_2018.pkl", T=1000, compute=False, l_thresh=2,\
+			is_pss="hss", model_name="era5_v5")
 	elif model == "barra":
 		pss_df, df_aws, df_sta = optimise_pss("/g/data/eg3/ab4502/ExtremeWind/points/"+\
-			"barra_allvars_2005_2018.pkl", T=1000, compute=False, l_thresh=2,\
-			is_pss="hss", model_name="barra_fc_v3")
+			"barra_allvars_v3_2005_2018.pkl", T=1000, compute=False, l_thresh=2,\
+			is_pss="hss", model_name="barra_fc_v5")
 	else:
 		raise ValueError("Invalid model name")
 
@@ -615,12 +605,12 @@ def fwd_selection(model, event, pval_choice):
 	#Load diagnostics/events
 	if model == "era5":
 		pss_df, df_aws, df_sta = optimise_pss("/g/data/eg3/ab4502/ExtremeWind/points/"+\
-			"era5_allvars_v2_2005_2018.pkl", T=1000, compute=False, l_thresh=2,\
-			is_pss="hss", model_name="era5_v3")
+			"era5_allvars_v3_2005_2018.pkl", T=1000, compute=False, l_thresh=2,\
+			is_pss="hss", model_name="era5_v5")
 	elif model == "barra":
 		pss_df, df_aws, df_sta = optimise_pss("/g/data/eg3/ab4502/ExtremeWind/points/"+\
-			"barra_allvars_2005_2018.pkl", T=1000, compute=False, l_thresh=2,\
-			is_pss="hss", model_name="barra_fc_v3")
+			"barra_allvars_v3_2005_2018.pkl", T=1000, compute=False, l_thresh=2,\
+			is_pss="hss", model_name="barra_fc_v5")
 	else:
 		raise ValueError("Invalid model name")
 
@@ -641,9 +631,7 @@ def fwd_selection(model, event, pval_choice):
 	     'srhe_left', 'srh01_left', 'srh03_left', 'srh06_left', 'ebwd', 's010', 's06',\
 	     's03', 's01', 's13', 's36', 'scld', 'U500', 'U10', 'U1', 'U3', 'U6', 'Ust_left',\
 	     'Usr01_left', 'Usr03_left', 'Usr06_left', 'Uwindinf', 'Umeanwindinf',\
-	     'Umean800_600', 'Umean06', 'Umean01', 'Umean03', 'wg10' ])
-	if model == "era5":
-		preds = np.append(preds,"cp")
+	     'Umean800_600', 'Umean06', 'Umean01', 'Umean03'])
 
 	#Initialise things
 	from plot_param import resample_events
@@ -756,19 +744,19 @@ def fwd_selection(model, event, pval_choice):
 		pval_str = "pval"
 	else:
 		pval_str = "hss" 
-	out_df.to_csv("/g/data/eg3/ab4502/ExtremeWind/skill_scores/logit_fwd_sel_"+model+"_"+event+"_"+pval_str+"_v2.csv")
+	out_df.to_csv("/g/data/eg3/ab4502/ExtremeWind/skill_scores/logit_fwd_sel_"+model+"_"+event+"_"+pval_str+"_v3.csv")
 
 def logit_explicit_cv(outname):
 
 	#Test logit models with explicitly defined predictors
     
-	preds = ["eff_lcl","U1","sb_cape","lr13","rhmin01","lr36","eff_cin"]
+	preds = ["ebwd","lr13","ml_el","Umean03","rhmin03"]
 	barra_aws = logit_predictor_test("barra", "is_conv_aws", preds, "t_totals", 16)
-	preds = ["ml_cape","Umean06","eff_lcl","scld"]
+	preds = ["ebwd","Umean800_600","lr13","rhmin13","ml_el"]
 	barra_sta = logit_predictor_test("barra", "is_sta", preds, "mlcape*s06", 16)
-	preds = ["ml_el","Umean03","eff_lcl","dpd700","lr36","rhmin01"]
+	preds = ["ebwd","Umean800_600","lr13","rhmin13","srhe_left","q_melting","eff_lcl"]
 	era5_aws = logit_predictor_test("era5", "is_conv_aws", preds, "t_totals", 16)
-	preds = ["ml_cape","Umean06","srhe_left","lr13"]
+	preds = ["ml_cape","Umean06","ebwd","lr13"]
 	era5_sta = logit_predictor_test("era5", "is_sta", preds, "dcp", 16)
 
 	#Name each of the models and put into a list
@@ -795,16 +783,16 @@ def logit_explicit_cv(outname):
 def plot_roc():
 
 	_, era5_aws, era5_sta = optimise_pss("/g/data/eg3/ab4502/ExtremeWind/points/"+\
-			"era5_allvars_v2_2005_2018.pkl", T=1000, compute=False, l_thresh=2,\
-			is_pss="hss", model_name="era5_v3")
+			"era5_allvars_v3_2005_2018.pkl", T=1000, compute=False, l_thresh=2,\
+			is_pss="hss", model_name="era5_v5")
 	_, barra_aws, barra_sta = optimise_pss("/g/data/eg3/ab4502/ExtremeWind/points/"+\
-			"barra_allvars_2005_2018.pkl", T=1000, compute=False, l_thresh=2,\
-			is_pss="hss", model_name="barra_fc_v3")
+			"barra_allvars_v3_2005_2018.pkl", T=1000, compute=False, l_thresh=2,\
+			is_pss="hss", model_name="barra_fc_v5")
 
-	barra_aws_preds = ["eff_lcl","U1","sb_cape","lr13","rhmin03","lr36","eff_cin"]
-	barra_sta_preds = ["ml_cape","Umean06","eff_lcl","srhe_left","lr13","q_melting"]
-	era5_aws_preds = ["ml_el","Umean03","eff_lcl","dpd700","lr36","rhmin01"]
-	era5_sta_preds = ["ml_cape","Umean06","srhe_left","lr13","rhmin01"]
+	barra_aws_preds = ["ebwd","lr13","ml_el","Umean03","rhmin03"]
+	barra_sta_preds = ["ebwd","Umean800_600","lr13","rhmin13","ml_el"]
+	era5_aws_preds = ["ebwd","Umean800_600","lr13","rhmin13","srhe_left","q_melting","eff_lcl"]
+	era5_sta_preds = ["ml_cape","Umean06","ebwd","lr13"]
 	logit = LogisticRegression(class_weight="balanced", solver="liblinear",\
 		max_iter=1000)
 	era5_aws.loc[:,"logit"] = logit.fit(era5_aws[era5_aws_preds], era5_aws["is_conv_aws"]).predict_proba(era5_aws[era5_aws_preds])[:,1]
@@ -816,9 +804,9 @@ def plot_roc():
 	matplotlib.rcParams.update({'font.size': 12})
 	plot_roc_fn(barra_aws, "t_totals", "is_conv_aws", -22000, 2000, -200, 60, 2, 2, 1, "BARRA Measured", "T-Totals")
 	plot_roc_fn(barra_sta, "mlcape*s06", "is_sta", -6000, 1000, -200, 200, 2, 2, 2, "BARRA Reported", "MLCS6")
-	plot_roc_fn(era5_aws, "t_totals", "is_conv_aws", -22000, 2000, -200, 60, 2, 2, 3, "ERA5 Measured", "T-Totals")
-	plot_roc_fn(era5_sta, "dcp", "is_sta", -3000, 750, -200, 200, 2, 2, 4, "ERA5 Reported", "DCP")
-	plt.savefig("roc_example.png", bbox_inches="tight")
+	plot_roc_fn(era5_aws, "t_totals", "is_conv_aws", -20000, 2000, -200, 60, 2, 2, 3, "ERA5 Measured", "T-Totals")
+	plot_roc_fn(era5_sta, "dcp", "is_sta", -1000, 750, -200, 200, 2, 2, 4, "ERA5 Reported", "DCP")
+	plt.savefig("figA5.eps", bbox_inches="tight", dpi=300)
 
 def plot_roc_fn(df, p, event, end_p, step_p, end_logit, step_logit, rows, cols, subplot_no, title, pname):
 
@@ -846,7 +834,7 @@ def plot_roc_fn(df, p, event, end_p, step_p, end_logit, step_logit, rows, cols, 
 	plt.plot(fpr_logit[200:end_logit:step_logit], tpr_logit[200:end_logit:step_logit], color="tab:blue", linestyle="none", marker="o")
 	for i, txt in enumerate(thresh_p[0:end_p:step_p]):
 		if p == "t_totals":
-			plt.annotate(txt.round(1), (fpr_p[0:end_p:step_p][i], tpr_p[0:end_p:step_p][i]), fontsize=12, weight="bold")
+			plt.annotate(txt.round(1), (fpr_p[0:end_p:step_p][i]+0.05, tpr_p[0:end_p:step_p][i]), fontsize=12, weight="bold")
 		elif p == "dcp":
 			plt.annotate(txt.round(3), (fpr_p[0:end_p:step_p][i], tpr_p[0:end_p:step_p][i]), fontsize=12, weight="bold")
 		else:
@@ -863,6 +851,6 @@ if __name__ == "__main__":
 	#fwd_selection("barra", "is_conv_aws", False)
 	#fwd_selection("era5", "is_conv_aws", False)
 
-	#logit_explicit_cv("logit_cv_skill.csv")
-	#plot_roc()
-	colin_test()
+	#logit_explicit_cv("logit_cv_skill_v3.csv")
+	plot_roc()
+	#colin_test()

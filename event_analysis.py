@@ -29,11 +29,11 @@ def auc_test():
 
 	#Do this by calculating the AUC, with confidence intervals attained by bootstrapping.
 
-	era5, df_aws_era5, df_sta_era5 = optimise_pss("/g/data/eg3/ab4502/ExtremeWind/points/era5_allvars_v2_2005_2018.pkl",\
-                         T=1000, compute=False, l_thresh=2, is_pss="hss", model_name="era5_v3",\
+	era5, df_aws_era5, df_sta_era5 = optimise_pss("/g/data/eg3/ab4502/ExtremeWind/points/era5_allvars_v3_2005_2018.pkl",\
+                         T=1000, compute=False, l_thresh=2, is_pss="hss", model_name="era5_v5",\
                          time="floor") 
-	barra, df_aws_barra, df_sta_barra = optimise_pss("/g/data/eg3/ab4502/ExtremeWind/points/barra_allvars_2005_2018.pkl",\
-                         T=1000, compute=False, l_thresh=2, is_pss="hss", model_name="barra_fc_v3",\
+	barra, df_aws_barra, df_sta_barra = optimise_pss("/g/data/eg3/ab4502/ExtremeWind/points/barra_allvars_v3_2005_2018.pkl",\
+                         T=1000, compute=False, l_thresh=2, is_pss="hss", model_name="barra_fc_v5",\
                          time="floor") 
 	df_aws_era5["is_lightning"] = (df_aws_era5["lightning"] >= 2)*1
 	df_aws_barra["is_lightning"] = (df_aws_barra["lightning"] >= 2)*1
@@ -42,10 +42,12 @@ def auc_test():
 	
 	#vlist1 = ["ml_el","eff_el","ml_cape","dcape","srhe_left","Uwindinf","lr13","lr36","rhmin13","U1","Umean06","Umean03","dpd850"]
 	#vlist2 = ["ml_el","eff_el","ml_cape","dcape","srhe_left","Uwindinf","lr13","lr36","rhmin13","U1","Umean06","Umean03","dpd850"]
-	vlist1 = ["ml_el","Umean06","lr13","lr36","U1","ml_cape","srhe_left","scld","Umean03","eff_lcl","rhmin01","rhmin03","sb_cape","eff_cin","dpd700"]
-	vlist2 = ["ml_el","Umean06","lr13","lr36","U1","ml_cape","srhe_left","scld","Umean03","eff_lcl","rhmin01","rhmin03","sb_cape","eff_cin","dpd700"]
+	#vlist1 = ["ml_el","Umean06","lr13","lr36","U1","ml_cape","srhe_left","scld","Umean03","eff_lcl","rhmin01","rhmin03","sb_cape","eff_cin","dpd700"]
+	#vlist2 = ["ml_el","Umean06","lr13","lr36","U1","ml_cape","srhe_left","scld","Umean03","eff_lcl","rhmin01","rhmin03","sb_cape","eff_cin","dpd700"]
 	#vlist1 = ["ml_cape", "ml_el", "srhe_left"]
 	#vlist2 = ["Umean06", "s03", "s06", "lr36", "lr_freezing", "mhgt", "qmean01", "qmeansubcloud"]
+	vlist1 = ["ml_el","ml_cape","eff_lcl","ebwd","srhe_left","lr13","q_melting","rhmin13","rhmin03","Umean800_600","Umean03","Umean06"]
+	vlist2 = ["ml_el","ml_cape","eff_lcl","ebwd","srhe_left","lr13","q_melting","rhmin13","rhmin03","Umean800_600","Umean03","Umean06"]
 	df1 = pd.DataFrame(columns=["era5_auc","era5_ci","barra_auc","barra_ci"], index=vlist1)
 	df2 = pd.DataFrame(columns=["era5_auc","era5_ci","barra_auc","barra_ci"], index=vlist2)
 
@@ -101,8 +103,8 @@ def diagnostics_aws_compare():
 	#Plot 2-d histogram comparing ~4 diagnostics from BARRA and ERA5 with measured gust speeds
 
 	#Load model data and obs at station locations.
-	barra = pd.read_pickle("/g/data/eg3/ab4502/ExtremeWind/points/barra_allvars_2005_2018.pkl")
-	era5 = pd.read_pickle("/g/data/eg3/ab4502/ExtremeWind/points/era5_allvars_v2_2005_2018.pkl")
+	barra = pd.read_pickle("/g/data/eg3/ab4502/ExtremeWind/points/barra_allvars_v3_2005_2018.pkl")
+	era5 = pd.read_pickle("/g/data/eg3/ab4502/ExtremeWind/points/era5_allvars_v3_2005_2018.pkl")
 	obs = pd.read_pickle("/g/data/eg3/ab4502/ExtremeWind/obs/aws/convective_wind_gust_aus_2005_2018.pkl")
 	obs["hourly_ceil_utc"] = pd.DatetimeIndex(obs["gust_time_utc"]).ceil("1H")
 
@@ -122,17 +124,17 @@ def diagnostics_aws_compare():
 
 	#Load HSS and thresholds
 	barra_hss_floor, temp, temp1 = optimise_pss("/g/data/eg3/ab4502/ExtremeWind/points/"+\
-		"barra_allvars_2005_2018.pkl",\
-		T=1000, compute=False, l_thresh=2, is_pss="hss", model_name="barra_fc_v3") 
+		"barra_allvars_v3_2005_2018.pkl",\
+		T=1000, compute=False, l_thresh=2, is_pss="hss", model_name="barra_fc_v5") 
 	era5_hss_floor, temp, temp1 = optimise_pss("/g/data/eg3/ab4502/ExtremeWind/points/"+\
-		"era5_allvars_v2_2005_2018.pkl",\
-		T=1000, compute=False, l_thresh=2, is_pss="hss", model_name="era5_v3")
+		"era5_allvars_v3_2005_2018.pkl",\
+		T=1000, compute=False, l_thresh=2, is_pss="hss", model_name="era5_v5")
 	barra_hss_ceil, temp, temp1 = optimise_pss("/g/data/eg3/ab4502/ExtremeWind/points/"+\
-		"barra_allvars_2005_2018.pkl",time="ceil",\
-		T=1000, compute=False, l_thresh=2, is_pss="hss", model_name="barra_fc_v3") 
+		"barra_allvars_v3_2005_2018.pkl",time="ceil",\
+		T=1000, compute=False, l_thresh=2, is_pss="hss", model_name="barra_fc_v5") 
 	era5_hss_ceil, temp, temp1 = optimise_pss("/g/data/eg3/ab4502/ExtremeWind/points/"+\
-		"era5_allvars_v2_2005_2018.pkl",time="ceil",\
-		T=1000, compute=False, l_thresh=2, is_pss="hss", model_name="era5_v3")
+		"era5_allvars_v3_2005_2018.pkl",time="ceil",\
+		T=1000, compute=False, l_thresh=2, is_pss="hss", model_name="era5_v5")
 
 	#Plotting settings
 	matplotlib.rcParams.update({'font.size': 14})
@@ -231,7 +233,7 @@ def diagnostics_aws_compare():
 	c = plt.colorbar(cax=ax, orientation="horizontal")
 	c.set_label("Days")
 	plt.subplots_adjust(top=0.95, bottom=0.2)
-	plt.savefig("fig3.png",bbox_inches="tight")
+	plt.savefig("fig3.eps", bbox_inches="tight", dpi=300)
 
 
 def compare_obs_soundings():
@@ -239,14 +241,14 @@ def compare_obs_soundings():
 	#Compare observed soundings (2005 - 2015) at Adelaide AP, Woomera, Darwin and Sydney to
 	# ERA-Interim (and later, ERA5 and BARRA-R)
 
-	barra = pd.read_pickle("/g/data/eg3/ab4502/ExtremeWind/points/barra_allvars_2005_2018_2.pkl")
-	era5 = pd.read_pickle("/g/data/eg3/ab4502/ExtremeWind/points/era5_allvars_2005_2018.pkl")
+	barra = pd.read_pickle("/g/data/eg3/ab4502/ExtremeWind/points/barra_allvars_v3_2005_2018.pkl")
+	era5 = pd.read_pickle("/g/data/eg3/ab4502/ExtremeWind/points/era5_allvars_v3_2005_2018.pkl")
 	obs = pd.read_pickle("/g/data/eg3/ab4502/ExtremeWind/points/UA_wrfpython.pkl").\
 		reset_index().rename(columns={"index":"time"})
-	temp, barra_wg10, barra_sta = optimise_pss("/g/data/eg3/ab4502/ExtremeWind/points/barra_allvars_2005_2018_2.pkl",
-		T=1000, compute=False, l_thresh=2, is_pss="hss", model_name="barra_fc") 
-	temp, era5_wg10, barra_sta = optimise_pss("/g/data/eg3/ab4502/ExtremeWind/points/era5_allvars_2005_2018.pkl",
-		T=1000, compute=False, l_thresh=2, is_pss="hss", model_name="era5") 
+	temp, barra_wg10, barra_sta = optimise_pss("/g/data/eg3/ab4502/ExtremeWind/points/barra_allvars_v3_2005_2018.pkl",
+		T=1000, compute=False, l_thresh=2, is_pss="hss", model_name="barra_fc_v5") 
+	temp, era5_wg10, barra_sta = optimise_pss("/g/data/eg3/ab4502/ExtremeWind/points/era5_allvars_v3_2005_2018.pkl",
+		T=1000, compute=False, l_thresh=2, is_pss="hss", model_name="era5_v5") 
 	stn_map = {14015:"Darwin",66037:"Sydney",16001:"Woomera",23034:"Adelaide"}
 	obs["stn_name"] = obs["stn_id"].map(stn_map)
 	mod_cols = ["k_index","t_totals","ml_cape","s06","ml_el","dcape","ml_cin","Umean800_600","Umean01","time","loc_id"]
@@ -311,7 +313,7 @@ def compare_obs_soundings():
 	plt.text(0.08, 0.5, "Model sounding", fontsize=14, transform=plt.gcf().transFigure,\
 		rotation=90, verticalalignment="center")
 	plt.colorbar(cax=ax, orientation="horizontal")
-	plt.savefig("figA1.png",bbox_inches="tight")
+	plt.savefig("figA1.eps", bbox_inches="tight", dpi=300)
 
 def create_mean_variable(variable, model, native=False, native_dir=None):
 
@@ -348,8 +350,8 @@ def create_mean_variable(variable, model, native=False, native_dir=None):
 		ds = xr.open_dataset(files[f])
 		start = dt.datetime.now()
 		print(files[f])
+		ds = ds.isel({"time":np.in1d(ds["time.hour"].values, [0,6,12,18])})
 		if native:
-			ds = ds.isel({"time":np.in1d(ds["time.hour"].values, [0,6,12,18])})
 			ds = ds.sel({"latitude":(ds.latitude <= -9.975) & \
 				(ds.latitude >= -44.525)\
 				,"longitude":(ds.longitude <= 156.275) & \
@@ -591,6 +593,8 @@ def create_threshold_variable(variable, threshold, model, event=None, predictors
 		files = glob.glob("/g/data/eg3/ab4502/ExtremeWind/aus/barra_fc/barra_fc*")
 	elif model == "era5":
 		files = glob.glob("/g/data/eg3/ab4502/ExtremeWind/aus/era5/era5*")
+	elif model == "erai":
+		files = glob.glob("/g/data/eg3/ab4502/ExtremeWind/aus/erai/erai*")
 	else:
 		raise ValueError("INVALID MODEL NAME")
 	files.sort()
@@ -605,12 +609,12 @@ def create_threshold_variable(variable, threshold, model, event=None, predictors
 		from event_analysis import optimise_pss 
 		if model == "barra":
 			pss_df, mod_aws, mod_sta = optimise_pss("/g/data/eg3/ab4502/ExtremeWind/points/"+\
-				"barra_allvars_2005_2018.pkl",\
-				T=1000, compute=False, l_thresh=2, is_pss="hss", model_name="barra_fc") 
+				"barra_allvars_v3_2005_2018.pkl",\
+				T=1000, compute=False, l_thresh=2, is_pss="hss", model_name="barra_fc_v5") 
 		elif model == "era5":
 			pss_df, mod_aws, mod_sta = optimise_pss("/g/data/eg3/ab4502/ExtremeWind/points/"+\
-				"era5_allvars_2005_2018.pkl",\
-				T=1000, compute=False, l_thresh=2, is_pss="hss", model_name="era5") 
+				"era5_allvars_v3_2005_2018.pkl",\
+				T=1000, compute=False, l_thresh=2, is_pss="hss", model_name="era5_v5") 
 		from sklearn.linear_model import LogisticRegression 
 		logit = LogisticRegression(class_weight="balanced", solver="liblinear",max_iter=1000)
 		try:
@@ -658,6 +662,14 @@ def create_threshold_variable(variable, threshold, model, event=None, predictors
 					+ ds[predictors[2]] * logit_mod.coef_[0][2] \
 					+ ds[predictors[3]] * logit_mod.coef_[0][3] +\
 					logit_mod.intercept_) ) ) 
+			elif len(predictors) == 5:
+				logit = 1 / ( 1 + np.exp( -(\
+					ds[predictors[0]] * logit_mod.coef_[0][0] \
+					+ ds[predictors[1]] * logit_mod.coef_[0][1]\
+					+ ds[predictors[2]] * logit_mod.coef_[0][2]\
+					+ ds[predictors[3]] * logit_mod.coef_[0][3]\
+					+ ds[predictors[4]] * logit_mod.coef_[0][4] +\
+					logit_mod.intercept_) ) ) 
 			elif len(predictors) == 7:
 				logit = 1 / ( 1 + np.exp( -(\
 					ds[predictors[0]] * logit_mod.coef_[0][0] \
@@ -681,6 +693,32 @@ def create_threshold_variable(variable, threshold, model, event=None, predictors
 					logit_mod.intercept_) ) ) 
 			else:
 				raise ValueError("FUNCTION ONLY HANDLES 6 OR 8 PREDICTORS")
+			xr.Dataset({"logit":logit}).to_netcdf("/g/data/eg3/ab4502/ExtremeWind/aus/"+model+"/logit_"+str(logit.time.values[0])[0:7]+".nc",\
+				unlimited_dims="time", encoding={"logit":{"zlib":True, "complevel":9, "least_significant_digit":3}}) 
+			out[f] = ( (logit >= threshold).sum("time") ).values
+			daily_logit = (logit >= threshold).resample({"time":"1D"}).max("time")
+			out_daily[f] = daily_logit.sum("time").values
+			out_mjo_active.append(daily_logit.sel(\
+				{"time":np.in1d(daily_logit.time, mjo_active)}).values*1)
+			out_mjo_inactive.append(daily_logit.sel(\
+				{"time":np.in1d(daily_logit.time, mjo_inactive)}).values*1)
+			mjo_active_days = mjo_active_days + np.in1d(daily_logit.time, mjo_active).sum()
+			mjo_inactive_days = mjo_inactive_days + np.in1d(daily_logit.time, mjo_inactive).sum()
+			mjo_active_times.append(\
+				daily_logit.time[np.in1d(daily_logit.time,mjo_active)].values)
+			mjo_inactive_times.append(\
+				daily_logit.time[np.in1d(daily_logit.time,mjo_inactive)].values)
+		elif variable == "era5_aws_logit":
+			#Instead of training a logistic model, explicitly apply the model trained on AWS events with ERA5
+			logit = 1 / ( 1 + np.exp( -(
+			    f["ebwd"] * 6.05603357e-02
+			    + f["Umean800_600"] * 1.53665063e-01
+			    + f["lr13"] * 9.38160623e-01
+			    + f["rhmin13"] * 3.93280305e-02
+			    + f["srhe_left"] * 1.70963064e-02
+			    + f["q_melting"] * 3.80715209e-01
+			    + f["eff_lcl"] * 4.68038403e-04
+			    - 12.864909412834322) ) )
 			out[f] = ( (logit >= threshold).sum("time") ).values
 			daily_logit = (logit >= threshold).resample({"time":"1D"}).max("time")
 			out_daily[f] = daily_logit.sum("time").values
@@ -1246,7 +1284,7 @@ def test_pss_location(event, param_list, df=None, pss_df=None, l_thresh=2):
 	return pss_df_loc
 
 def optimise_pss(model_fname,T=1000, compute=True, l_thresh=2, is_pss="pss", model_name="erai", time="floor",\
-	exclude_logit_hits=False, logit_mod="era5"):
+	exclude_logit_hits=False, logit_mod="era5", hss_min_pod=0.66):
 
 	#model_fname is the path to the model point data
 	#T is the number of linear steps between the max and min of a parameter, used to test the pss
@@ -1259,22 +1297,24 @@ def optimise_pss(model_fname,T=1000, compute=True, l_thresh=2, is_pss="pss", mod
 	#For barra: /g/data/eg3/ab4502/ExtremeWind/points/barra_allvars_2005_2018.pkl
 
 	model = pd.read_pickle(model_fname).dropna()
-	if time == "floor":
-		param_list = np.delete(np.array(model.columns), \
-		    np.where((np.array(model.columns)=="lat") | \
-		    (np.array(model.columns)=="lon") | \
-		    (np.array(model.columns)=="loc_id") | \
-		    (np.array(model.columns)=="time")))
-	else:
-		param_list = ["wg10"]
+	param_list = np.delete(np.array(model.columns), \
+	    np.where((np.array(model.columns)=="lat") | \
+	    (np.array(model.columns)=="lon") | \
+	    (np.array(model.columns)=="loc_id") | \
+	    (np.array(model.columns)=="time")))
 	obs = pd.read_pickle("/g/data/eg3/ab4502/ExtremeWind/obs/aws/convective_wind_gust_aus_2005_2018.pkl")
 	obs["hourly_ceil_utc"] = pd.DatetimeIndex(obs["gust_time_utc"]).ceil("1H")
 	obs["sta_date_ceil"] = np.where(obs.sta_date_ceil.isna(), obs.hourly_ceil_utc, obs["sta_date_ceil"])
 	obs["sta_date_floor"] = np.where(obs.sta_date_floor.isna(), obs.hourly_floor_utc, obs["sta_date_floor"])
-	#obs["hourly_floor_sta"] = np.where(obs.sta_date.isna(), obs.hourly_floor_utc, pd.DatetimeIndex(obs["sta_date"]).floor("1H"))
-	#obs["hourly_ceil_sta"] = np.where(obs.sta_date.isna(), obs.hourly_ceil_utc, pd.DatetimeIndex(obs["sta_date"]) + dt.timedelta(hours=1))
-	#There is one missing entry for parameters needing mhgt
 	if time == "floor":
+	    df_sta = pd.merge(obs[["stn_name","wind_gust","sta_date_floor","tc_affected","lightning","is_sta"]],\
+		    model, how="left",left_on=["stn_name","sta_date_floor"], right_on=["loc_id","time"]).dropna(subset=param_list)
+	    df_aws = pd.merge(obs[["stn_name","wind_gust","hourly_floor_utc","tc_affected","lightning","is_sta"]],\
+		    model, how="left",left_on=["stn_name","hourly_floor_utc"], right_on=["loc_id","time"]).dropna(subset=param_list).\
+		    dropna(subset=["wind_gust"])
+	elif time == "floor2":
+	    obs["sta_date_floor"] = obs["sta_date_floor"] + dt.timedelta(hours=-1)
+	    obs["hourly_floor_utc"] = obs["hourly_floor_utc"] + dt.timedelta(hours=-1)
 	    df_sta = pd.merge(obs[["stn_name","wind_gust","sta_date_floor","tc_affected","lightning","is_sta"]],\
 		    model, how="left",left_on=["stn_name","sta_date_floor"], right_on=["loc_id","time"]).dropna(subset=param_list)
 	    df_aws = pd.merge(obs[["stn_name","wind_gust","hourly_floor_utc","tc_affected","lightning","is_sta"]],\
@@ -1338,20 +1378,20 @@ def optimise_pss(model_fname,T=1000, compute=True, l_thresh=2, is_pss="pss", mod
 		pool = multiprocessing.Pool()
 
 		#Optimise for discriminating lightning and non-lightning
-		print("OPTIMISING "+is_pss+" FOR LIGHTNING...")
-		df_aws.loc[:,"is_lightning"] = 0
-		df_aws.loc[df_aws.lightning >= l_thresh, "is_lightning"] = 1
-		for p in param_list:
-			print(p)
-			test_thresh = np.linspace(df_aws.loc[:,p].min(), np.percentile(df_aws.loc[:,p],99.95) , T)
-			temp_df = df_aws.loc[:,["is_lightning",p]]
-			iterable = itertools.product(test_thresh, [temp_df], [p], ["is_lightning"], [is_pss])
-			res = pool.map(pss, iterable)
-			thresh = [res[i][1] for i in np.arange(len(res))]
-			pss_p = [res[i][0] for i in np.arange(len(res))]
+		#print("OPTIMISING "+is_pss+" FOR LIGHTNING...")
+		#df_aws.loc[:,"is_lightning"] = 0
+		#df_aws.loc[df_aws.lightning >= l_thresh, "is_lightning"] = 1
+		#for p in param_list:
+			#print(p)
+			#test_thresh = np.linspace(df_aws.loc[:,p].min(), np.percentile(df_aws.loc[:,p],99.95) , T)
+			#temp_df = df_aws.loc[:,["is_lightning",p]]
+			#iterable = itertools.product(test_thresh, [temp_df], [p], ["is_lightning"], [is_pss])
+			#res = pool.map(pss, iterable)
+			#thresh = [res[i][1] for i in np.arange(len(res))]
+			#pss_p = [res[i][0] for i in np.arange(len(res))]
 
-			pss_df.loc[p, "threshold_light"] = thresh[np.argmax(np.array(pss_p))]
-			pss_df.loc[p, "pss_light"] = np.array(pss_p).max()
+			#pss_df.loc[p, "threshold_light"] = thresh[np.argmax(np.array(pss_p))]
+			#pss_df.loc[p, "pss_light"] = np.array(pss_p).max()
 
 		#Optimise for discriminating convective AWS and non-convective AWS
 		print("OPTIMISING "+is_pss+" FOR CONVECTIVE AWS EVENTS...")
@@ -1361,7 +1401,7 @@ def optimise_pss(model_fname,T=1000, compute=True, l_thresh=2, is_pss="pss", mod
 			print(p)
 			test_thresh = np.linspace(df_aws.loc[:,p].min(), np.percentile(df_aws.loc[:,p],99.95) , T)
 			temp_df = df_aws.loc[:,["is_conv_aws",p]]
-			iterable = itertools.product(test_thresh, [temp_df], [p], ["is_conv_aws"], [is_pss])
+			iterable = itertools.product(test_thresh, [temp_df], [p], ["is_conv_aws"], [is_pss], [hss_min_pod])
 			res = pool.map(pss, iterable)
 			thresh = [res[i][1] for i in np.arange(len(res))]
 			pss_p = [res[i][0] for i in np.arange(len(res))]
@@ -1375,7 +1415,7 @@ def optimise_pss(model_fname,T=1000, compute=True, l_thresh=2, is_pss="pss", mod
 			print(p)
 			test_thresh = np.linspace(df_sta.loc[:,p].min(), np.percentile(df_sta.loc[:,p],99.95) , T)
 			temp_df = df_sta.loc[:,["is_sta",p]]
-			iterable = itertools.product(test_thresh, [temp_df], [p], ["is_sta"], [is_pss])
+			iterable = itertools.product(test_thresh, [temp_df], [p], ["is_sta"], [is_pss], [hss_min_pod])
 			res = pool.map(pss, iterable)
 			thresh = [res[i][1] for i in np.arange(len(res))]
 			pss_p = [res[i][0] for i in np.arange(len(res))]
@@ -1384,21 +1424,21 @@ def optimise_pss(model_fname,T=1000, compute=True, l_thresh=2, is_pss="pss", mod
 			pss_df.loc[p, "pss_sta"] = np.array(pss_p).max()
 
 		#Optimise for discriminating convective AWS and lightning but non-convective AWS
-		print("OPTIMISING "+is_pss+" FOR CONVECTIVE WIND EVENTS VERSUS CONVECTIVE NON-WIND EVENTS...")
-		df_aws.loc[:,"is_conv_aws_cond_light"] = np.nan
-		df_aws.loc[(df_aws.lightning >= l_thresh) & (df_aws.wind_gust >= 25), "is_conv_aws_cond_light"] = 1
-		df_aws.loc[(df_aws.lightning >= l_thresh) & (df_aws.wind_gust < 25), "is_conv_aws_cond_light"] = 0
-		for p in param_list:
-			print(p)
-			test_thresh = np.linspace(df_aws.loc[:,p].min(), np.percentile(df_aws.loc[:,p],99.95) , T)
-			temp_df = df_aws.loc[:,["is_conv_aws_cond_light",p]]
-			iterable = itertools.product(test_thresh, [temp_df], [p], ["is_conv_aws_cond_light"], [is_pss])
-			res = pool.map(pss, iterable)
-			thresh = [res[i][1] for i in np.arange(len(res))]
-			pss_p = [res[i][0] for i in np.arange(len(res))]
+		#print("OPTIMISING "+is_pss+" FOR CONVECTIVE WIND EVENTS VERSUS CONVECTIVE NON-WIND EVENTS...")
+		#df_aws.loc[:,"is_conv_aws_cond_light"] = np.nan
+		#df_aws.loc[(df_aws.lightning >= l_thresh) & (df_aws.wind_gust >= 25), "is_conv_aws_cond_light"] = 1
+		#df_aws.loc[(df_aws.lightning >= l_thresh) & (df_aws.wind_gust < 25), "is_conv_aws_cond_light"] = 0
+		#for p in param_list:
+		#	print(p)
+		#	test_thresh = np.linspace(df_aws.loc[:,p].min(), np.percentile(df_aws.loc[:,p],99.95) , T)
+		#	temp_df = df_aws.loc[:,["is_conv_aws_cond_light",p]]
+		#	iterable = itertools.product(test_thresh, [temp_df], [p], ["is_conv_aws_cond_light"], [is_pss])
+		#	res = pool.map(pss, iterable)
+		#	thresh = [res[i][1] for i in np.arange(len(res))]
+		#	pss_p = [res[i][0] for i in np.arange(len(res))]
 
-			pss_df.loc[p, "threshold_conv_aws_cond_light"] = thresh[np.argmax(np.array(pss_p))]
-			pss_df.loc[p, "pss_conv_aws_cond_light"] = np.array(pss_p).max()
+		#	pss_df.loc[p, "threshold_conv_aws_cond_light"] = thresh[np.argmax(np.array(pss_p))]
+		#	pss_df.loc[p, "pss_conv_aws_cond_light"] = np.array(pss_p).max()
 
 		pss_df.to_pickle("/g/data/eg3/ab4502/ExtremeWind/skill_scores/"+is_pss+"_"+time+"_df_lightning"+str(l_thresh)+\
 				"_"+model_name+".pkl")
@@ -1422,7 +1462,7 @@ def pss(it):
 
 	#Calculate pss with the help of multiprocessing
 
-	t, df, p, event, score = it
+	t, df, p, event, score, hss_min_pod = it
 
 	try:
 
@@ -1441,7 +1481,7 @@ def pss(it):
 				pss_ge = 0
 		elif score == "hss":
 			#From Doswell (1990) WaF
-			if (hits / (hits + misses)) > 0.66:
+			if (hits / (hits + misses)) > hss_min_pod:
 				cn = float(((df[event]==0) & (df[p]<=t)).sum())
 				pss_ge = ( 2*(hits*cn - misses*fa) ) / \
 					( misses*misses + fa*fa + 2*hits*cn + (misses + fa) * (hits + cn) )
@@ -2085,22 +2125,37 @@ if __name__ == "__main__":
 
 		print("Creating monthly variables from gridded data...")
 
+		create_threshold_variable(variable,float(threshold),model,event=event,\
+			predictors=predictors)
 		create_mean_variable(variable, model, native=False)
-		#create_threshold_variable(variable,float(threshold),model,event=event,\
-		#	predictors=predictors)
 		#create_mjo_phase_variable(variable,float(threshold),model,event=event,\
 		#	predictors=predictors)
 
 	else:	
-		#create_mean_variable("cape",native=True, native_dir="cape")
+		create_threshold_variable("logit",0.83,"era5","is_conv_aws",["ebwd","Umean800_600","lr13","rhmin13","srhe_left","q_melting","eff_lcl"])
+		#create_threshold_variable("logit",0.72,"era5","is_sta",["ebwd","Umean06","ml_cape","lr13"])
+		#create_mean_variable("d2m","era5",native=True, native_dir="d2m")
+		#create_threshold_variable("t_totals",50.9,"era5")
+		#create_threshold_variable("dcp",0.91,"era5")
+		#create_threshold_variable("eff_sherb",0.90,"era5")
+		#create_mean_variable("lr03","era5")
+		#create_mean_variable("lr700_500","era5")
+		#create_mean_variable("ta850","era5")
+		#create_mean_variable("ta500","era5")
+		#create_mean_variable("dp850","era5")
+		#create_mean_variable("ebwd","era5")
+		#create_mean_variable("t_totals","era5")
+		#create_mean_variable("eff_sherb","era5")
 		#compare_obs_soundings()
 		#diagnostics_aws_compare()
-		auc_test()
-		#optimise_pss("/g/data/eg3/ab4502/ExtremeWind/points/era5_allvars_v2_2005_2018.pkl",T=1000,\
-		#	compute=True, l_thresh=2, is_pss="hss", model_name="era5_v4",time="floor")
-		#optimise_pss("/g/data/eg3/ab4502/ExtremeWind/points/barra_allvars_2005_2018.pkl",T=1000,
-		#	compute=True, l_thresh=2, is_pss="hss", model_name="barra_fc_v4",time="floor")
-		#optimise_pss("/g/data/eg3/ab4502/ExtremeWind/points/era5_allvars_v2_2005_2018.pkl",T=1000,\
-		#	compute=True, l_thresh=2, is_pss="hss", model_name="era5_v4",time="ceil")
-		#optimise_pss("/g/data/eg3/ab4502/ExtremeWind/points/barra_allvars_2005_2018.pkl",T=1000,\
-			#compute=True, l_thresh=2, is_pss="hss", model_name="barra_fc_v4",time="ceil")
+		#auc_test()
+		#optimise_pss("/g/data/eg3/ab4502/ExtremeWind/points/barra_allvars_v3_2005_2018.pkl",T=1000,\
+		#	compute=True, l_thresh=2, is_pss="hss", model_name="barra_mean_v5",time="floor2")
+		#optimise_pss("/g/data/eg3/ab4502/ExtremeWind/points/barra_rad50km_max_v3_2005_2018.pkl",T=1000,\
+		#	compute=True, l_thresh=2, is_pss="hss", model_name="barra_max_v5",time="floor")
+		#optimise_pss("/g/data/eg3/ab4502/ExtremeWind/points/barra_allvars_v3_2005_2018.pkl",T=1000,
+		#	compute=True, l_thresh=2, is_pss="hss", model_name="barra_fc_v5",time="ceil")
+		#optimise_pss("/g/data/eg3/ab4502/ExtremeWind/points/era5_allvars_v3_2005_2018.pkl",T=1000,\
+		#	compute=True, l_thresh=2, is_pss="hss", model_name="era5_v5",time="ceil")
+		#optimise_pss("/g/data/eg3/ab4502/ExtremeWind/points/barra_allvars_v3_2005_2018.pkl",T=1000,\
+		#	compute=True, l_thresh=2, is_pss="hss", model_name="barra_fc_v5",time="ceil")

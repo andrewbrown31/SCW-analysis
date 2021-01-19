@@ -7,44 +7,26 @@ import numpy as np
 import matplotlib.pyplot as plt
 import xarray as xr
 
-def plot_mean(models, hist_y1, hist_y2, outname, variables, qm=True):
+def plot_mean(models, hist_y1, hist_y2, outname, qm=True):
 
 	#Taken from cmip_analysis. However, this function accepts the dataframe created by save_mean(), which 
 	# consists of 2d variables representing the mean for each month (and the total mean). This mean has been 
 	# generated from 6-hourly data, quantile matched to ERA5.
 
-	log = {"lr36":False,"mhgt":False,"ml_el":False,"qmean01":False,"srhe_left":False,\
-		    "Umean06":False, "dcape":False, "mu_cape":False, "ml_cape":False, "s06":False, "srh01_left":False,\
-		    "dcp":False,"scp_fixed":False,"mucape*s06":False,"ebwd":False,"lr03":False,"lr700_500":False,"ta850":False,\
-		    "ta500":False, "dp850":False, "Umean800_600":False, "lr13":False, "rhmin13":False, "q_melting":False, "eff_lcl":False}
-	titles = {"lr36":"LR36","mhgt":"MHGT","ml_el":"ML-EL","qmean01":"Qmean01","srhe_left":"SRHE",\
-		    "Umean06":"Umean06", "dcape":"DCAPE", "mu_cape":"MU-CAPE", "ml_cape":"ML-CAPE", "s06":"S06", "srh01_left":"SRH01",\
-		    "dcp":"DCP","scp_fixed":"SCP","mucape*s06":"MUCS6","ebwd":"EBWD", "lr03":"LR03","lr700_500":"LR75","dp850":"DP850",\
-		    "ta850":"T850","ta500":"T500", "Umean800_600":"Umean800-600", "lr13":"LR13", "rhmin13":"RHMin13", "q_melting":"Q-Melting",\
-		    "eff_lcl":"Eff-LCL"}
-	rnge = {"lr03":[4,8],"lr700_500":[5,8],"mhgt":[None,None],"ml_el":[None,None],"qmean01":[None,None],"srhe_left":[0,15],\
-		    "Umean06":[3,15], "dcape":[100,1000], "mu_cape":[0,1500], "ml_cape":[0,1200], \
-		    "s06":[6,20],"srh01_left":[None,None],"ebwd":[0,10],"dp850":[-6,10], "ta850":[0,25], "ta500":[-20,-5],\
-		    "dcp":[0,0.2],"scp_fixed":[0,0.2],"mucape*s06":[0,50000], "Umean800_600":[3,15], "lr13":[3,8], "rhmin13":[0,80], "q_melting":[1,4],\
-		    "eff_lcl":[0,1000]}
-	rnge2 = {"lr36":[None,None],"mhgt":[None,None],"ml_el":[None,None],"qmean01":[None,None],"srhe_left":[None,None],\
-		    "Umean06":[None,None], "dcape":[None,None], "mu_cape":[None,None], "ml_cape":[0,1200], \
-            "s06":[None,None],"srh01_left":[None,None],\
-		    "dcp":[0,0.32],"scp_fixed":[0,0.05],"mucape*s06":[0,15000], "Umean800_600":[None,None], "lr13":[None,None], "rhmin13":[None,None], "q_melting":[None,None], "eff_lcl":[None,None]}
-	units = {"lr03":"deg km$^{-1}$","mu_cape":"J kg$^{-1}$",
-		    "ebwd":"m s$^{-1}$","Umean06":"m s$^{-1}$","s06":"m s$^{-1}$",\
-		    "dp850":"deg C","ta500":"deg C","ta850":"deg C","srhe_left":"m$^{-2}$ s$^{-2}$",\
-		    "lr700_500":"deg km$^{-1}$", "dcape":"J kg$^{-1}$", "Umean800_600":"m s$^{-1}$", "lr13":"deg km$^{-1}$", "rhmin13":"%", "q_melting":"g kg$^{-1}$", "eff_lcl":"m"}
+	log = {"t_totals":False,"eff_sherb":False,"dcp":False}
+	titles = {"t_totals":"T-Totals","eff_sherb":"SHERBE","dcp":"DCP"}
+	rnge = {"t_totals":[30,45], "eff_sherb":[0,0.4], "dcp":[0,.4]}
+	units = {"t_totals":"","eff_sherb":"","dcp":""}
 
 	m = Basemap(llcrnrlon=112, llcrnrlat=-44.5, urcrnrlon=156.25, \
 		urcrnrlat=-10,projection="cyl")
-	plt.figure(figsize=[6,14])
+	plt.figure(figsize=[6,8])
 	tick_locator = ticker.MaxNLocator(nbins=4)
 	n = 10
 	r = 12
 	cm = plt.get_cmap("YlOrBr")
 	cnt=1
-	for p in variables:
+	for p in ["t_totals","eff_sherb","dcp"]:
 			if qm == True:
 				data = get_mean(models, p, hist_y1, hist_y2, hist_y1, hist_y2, experiment="historical")
 				cmip = np.median(np.stack([data[i][p].values for i in np.arange(1,13)]), axis=0)
@@ -64,7 +46,7 @@ def plot_mean(models, hist_y1, hist_y2, outname, variables, qm=True):
 			lat = data[0].lat.values
 			x,y = np.meshgrid(lon,lat)
 
-			plt.subplot(len(variables),2,cnt)
+			plt.subplot(3,2,cnt)
 			if cnt==1:
 				plt.title("ERA5")
 			m.drawcoastlines()
@@ -81,7 +63,7 @@ def plot_mean(models, hist_y1, hist_y2, outname, variables, qm=True):
 			cb.ax.tick_params(labelsize=12)
 			cnt=cnt+1
 
-			plt.subplot(len(variables),2,cnt)
+			plt.subplot(3,2,cnt)
 			if cnt==2:
 				plt.title("CMIP5")
 			m.drawcoastlines()
@@ -157,7 +139,5 @@ if __name__ == "__main__":
 	hist_y2 = 2005
 
 	plot_mean(models, hist_y1, hist_y2,\
-		"mean_logit_variable_compare",["Umean800_600","lr13","rhmin13","srhe_left","q_melting","eff_lcl"], qm=False)
-	plot_mean(models, hist_y1, hist_y2,\
-		"mean_variable_compare",["mu_cape","dcape", "ebwd", "lr03", "lr700_500", "dp850", "ta850", "ta500", "Umean06", "s06"], qm=False)
+		"mean_indices_compare", qm=False)
 

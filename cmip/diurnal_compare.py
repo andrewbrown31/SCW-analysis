@@ -56,6 +56,7 @@ def load_logit(model, ensemble, era52=False):
         return model_6hr
 
 if __name__ == "__main__":
+	lsm = get_era5_lsm()
 	access0 = load_logit("ACCESS1-0","r1i1p1").persist()
 	access3 = load_logit("ACCESS1-3","r1i1p1").persist()
 	access_esm = load_logit("ACCESS-ESM1-5","r1i1p1f1").persist()
@@ -81,7 +82,8 @@ if __name__ == "__main__":
 	df3 = pd.DataFrame(index=[0,6,12,18])
 	for i in np.arange(len(x)):
 		print(i)
-		tot = np.nansum(x[i]["logit_aws"].values)
+		#tot = np.nansum(x[i]["logit_aws"].values)
+		tot = np.nansum(xr.where(lsm==1, np.nansum(x[i]["logit_aws"].values >= 0.72, axis=0), np.nan))
 		out = []
 		if n[i] in ["IPSL-CM5A-LR", "IPSL-CM5A-MR"]:
 			times = [3,9,15,21]
@@ -89,7 +91,8 @@ if __name__ == "__main__":
 			times = [0,6,12,18]
 		for t in times:
 			print(t)
-			out.append(np.nansum(x[i].sel({"time":x[i]["time.hour"]==t})["logit_aws"].values) / tot)
+			out.append(np.nansum(xr.where(lsm==1, np.nansum(x[i]["logit_aws"].sel({"time":x[i]["time.hour"]==t}).values >= 0.72, axis=0), np.nan)) / tot)
+			#out.append(np.nansum(x[i].sel({"time":x[i]["time.hour"]==t})["logit_aws"].values) / tot)
 		if n[i] in ["IPSL-CM5A-LR", "IPSL-CM5A-MR"]:
 			df[n[i]] = out
 		elif n[i] in ["ACCESS-ESM1-5", "ACCESS-CM2"]:
@@ -111,4 +114,4 @@ if __name__ == "__main__":
 	plt.subplots_adjust(bottom=0.3)
 	plt.legend((l.lines[-6], l.lines[-5],l.lines[-4],l.lines[-3],l.lines[-2],l.lines[-1]), ("CMIP5*","ERA5","IPSL-CM5A-LR","IPSL-CM5A-MR","ACCESS-ESM1-5","ACCESS-CM2"), loc=8, bbox_to_anchor=(0.5,-0.5), ncol=3)
 	plt.xlim([-1, 24])
-	plt.savefig("out.png",bbox_inches="tight")
+	plt.savefig("/g/data/eg3/ab4502/figs/CMIP/diurnal_variability_logit.png",bbox_inches="tight")

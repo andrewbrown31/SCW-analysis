@@ -1,7 +1,7 @@
-from calc_param import nc_attributes
+import tqdm
 from scipy.stats import ttest_ind
 from era5_read import get_mask
-from numba import jit
+from numba import njit, prange
 import argparse
 from mpl_toolkits.basemap import Basemap
 import pandas as pd
@@ -263,7 +263,7 @@ def seasonal_freq_change_significance(hist_da_list, scenario_da_list,\
 					axis=0, equal_var=False)[1]),\
 			    },\
 			coords={"lat":lat,"lon":lon}).\
-		to_netcdf("/g/data/eg3/ab4502/ExtremeWind/aus/regrid_1.5/"+\
+		to_netcdf("/g/data/eg3/ab4502/ExtremeWind/global/regrid_1.5/"+\
 		    models[i][0]+"_"+models[i][1]+"_sig_"+p+"_"+str(threshold)+"_"+experiment+"_"+str(y1)+"_"+str(y2)+".nc")
 
 def save_seasonal_freq(data_list, da_list, threshold, models, p, lon, lat, y1, y2, experiment=""):
@@ -339,7 +339,7 @@ def save_seasonal_freq(data_list, da_list, threshold, models, p, lon, lat, y1, y
 					((y2+1) - y1)),\
 			    },\
 			coords={"lat":lat,"lon":lon}).\
-		to_netcdf("/g/data/eg3/ab4502/ExtremeWind/aus/regrid_1.5/"+\
+		to_netcdf("/g/data/eg3/ab4502/ExtremeWind/global/regrid_1.5/"+\
 		    models[i][0]+"_"+models[i][1]+"_seasonal_freq_"+p+"_"+str(threshold)+"_"+experiment+"_"+str(y1)+"_"+str(y2)+".nc")
 
 def save_daily_freq(data_list, da_list, threshold, models, p, lon, lat, y1, y2, experiment=""):
@@ -415,7 +415,7 @@ def save_daily_freq(data_list, da_list, threshold, models, p, lon, lat, y1, y2, 
 					    data[np.in1d(da_list[i]["time.month"],[45,6,7,8])].shape[0]),\
 			    },\
 			coords={"lat":lat,"lon":lon}).\
-		to_netcdf("/g/data/eg3/ab4502/ExtremeWind/aus/regrid_1.5/"+\
+		to_netcdf("/g/data/eg3/ab4502/ExtremeWind/global/regrid_1.5/"+\
 		    models[i][0]+"_"+models[i][1]+"_daily_freq_"+p+"_"+experiment+"_"+str(y1)+"_"+str(y2)+".nc")
 
 def save_mean(data_list, da_list, models, p, lon, lat, y1, y2, experiment=""):
@@ -473,7 +473,7 @@ def save_mean(data_list, da_list, models, p, lon, lat, y1, y2, experiment=""):
 					axis=0)),
 			    },\
 			coords={"lat":lat,"lon":lon}).\
-		to_netcdf("/g/data/eg3/ab4502/ExtremeWind/aus/regrid_1.5/"+\
+		to_netcdf("/g/data/eg3/ab4502/ExtremeWind/global/regrid_1.5/"+\
 		    models[i][0]+"_"+models[i][1]+"_mean_"+p+"_"+experiment+"_"+str(y1)+"_"+str(y2)+".nc")
 
 def get_seasonal_sig(models, p, y1, y2, experiment=""):
@@ -483,7 +483,7 @@ def get_seasonal_sig(models, p, y1, y2, experiment=""):
 		if models[i][0]=="ERA5":
 			mean_out.append(None)
 		else:
-			mean_out.append(xr.open_dataset("/g/data/eg3/ab4502/ExtremeWind/aus/regrid_1.5/"+\
+			mean_out.append(xr.open_dataset("/g/data/eg3/ab4502/ExtremeWind/global/regrid_1.5/"+\
 			    models[i][0]+"_"+models[i][1]+"_sig_"+p+"_"+experiment+"_"+str(y1)+"_"+str(y2)+".nc"))
 	return mean_out
 
@@ -492,11 +492,11 @@ def get_seasonal_freq(models, p, y1, y2, era5_y1, era5_y2, experiment=""):
 	mean_out = []
 	for i in np.arange(len(models)):
 		if models[i][0]=="ERA5":
-			mean_out.append(xr.open_dataset("/g/data/eg3/ab4502/ExtremeWind/aus/regrid_1.5/"+\
+			mean_out.append(xr.open_dataset("/g/data/eg3/ab4502/ExtremeWind/global/regrid_1.5/"+\
 			    models[i][0]+"_"+models[i][1]+"_seasonal_freq_"+p+"_historical_"+\
 			    str(era5_y1)+"_"+str(era5_y2)+".nc"))
 		else:
-			mean_out.append(xr.open_dataset("/g/data/eg3/ab4502/ExtremeWind/aus/regrid_1.5/"+\
+			mean_out.append(xr.open_dataset("/g/data/eg3/ab4502/ExtremeWind/global/regrid_1.5/"+\
 			    models[i][0]+"_"+models[i][1]+"_seasonal_freq_"+p+"_"+experiment+"_"+str(y1)+"_"+str(y2)+".nc"))
 	return mean_out
 
@@ -505,11 +505,11 @@ def get_daily_freq(models, p, y1, y2, era5_y1, era5_y2, experiment=""):
 	mean_out = []
 	for i in np.arange(len(models)):
 		if models[i][0]=="ERA5":
-			mean_out.append(xr.open_dataset("/g/data/eg3/ab4502/ExtremeWind/aus/regrid_1.5/"+\
+			mean_out.append(xr.open_dataset("/g/data/eg3/ab4502/ExtremeWind/global/regrid_1.5/"+\
 			    models[i][0]+"_"+models[i][1]+"_daily_freq_"+p+"_historical_"+\
 			    str(era5_y1)+"_"+str(era5_y2)+".nc"))
 		else:
-			mean_out.append(xr.open_dataset("/g/data/eg3/ab4502/ExtremeWind/aus/regrid_1.5/"+\
+			mean_out.append(xr.open_dataset("/g/data/eg3/ab4502/ExtremeWind/global/regrid_1.5/"+\
 			    models[i][0]+"_"+models[i][1]+"_daily_freq_"+p+"_"+experiment+"_"+str(y1)+"_"+str(y2)+".nc"))
 	return mean_out
 
@@ -518,11 +518,11 @@ def get_mean(models, p, y1, y2, era5_y1, era5_y2, experiment=""):
 	mean_out = []
 	for i in np.arange(len(models)):
 		if models[i][0]=="ERA5":
-			mean_out.append(xr.open_dataset("/g/data/eg3/ab4502/ExtremeWind/aus/regrid_1.5/"+\
+			mean_out.append(xr.open_dataset("/g/data/eg3/ab4502/ExtremeWind/global/regrid_1.5/"+\
 			    models[i][0]+"_"+models[i][1]+"_mean_"+p+"_historical_"+\
 			    str(era5_y1)+"_"+str(era5_y2)+".nc"))
 		else:
-			mean_out.append(xr.open_dataset("/g/data/eg3/ab4502/ExtremeWind/aus/regrid_1.5/"+\
+			mean_out.append(xr.open_dataset("/g/data/eg3/ab4502/ExtremeWind/global/regrid_1.5/"+\
 			    models[i][0]+"_"+models[i][1]+"_mean_"+p+"_"+experiment+"_"+str(y1)+"_"+str(y2)+".nc"))
 	return mean_out
 
@@ -531,10 +531,10 @@ def load_logit(model, ensemble, p, lsm, hist_y1, hist_y2, scenario_y1, scenario_
 
 	hist_out = []
 	scenario_out = []
-	hist_fname = "/g/data/eg3/ab4502/ExtremeWind/aus/regrid_1.5/"+\
+	hist_fname = "/g/data/eg3/ab4502/ExtremeWind/global/regrid_1.5/"+\
 		model+"_"+ensemble+"_"+p+"_historical_"+\
 		str(hist_y1)+"_"+str(hist_y2)+".nc"
-	scenario_fname = "/g/data/eg3/ab4502/ExtremeWind/aus/regrid_1.5/"+\
+	scenario_fname = "/g/data/eg3/ab4502/ExtremeWind/global/regrid_1.5/"+\
 		model+"_"+ensemble+"_"+p+"_"+experiment+"_"+\
 		str(scenario_y1)+"_"+str(scenario_y2)+".nc"
 
@@ -566,10 +566,10 @@ def calc_logit(model, ensemble, p, lsm, hist_y1, hist_y2, scenario_y1, scenario_
 	era5_lsm = get_era5_lsm()
 
 	if p == "logit_aws":
-		vars = ["ebwd","Umean800_600","lr13",\
-			    "rhmin13","srhe_left","q_melting","eff_lcl"]
+		vars = ["lr36","mhgt","ml_el",\
+			    "qmean01","srhe_left","Umean06"]
 	elif p == "logit_sta":
-		vars = ["ebwd","Umean06","ml_cape","lr13"]
+		vars = ["lr36","ml_cape","srhe_left","Umean06"]
 	elif p == "logit_aws_barra":
 		vars = ["lr36","lr_freezing","ml_el",\
 			    "s06","srhe_left","Umean06"]
@@ -623,16 +623,15 @@ def calc_logit(model, ensemble, p, lsm, hist_y1, hist_y2, scenario_y1, scenario_
 	out_logit = []
 	for var_list in [var_list_hist, var_list_scenario]:
 		if p == "logit_aws":
-			z = 6.1e-2*var_list[0] + 1.5e-1*var_list[1] +\
-				     9.4e-1*var_list[2] \
-				    + 3.9e-2*var_list[3] \
+			z = 6.4e-1*var_list[0] - 1.2e-4*var_list[1] +\
+				     4.4e-4*var_list[2] \
+				    -1.0e-1*var_list[3] \
 				    + 1.7e-2*var_list[4] \
-				    + 3.8e-1*var_list[5] \
-				    +4.7e-4*var_list[6] - 13
+				    + 1.8e-1*var_list[5] - 7.4
 		elif p == "logit_sta":
-			z = 1.3e-1*var_list[0] + 1.7e-1*var_list[1] +\
-				     1.6e-3*var_list[2] \
-				    +4.1e-1*var_list[3] - 5.6
+			z = 3.3e-1*var_list[0] + 1.6e-3*var_list[1] +\
+				     2.9e-2*var_list[2] \
+				    +1.6e-1*var_list[3] - 4.5
 		elif p == "logit_aws_barra":
 			z = 8.5e-1*var_list[0] + 6.2e-1*var_list[1] +\
 				     3.9e-4*var_list[2] \
@@ -745,14 +744,14 @@ def plot_scenario_hist(historical, scenario, subplots, models, log, outname):
 def load_qm(model_name, ensemble, p, lsm, hist_y1, hist_y2, scenario_y1, scenario_y2, experiment="historical"):
 
         if lsm:
-                hist_fname = "/g/data/eg3/ab4502/ExtremeWind/aus/regrid_1.5/"+\
+                hist_fname = "/g/data/eg3/ab4502/ExtremeWind/global/regrid_1.5/"+\
                     model_name+"_"+ensemble+"_historical_"+p+"_qm_lsm_"+str(hist_y1)+"_"+str(hist_y2)+".nc"
-                scenario_fname = "/g/data/eg3/ab4502/ExtremeWind/aus/regrid_1.5/"+\
+                scenario_fname = "/g/data/eg3/ab4502/ExtremeWind/global/regrid_1.5/"+\
                     model_name+"_"+ensemble+"_"+experiment+"_"+p+"_qm_lsm_"+str(scenario_y1)+"_"+str(scenario_y2)+".nc"
         else:
-                hist_fname = "/g/data/eg3/ab4502/ExtremeWind/aus/regrid_1.5/"+\
+                hist_fname = "/g/data/eg3/ab4502/ExtremeWind/global/regrid_1.5/"+\
                     model_name+"_"+ensemble+"_historical_"+p+"_qm_"+str(hist_y1)+"_"+str(hist_y2)+".nc"
-                scenario_fname = "/g/data/eg3/ab4502/ExtremeWind/aus/regrid_1.5/"+\
+                scenario_fname = "/g/data/eg3/ab4502/ExtremeWind/global/regrid_1.5/"+\
                     model_name+"_"+ensemble+"_"+experiment+"_"+p+"_qm_"+str(scenario_y1)+"_"+str(scenario_y2)+".nc"
         mod_xhat_hist = xr.open_dataset(hist_fname)[p]
         mod_xhat_scenario = xr.open_dataset(scenario_fname)[p]
@@ -765,19 +764,24 @@ def create_qm_combined(era5_da, model_da_hist, model_da_scenario, \
 	    save_hist_qm, experiment="historical",loop=True):
 
         if lsm:
-                hist_fname = "/g/data/eg3/ab4502/ExtremeWind/aus/regrid_1.5/"+\
+                hist_fname = "/g/data/eg3/ab4502/ExtremeWind/global/regrid_1.5/"+\
                     model_name+"_"+ensemble+"_historical_"+p+"_qm_lsm_"+str(hist_y1)+"_"+str(hist_y2)+".nc"
-                scenario_fname = "/g/data/eg3/ab4502/ExtremeWind/aus/regrid_1.5/"+\
+                scenario_fname = "/g/data/eg3/ab4502/ExtremeWind/global/regrid_1.5/"+\
                     model_name+"_"+ensemble+"_"+experiment+"_"+p+"_qm_lsm_"+str(scenario_y1)+"_"+str(scenario_y2)+".nc"
         else:
-                hist_fname = "/g/data/eg3/ab4502/ExtremeWind/aus/regrid_1.5/"+\
+                hist_fname = "/g/data/eg3/ab4502/ExtremeWind/global/regrid_1.5/"+\
                     model_name+"_"+ensemble+"_historical_"+p+"_qm_"+str(hist_y1)+"_"+str(hist_y2)+".nc"
-                scenario_fname = "/g/data/eg3/ab4502/ExtremeWind/aus/regrid_1.5/"+\
+                scenario_fname = "/g/data/eg3/ab4502/ExtremeWind/global/regrid_1.5/"+\
                     model_name+"_"+ensemble+"_"+experiment+"_"+p+"_qm_"+str(scenario_y1)+"_"+str(scenario_y2)+".nc"
         if loop:
-                mod_xhat_hist, mod_xhat_scenario = \
-		    qm_cmip_combined_loop(era5_da, model_da_hist, model_da_scenario,\
-		    replace_zeros, get_mask(era5_da.lon.values, era5_da.lat.values))
+               if lsm:
+                        mod_xhat_hist, mod_xhat_scenario = \
+			    qm_cmip_combined_loop(era5_da, model_da_hist, model_da_scenario,\
+			    replace_zeros, get_mask(era5_da.lon.values, era5_da.lat.values))
+               else:
+                        mod_xhat_hist, mod_xhat_scenario = \
+			    qm_cmip_combined_loop(era5_da, model_da_hist, model_da_scenario,\
+			    replace_zeros, np.ones((era5_da.lat.values.shape[0], era5_da.lon.values.shape[0])))
         else:
                 mod_xhat_hist, mod_xhat_scenario = \
 		    qm_cmip_combined(era5_da, model_da_hist, model_da_scenario,\
@@ -787,14 +791,16 @@ def create_qm_combined(era5_da, model_da_hist, model_da_scenario, \
 			(("time", "lat", "lon"), mod_xhat_hist)},\
                     coords={"time":model_da_hist.time.values,\
 			"lat":model_da_hist.lat, "lon":model_da_hist.lon}).\
-                    to_netcdf(hist_fname, mode="w",engine="h5netcdf",\
-			    encoding={p:{"zlib":True, "complevel":9, "least_significant_digit":8}})
+                    to_netcdf(hist_fname, mode="w",\
+			    #engine="h5netcdf",\
+			    encoding={p:{"zlib":True, "complevel":1, "least_significant_digit":1}})
         xr.Dataset(data_vars={p:\
 	    (("time", "lat", "lon"), mod_xhat_scenario)},\
 		    coords={"time":model_da_scenario.time.values,\
 			"lat":model_da_scenario.lat, "lon":model_da_scenario.lon}).\
-		    to_netcdf(scenario_fname, mode="w",engine="h5netcdf",\
-			encoding={p:{"zlib":True, "complevel":9}})
+		    to_netcdf(scenario_fname, mode="w",\
+			#engine="h5netcdf",\
+			encoding={p:{"zlib":True, "complevel":1, "least_significant_digit":1}})
 
         return mod_xhat_hist, mod_xhat_scenario
 
@@ -865,21 +871,21 @@ def load_all_qm_combined(data_hist, data_scenario, models, p, lsm, replace_zeros
                                     data_hist[0].lon.values, data_hist[0].lat.values,\
                                     scenario_y1, scenario_y2, experiment=experiment)
 
-@jit
+#@njit(parallel=True)
 def qm_cmip_combined_loop(era5_da, model_da1, model_da2, replace_zeros, mask):
 
-	vals1 = model_da1.values
-	vals2 = model_da2.values
-	obs = era5_da.values
+	vals1 = model_da1.astype("float32").values
+	vals2 = model_da2.astype("float32").values
+	obs = era5_da.astype("float32").values
 
-	model_xhat1 = np.zeros(vals1.shape) * np.nan
-	model_xhat2 = np.zeros(vals2.shape) * np.nan
+	#model_xhat1 = np.zeros(vals1.shape) * np.nan
+	#model_xhat2 = np.zeros(vals2.shape) * np.nan
 	for m in np.arange(1,13):
-		print(m)
+		print("INFO: QM FOR MONTH="+str(m))
 		model_m_inds1 = (model_da1["time.month"] == m)
 		model_m_inds2 = (model_da2["time.month"] == m)
 		obs_m_inds = (era5_da["time.month"] == m)
-		for i in np.arange(vals1.shape[1]):
+		for i in tqdm.tqdm(np.arange(vals1.shape[1])):
 			for j in np.arange(vals1.shape[2]):
 				if mask[i,j] == 1:
 				
@@ -899,19 +905,32 @@ def qm_cmip_combined_loop(era5_da, model_da1, model_da2, replace_zeros, mask):
 						model_invcdf,model_p)
 
 					#Interpolate the model CDF probabilities onto the observed CDF values
-					model_xhat1[model_m_inds1,i,j] = \
-						np.interp(model_p1,obs_p,obs_invcdf)
-					model_xhat2[model_m_inds2,i,j] = \
-						np.interp(model_p2,obs_p,obs_invcdf)
-	if replace_zeros:
-                model_xhat1[vals1 == 0] = 0
-                model_xhat2[vals2 == 0] = 0
-	model_xhat1[(model_xhat1>0) & (np.isinf(model_xhat1))] = np.max(model_xhat1)
-	model_xhat1[(model_xhat1<0) & (np.isinf(model_xhat1))] = np.min(model_xhat1)
-	model_xhat2[(model_xhat2>0) & (np.isinf(model_xhat2))] = np.max(model_xhat2)
-	model_xhat2[(model_xhat2<0) & (np.isinf(model_xhat2))] = np.min(model_xhat2)
+					#model_xhat1[model_m_inds1,i,j] = \
+					temp_out1 = np.interp(model_p1,obs_p,obs_invcdf)
+					#model_xhat2[model_m_inds2,i,j] = \
+					temp_out2 = np.interp(model_p2,obs_p,obs_invcdf)
 
-	return model_xhat1, model_xhat2
+					if replace_zeros:
+					        temp_out1[vals1[model_m_inds1,i,j] == 0] = 0
+					        temp_out2[vals2[model_m_inds2,i,j] == 0] = 0
+
+					vals1[model_m_inds1,i,j] = temp_out1
+					vals2[model_m_inds2,i,j] = temp_out2
+
+	#if replace_zeros:
+        #        model_xhat1[vals1 == 0] = 0
+        #        model_xhat2[vals2 == 0] = 0
+	#model_xhat1[(model_xhat1>0) & (np.isinf(model_xhat1))] = np.max(model_xhat1)
+	#model_xhat1[(model_xhat1<0) & (np.isinf(model_xhat1))] = np.min(model_xhat1)
+	#model_xhat2[(model_xhat2>0) & (np.isinf(model_xhat2))] = np.max(model_xhat2)
+	#model_xhat2[(model_xhat2<0) & (np.isinf(model_xhat2))] = np.min(model_xhat2)
+	vals1[(vals1>0) & (np.isinf(vals1))] = np.max(vals1)
+	vals1[(vals1<0) & (np.isinf(vals1))] = np.min(vals1)
+	vals2[(vals2>0) & (np.isinf(vals2))] = np.max(vals2)
+	vals2[(vals2<0) & (np.isinf(vals2))] = np.min(vals2)
+
+	#return model_xhat1, model_xhat2
+	return vals1, vals2
 
 def qm_cmip_combined(era5_da, model_da1, model_da2, replace_zeros):
 
@@ -948,7 +967,7 @@ if __name__ == "__main__":
 
 	#Set up models
 
-	parser = argparse.ArgumentParser(description='Post-processing of CMIP convective diagnostics, including'\
+	parser = argparse.ArgumentParser(description='Post-processing of global CMIP convective diagnostics, including'\
 	    +" quantile mapping to ERA5 for historical and scenario runs")
 	parser.add_argument("-p",help="Parameter",required=True)
 	parser.add_argument("-m",help="Model",default="",nargs="+")
@@ -1088,44 +1107,6 @@ if __name__ == "__main__":
 					    scenario_y1, scenario_y2, experiment=experiment)
 				    
 
-			#This code block quantile-maps a diagnostic to ERA5 and saves the seasonal 
-			# frequency, based on a threshold. It is different to the above, which loads the quantile
-			# matched ingredients of a diagnostic, and then calculates the diagnostic.
-
-			#if (force_compute) & (["ERA5",""] not in models):
-			#	if models != [["BARPA",""]]:
-			#		models = [ ["ERA5", ""] ]+models
-			#	print(models)
-
-			#print("Loading re-gridded historical model data...")
-			#out_hist = load_model_data(models, p, lsm=lsm,\
-			#	force_cmip_regrid=force_cmip_regrid,\
-			#	experiment="historical", era5_y1=era5_y1, era5_y2=era5_y2,\
-			#	y1=hist_y1, y2=hist_y2, save=False) 
-			#print("Loading re-gridded scenario model data...")
-			#out_scenario = load_model_data(models, p, lsm=lsm,\
-			#	force_cmip_regrid=force_cmip_regrid, \
-			#	experiment=experiment, y2=scenario_y2, \
-			#	y1=scenario_y1, era5_data=out_hist[0], save=False) 
-			#print("Quantile mapping to ERA5...")
-			#out_qm_hist, out_qm_scenario = load_all_qm_combined(\
-			#	out_hist, out_scenario, models, p, lsm, \
-			#	replace_zeros, experiment, \
-			#	hist_y1, hist_y2, scenario_y1, scenario_y2, \
-			#	force_compute=force_compute, save_hist_qm=save_hist_qm)
-			#out_hist_dmax = daily_max_qm( out_qm_hist, out_hist, models, p, lsm)
-			#save_seasonal_freq([ds[p].values for ds in out_hist_dmax], \
-			#	    out_hist_dmax, threshold, models, p,\
-			#	    out_qm_hist[0].lon.values, out_qm_hist[0].lat.values,\
-			#	    hist_y1, hist_y2, experiment="historical")
-			#del out_hist_dmax, out_qm_hist
-			#out_scenario_dmax = daily_max_qm(out_qm_scenario, \
-			#		out_scenario, models, p, lsm)
-			#save_seasonal_freq([ds[p].values for ds in out_scenario_dmax], \
-			#	    out_scenario_dmax, threshold, models, p,\
-			#	    out_qm_scenario[0].lon.values, out_qm_scenario[0].lat.values,\
-			#	    scenario_y1, scenario_y2, experiment=experiment)
-			#del out_scenario_dmax, out_qm_scenario
 		else:
 			if (force_compute) & (["ERA5",""] not in models):
 				if models != [["BARPA",""]]:
@@ -1137,7 +1118,7 @@ if __name__ == "__main__":
 			out_hist = load_model_data(models, p, lsm=lsm,\
 				force_cmip_regrid=force_cmip_regrid,\
 				experiment="historical", era5_y1=era5_y1, era5_y2=era5_y2,\
-				y1=hist_y1, y2=hist_y2, save=False) 
+				y1=hist_y1, y2=hist_y2, save=False, domain="global") 
 			[print(models[i], out_hist[i].shape) for i in np.arange(len(models))]
 			#For all models, load CMIP data for the run given by "experiment".
 			# Parse "era5_data" into this function, instead of loading again
@@ -1145,7 +1126,7 @@ if __name__ == "__main__":
 			out_scenario = load_model_data(models, p, lsm=lsm,\
 			    force_cmip_regrid=force_cmip_regrid, \
 			    experiment=experiment, y2=scenario_y2, \
-			    y1=scenario_y1, era5_data=out_hist[0], save=False) 
+			    y1=scenario_y1, era5_data=out_hist[0], save=False, domain="global") 
 			[print(x.shape) for x in out_scenario]
 			#For each model, either (a) load quantile-matched CMIP data for the 
 			# given experiment/years if it has been done previously or (b) 

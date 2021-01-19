@@ -1,5 +1,5 @@
 import glob
-from era5_read import get_mask
+from erai_read import get_mask
 from numba import jit
 import argparse
 from mpl_toolkits.basemap import Basemap
@@ -43,7 +43,7 @@ def daily_max_qm(data, da, models, p, lsm):
 def calc_logit(models, p, lsm):
 
 	#Load the regridded, quantile mapped model data, and calculate logistic model equations
-	era5_lsm = get_era5_lsm()
+	erai_lsm = get_erai_lsm()
 
 	if p == "logit_aws":
 		vars = ["lr36","mhgt","ml_el","qmean01","srhe_left","Umean06"]
@@ -57,14 +57,14 @@ def calc_logit(models, p, lsm):
 		out = []
 		for m in np.arange(len(models)):
 			if m == 0:
-				era5 = regrid_era5(v)
+				erai = regrid_erai(v)
 				if lsm:
-					out.append(xr.where(era5_lsm, \
-							era5.sel({"time":(era5["time.year"] <= 2005) & \
-							(era5["time.year"] >= 1979)}), np.nan).values)
+					out.append(xr.where(erai_lsm, \
+							erai.sel({"time":(erai["time.year"] <= 2005) & \
+							(erai["time.year"] >= 1979)}), np.nan).values)
 				else:
-					out.append(era5 = era5.sel({"time":(era5["time.year"] <= 2005) & \
-						(era5["time.year"] >= 1979)}).values)
+					out.append(erai = erai.sel({"time":(erai["time.year"] <= 2005) & \
+						(erai["time.year"] >= 1979)}).values)
 			else:
 				try:
 					out.append(load_qm(models[m][0], models[m][1], v, lsm))
@@ -99,7 +99,7 @@ def plot_monthly_threshold(data, models, p, threshold, outname):
 				( data[i][p][data[i]["time.month"]==m] >= threshold ).sum().values \
 				    / (( data[i]["time.month"]==m).values.sum() * spatial_points)  )
 		if i >= 1:
-			r = str(np.corrcoef(thresh, monthly_thresh["ERA5 r=1"])[1,0].round(3))
+			r = str(np.corrcoef(thresh, monthly_thresh["ERAI r=1"])[1,0].round(3))
 			monthly_thresh = pd.concat([monthly_thresh, pd.DataFrame({models[i][0]+" r="+r:thresh})],\
 				axis=1)
 		else:
@@ -122,7 +122,7 @@ def plot_monthly_mean(data, data_da, models, p, outname):
 		for m in np.arange(1,13):
 			mean.append(np.nanmean(data[i][data_da[i]["time.month"]==m]))
 		if i >= 1:
-			r = str(np.corrcoef(mean, monthly_mean["ERA5 r=1"])[1,0].round(3))
+			r = str(np.corrcoef(mean, monthly_mean["ERAI r=1"])[1,0].round(3))
 			monthly_mean = pd.concat([monthly_mean, pd.DataFrame({models[i][0]+" r="+r:mean})],\
 				axis=1)
 		else:
@@ -184,9 +184,9 @@ def plot_threshold_spatial_dist(data, models, p, threshold, subplots, log, geo_p
 				urcrnrlat=-10,projection="cyl")
 	plt.figure(figsize=[11,9])
 
-	era5_freq = ( (data[0][p] >= threshold).sum("time") / data[0][p].shape[0]).values.flatten()
+	erai_freq = ( (data[0][p] >= threshold).sum("time") / data[0][p].shape[0]).values.flatten()
 	if lsm:
-		era5_freq = era5_freq[~np.isnan(era5_freq)]
+		erai_freq = erai_freq[~np.isnan(erai_freq)]
 
 	x,y = np.meshgrid(lon,lat)
 	for i in np.arange(len(models)):
@@ -199,7 +199,7 @@ def plot_threshold_spatial_dist(data, models, p, threshold, subplots, log, geo_p
 			mod_freq1d = mod_freq.flatten()
 			if lsm:
 				mod_freq1d = mod_freq1d[~np.isnan(mod_freq1d)]
-			r = str(np.corrcoef(era5_freq, mod_freq1d)[1,0].round(3))
+			r = str(np.corrcoef(erai_freq, mod_freq1d)[1,0].round(3))
 
 			if log:
 				m.pcolormesh(x, y, mod_freq, norm=mpl.colors.LogNorm(), vmin=vmin, vmax=vmax)
@@ -217,14 +217,14 @@ def plot_mean_spatial_dist(data, models, subplots, log, geo_plot, lon, lat, lsm,
 				urcrnrlat=-10,projection="cyl")
 	plt.figure(figsize=[11,9])
 	try:
-		era5_mean = data[0].mean("time").values.flatten()
+		erai_mean = data[0].mean("time").values.flatten()
 	except:
 		try:
-			era5_mean = data[0].mean(axis=0).flatten()
+			erai_mean = data[0].mean(axis=0).flatten()
 		except:
-			era5_mean = data[0]
+			erai_mean = data[0]
 	if lsm:
-		era5_mean = era5_mean[~np.isnan(era5_mean)]
+		erai_mean = erai_mean[~np.isnan(erai_mean)]
 
 	x,y = np.meshgrid(lon,lat)
 	for i in np.arange(len(models)):
@@ -241,7 +241,7 @@ def plot_mean_spatial_dist(data, models, subplots, log, geo_plot, lon, lat, lsm,
 			mod_mean1d = mod_mean.flatten()
 			if lsm:
 				mod_mean1d = mod_mean1d[~np.isnan(mod_mean1d)]
-			r = str(np.corrcoef(era5_mean, mod_mean1d)[1,0].round(3))
+			r = str(np.corrcoef(erai_mean, mod_mean1d)[1,0].round(3))
 
 			if log:
 				m.pcolormesh(x, y, mod_mean, norm=mpl.colors.LogNorm(), vmin=vmin, vmax=vmax)
@@ -259,41 +259,41 @@ def ecdf_to_unique(ecdf):
 	y = y[inds]
 	return x,y
 
-def load_model_data(models, p, era5_data=None, save=True, domain="aus",\
-		era5_regrid=False, lsm=True, force_cmip_regrid=False,\
-		experiment="historical", y1=1979, y2=2005, era5_y1=1979, era5_y2=2005):
+def load_model_data(models, p, erai_data=None, save=True, \
+		erai_regrid=False, lsm=True, force_cmip_regrid=False,\
+		experiment="historical", y1=1979, y2=2005, erai_y1=1979, erai_y2=2005):
 
-	#For each model in the list "models" (including ERA5), load regridded data and slice in time.
-	#If lsm is True, then mask ocean data based on ERA5 lsm
+	#For each model in the list "models" (including ERAI), load regridded data and slice in time.
+	#If lsm is True, then mask ocean data based on ERAI lsm
 
 	assert y2 >= y1
-	assert era5_y2 >= era5_y1
+	assert erai_y2 >= erai_y1
 
-	era5_lsm = get_era5_lsm(domain=domain)
-	if models[0][0] == "ERA5":
-		if era5_data is None:
-			era5 = load_era5(p, era5_regrid,domain=domain)
-			era5_data = era5.sel({"time":(era5["time.year"] <= era5_y2) & \
-					    (era5["time.year"] >= era5_y1)})
+	erai_lsm = get_erai_lsm()
+	if models[0][0] == "ERAI":
+		if erai_data is None:
+			erai = load_erai(p, erai_regrid)
+			erai_data = erai.sel({"time":(erai["time.year"] <= erai_y2) & \
+					    (erai["time.year"] >= erai_y1)})
 			if lsm:
-				era5_data = xr.where(era5_lsm, \
-				    era5_data, np.nan)
+				erai_data = xr.where(erai_lsm, \
+				    erai_data, np.nan)
 
 	out = []
 	for i in np.arange(len(models)):
-		if models[i][0] == "ERA5":
-			e = era5_data
+		if models[i][0] == "ERAI":
+			e = erai_data
 			if lsm:
-				e = xr.where(era5_lsm, \
+				e = xr.where(erai_lsm, \
 					e, np.nan)
 		elif models[i][0] == "BARPA":
 			e = load_barpa(p, y1, y2)
 		else:
-			e = regrid_cmip(era5_data, models[i][0],\
+			e = regrid_cmip(erai_data, models[i][0],\
 				models[i][1], p, y1, y2, \
-				force_cmip_regrid, experiment=experiment, save=save, domain=domain)
+				force_cmip_regrid, experiment=experiment, save=save)
 			if lsm:
-				e = xr.where(era5_lsm, \
+				e = xr.where(erai_lsm, \
 					e, np.nan)
 
 		e = drop_duplicates(e)
@@ -305,7 +305,7 @@ def load_model_data(models, p, era5_data=None, save=True, domain="aus",\
 def load_all_qm(data, models, p, lsm, replace_zeros, force_compute=False, \
 	    experiment="historical", loop=True):
 
-	#Loop over all models, and use either load_qm() to load, or qm_cmip_era5() to calculate
+	#Loop over all models, and use either load_qm() to load, or qm_cmip_erai() to calculate
 
 	out_qm = []
 	for i in np.arange(len(models)):
@@ -330,18 +330,18 @@ def load_all_qm(data, models, p, lsm, replace_zeros, force_compute=False, \
 	return out_qm
 
 @jit
-def qm_cmip_era5_loop(era5_da, model_da, replace_zeros, mask):
+def qm_cmip_erai_loop(erai_da, model_da, replace_zeros, mask):
 
-	#As in qm_cmip_era5(), but with treating each spatial point as a unique distribution, 
+	#As in qm_cmip_erai(), but with treating each spatial point as a unique distribution, 
 	# and  matching independantly, rather than treating all spatial points as one distribution
 
 	vals = model_da.values
-	obs = era5_da.values
+	obs = erai_da.values
 	model_xhat = np.zeros(vals.shape) * np.nan
 	for m in np.arange(1,13):
 		print(m)
 		model_m_inds = (model_da["time.month"] == m)
-		obs_m_inds = (era5_da["time.month"] == m)
+		obs_m_inds = (erai_da["time.month"] == m)
 		for i in np.arange(vals.shape[1]):
 			for j in np.arange(vals.shape[2]):
 				if mask[i,j] == 1:
@@ -358,15 +358,15 @@ def qm_cmip_era5_loop(era5_da, model_da, replace_zeros, mask):
 
 	return model_xhat
 
-def qm_cmip_era5(era5_da, model_da, replace_zeros):
+def qm_cmip_erai(erai_da, model_da, replace_zeros):
 
 	#Quantile match a 3d (time-lat-lon) DataArray of CMIP model data (model_da) to an xarray
-	# DataArray of ERA5 data, which are on the same spatial grid.
+	# DataArray of ERAI data, which are on the same spatial grid.
 
 	vals = model_da.values.flatten()
 	vals = vals[~np.isnan(vals)]
 
-	obs = era5_da.values.flatten()
+	obs = erai_da.values.flatten()
 	obs = obs[~np.isnan(obs)]
 	obs_cdf = ECDF(obs)
 	obs_invcdf = obs_cdf.x
@@ -376,11 +376,11 @@ def qm_cmip_era5(era5_da, model_da, replace_zeros):
 	#Convert model data to percentiles using the CDF
 	model_p = np.interp(model_da.values,\
 		model_cdf.x,model_cdf.y)
-	#Convert model percentiles to ERA5 values
+	#Convert model percentiles to ERAI values
 	model_xhat = np.interp(model_p,obs_cdf.y,obs_invcdf)
 
 	#For effective SRH and MLCAPE, a CMIP model value of zero can be matched with a significant non-zero
-	# value, if the equivalent ERA5 percentile is non-zero. To avoid, manually replace with zeros. This 
+	# value, if the equivalent ERAI percentile is non-zero. To avoid, manually replace with zeros. This 
 	# makes physical sense (can't create CAPE where there is none)
 	if replace_zeros:
 		model_xhat[model_da.values == 0] = 0
@@ -390,10 +390,10 @@ def qm_cmip_era5(era5_da, model_da, replace_zeros):
 def load_qm(model_name, ensemble, p, lsm, experiment="historical"):
 
 	if lsm:
-		fname = "/g/data/eg3/ab4502/ExtremeWind/aus/regrid_1.5/"+\
+		fname = "/g/data/eg3/ab4502/ExtremeWind/global/regrid_1.5/"+\
 		    model_name+"_"+experiment+"_"+ensemble+"_"+p+"_qm_lsm.nc"
 	else:
-		fname = "/g/data/eg3/ab4502/ExtremeWind/aus/regrid_1.5/"+\
+		fname = "/g/data/eg3/ab4502/ExtremeWind/global/regrid_1.5/"+\
 		    model_name+"_"+experiment+"_"+ensemble+"_"+p+"_qm.nc"
 	mod_xhat = xr.open_dataset(fname)[p+"_qm"].values
 
@@ -403,30 +403,30 @@ def save_logit(models, data, da, lsm, p):
 
 	for i in np.arange(len(models)):
 		if lsm:
-			fname = "/g/data/eg3/ab4502/ExtremeWind/aus/regrid_1.5/"+\
+			fname = "/g/data/eg3/ab4502/ExtremeWind/global/regrid_1.5/"+\
 			    models[i][0]+"_"+models[i][1]+"_"+p+"_lsm.nc"
 		else:
-			fname = "/g/data/eg3/ab4502/ExtremeWind/aus/regrid_1.5/"+\
+			fname = "/g/data/eg3/ab4502/ExtremeWind/global/regrid_1.5/"+\
 			    models[i][0]+"_"+models[i][1]+"_"+p+".nc"
 		xr.Dataset(data_vars={p:(("time", "lat", "lon"), data[i])},\
 		    coords={"time":da[i].time, "lat":da[i].lat, "lon":da[i].lon}).\
 		    to_netcdf(fname, mode="w", engine="h5netcdf",\
 			    encoding={p:{"zlib":True, "complevel":9}})
 
-def create_qm(era5_da, model_da, model_name, ensemble, p, lsm, replace_zeros, \
+def create_qm(erai_da, model_da, model_name, ensemble, p, lsm, replace_zeros, \
 	    experiment="historical", loop=True):
 
 	if lsm:
-		fname = "/g/data/eg3/ab4502/ExtremeWind/aus/regrid_1.5/"+\
+		fname = "/g/data/eg3/ab4502/ExtremeWind/global/regrid_1.5/"+\
 		    model_name+"_"+experiment+"_"+ensemble+"_"+p+"_qm_lsm.nc"
 	else:
-		fname = "/g/data/eg3/ab4502/ExtremeWind/aus/regrid_1.5/"+\
+		fname = "/g/data/eg3/ab4502/ExtremeWind/global/regrid_1.5/"+\
 		    model_name+"_"+experiment+"_"+ensemble+"_"+p+"_qm.nc"
 	if loop:
-		mod_xhat = qm_cmip_era5_loop(era5_da, model_da, replace_zeros, \
-		    get_mask(era5_da.lon.values, era5_da.lat.values))
+		mod_xhat = qm_cmip_erai_loop(erai_da, model_da, replace_zeros, \
+		    get_mask(erai_da.lon.values, erai_da.lat.values))
 	else:
-		mod_xhat = qm_cmip_era5(era5_da, model_da, replace_zeros)
+		mod_xhat = qm_cmip_erai(erai_da, model_da, replace_zeros)
 	xr.Dataset(data_vars={p+"_qm":(("time", "lat", "lon"), mod_xhat)},\
 		    coords={"time":model_da.time, "lat":model_da.lat, "lon":model_da.lon}).\
 		    to_netcdf(fname, mode="w", engine="h5netcdf",\
@@ -434,20 +434,20 @@ def create_qm(era5_da, model_da, model_name, ensemble, p, lsm, replace_zeros, \
 	
 	return mod_xhat
 
-def get_cmip_lsm(era5, model, experiment, cmip_ver, group):
+def get_cmip_lsm(erai, model, experiment, cmip_ver, group):
 
 	lsm = get_lsm(model, experiment, cmip_ver=cmip_ver, group=group)
-	lsm_regrid = lsm.interp({"lat":era5.lat, "lon":era5.lon}, method="nearest")
+	lsm_regrid = lsm.interp({"lat":erai.lat, "lon":erai.lon}, method="nearest")
 	return np.flipud(np.where(lsm_regrid.values >= 50, 1, 0))
 	
 
-def get_era5_lsm(regrid=False, domain="aus"):
+def get_erai_lsm(regrid=False):
 
-	#load the era5 lsm, subset to Australia, and coarsen as in regrid_era5(). Consider the coarse
+	#load the erai lsm, subset to Australia, and coarsen as in regrid_erai(). Consider the coarse
 	# lsm to be land if greater than 50% of the points are land
 
     
-	f = xr.open_mfdataset("/g/data/eg3/ab4502/ExtremeWind/"+domain+"/era5/era5_19790101_19790131.nc")
+	f = xr.open_mfdataset("/g/data/eg3/ab4502/ExtremeWind/global/erai/erai_19790101_19790131.nc")
 	lsm = get_mask(f.lon.values,f.lat.values)
 	if regrid:
 		lsm_coarse = xr.DataArray(lsm, dims=("lat","lon")).coarsen({"lat":6,"lon":6},\
@@ -461,7 +461,7 @@ def load_barpa(p, y1, y2, regrid=False):
 	#Load BARPA data between two years.
 
 	print("Loading BARPA...")
-	files = np.sort(glob.glob("/g/data/eg3/ab4502/ExtremeWind/aus/barpa_access/barpa_access_*"))
+	files = np.sort(glob.glob("/g/data/eg3/ab4502/ExtremeWind/global/barpa_access/barpa_access_*"))
 	years = np.array([int(file.split("/")[8].split("_")[2][0:4]) for file in files])
 	barpa = xr.open_mfdataset(files[(years>=y1) & (years <= y2)])[p]
 	lsm = xr.open_dataset("/g/data/du7/barpa/trials/BARPA-EASTAUS_12km/static/lnd_mask-BARPA-EASTAUS_12km.nc").interp({"longitude":barpa.lon, "latitude":barpa.lat}, "nearest")
@@ -471,9 +471,9 @@ def load_barpa(p, y1, y2, regrid=False):
 
 	return barpa_lsm
 
-def load_era5(p, regrid=False, domain="aus"):
+def load_erai(p, regrid=False):
 
-	#Regrid ERA5 convective diagnostics to a 1.5 degree, 6 hourly grid over the Aus region, by
+	#Regrid ERAI convective diagnostics to a 1.5 degree, 6 hourly grid over the Aus region, by
 	# taking the mean over each 1.5 degree region.
 
 	#If this has already been done for parameter "p", then just load the data. Or else, 
@@ -481,33 +481,33 @@ def load_era5(p, regrid=False, domain="aus"):
 
 	#(Takes about an hour for all years and one diagnostic)
 
-	fname = "/g/data/eg3/ab4502/ExtremeWind/"+domain+"/regrid_1.5/"+\
-		"era5_"+p+".nc"
+	fname = "/g/data/eg3/ab4502/ExtremeWind/global/regrid_1.5/"+\
+		"erai_"+p+".nc"
 
 	if regrid:
 		if (os.path.isfile(fname)):
-			era5_coarse = xr.open_dataset(fname)["__xarray_dataarray_variable__"]
+			erai_coarse = xr.open_dataset(fname)["__xarray_dataarray_variable__"]
 		else:
-			print("Regridding ERA5 to a 1.5 degree grid...")
+			print("Regridding ERAI to a 1.5 degree grid...")
 			ProgressBar().register()
-			era5 = xr.open_mfdataset("/g/data/eg3/ab4502/ExtremeWind/"+domain+"/era5/era5_*")
-			era5_sub = era5[p].sel({"time":np.in1d(era5["time.hour"], [0,6,12,18])})
-			era5_coarse = era5_sub.coarsen({"lat":6, "lon":6}, boundary="trim", side="left").\
+			erai = xr.open_mfdataset("/g/data/eg3/ab4502/ExtremeWind/global/erai/erai_*")
+			erai_sub = erai[p].sel({"time":np.in1d(erai["time.hour"], [0,6,12,18])})
+			erai_coarse = erai_sub.coarsen({"lat":6, "lon":6}, boundary="trim", side="left").\
 					mean()
 	else:
-			print("Loading ERA5...")
-			era5 = xr.open_mfdataset("/g/data/eg3/ab4502/ExtremeWind/"+domain+"/era5/era5_*")
-			era5_coarse = era5[p].sel({"time":np.in1d(era5["time.hour"], [0,6,12,18])})
+			print("Loading ERAI...")
+			erai = xr.open_mfdataset("/g/data/eg3/ab4502/ExtremeWind/global/erai/erai_*")
+			erai_coarse = erai[p].sel({"time":np.in1d(erai["time.hour"], [0,6,12,18])})
 
-	return era5_coarse
+	return erai_coarse
 
-def regrid_cmip(era5, model_name, ensemble, p, y1, y2, force_regrid,\
-	experiment="historical", save=True, domain="aus"):
+def regrid_cmip(erai, model_name, ensemble, p, y1, y2, force_regrid,\
+	experiment="historical", save=True):
 
-	#Regrid convective diagnostics from CMIP models to the coarsened ERA5 grid over Aus (1.5 
+	#Regrid convective diagnostics from CMIP models to the coarsened ERAI grid over Aus (1.5 
 	# degree spacing)
 	
-	fname = "/g/data/eg3/ab4502/ExtremeWind/"+domain+"/regrid_1.5/"+\
+	fname = "/g/data/eg3/ab4502/ExtremeWind/global/regrid_1.5/"+\
 		model_name+"_"+experiment+"_"+ensemble+"_"+p+".nc"
 
 	if (os.path.isfile(fname)) & (~force_regrid):
@@ -517,13 +517,13 @@ def regrid_cmip(era5, model_name, ensemble, p, y1, y2, force_regrid,\
 		mod_regrid = f[p]
 		f.close()
 	else:
-		spacing = str(era5.lon.values[-1] - era5.lon.values[-2])
+		spacing = str(erai.lon.values[-1] - erai.lon.values[-2])
 		print("Regridding "+experiment+" "+\
 		    model_name+" to a "+spacing+" degree grid...")
-		mod = xr.open_mfdataset("/g/data/eg3/ab4502/ExtremeWind/"+domain+"/"+\
+		mod = xr.open_mfdataset("/g/data/eg3/ab4502/ExtremeWind/global/"+\
 			model_name+"/"+model_name+"_"+experiment+"_"+ensemble+"*.nc")
 		mod = mod.sel({"time":(mod["time.year"] <= y2) & (mod["time.year"] >= y1)})
-		mod_regrid = mod[p].interp({"lat":era5.lat, "lon":era5.lon}).persist()
+		mod_regrid = mod[p].interp({"lat":erai.lat, "lon":erai.lon}).persist()
 		if save:
 			mod_regrid.to_netcdf(fname,format="NETCDF4_CLASSIC",\
 				encoding={p:{"zlib":True, "complevel":9}})
@@ -546,15 +546,15 @@ if __name__ == "__main__":
 	#Parse command line arguments
 
 	parser = argparse.ArgumentParser(description='Post-processing of CMIP convective diagnostics, including'\
-	    +" quantile mapping to ERA5 and plotting")
+	    +" quantile mapping to ERAI and plotting")
 	parser.add_argument("-p",help="Parameter",required=True)
 	parser.add_argument("--y1",help="Start year for CMIP models",default=1979,\
 		type=float)
 	parser.add_argument("--y2",help="End year for CMIP models",default=2005,\
 		type=float)
-	parser.add_argument("--era5_y1",help="Start year for ERA5",default=1979,\
+	parser.add_argument("--erai_y1",help="Start year for ERAI",default=1979,\
 		type=float)
-	parser.add_argument("--era5_y2",help="End year for ERA5",default=2005,\
+	parser.add_argument("--erai_y2",help="End year for ERAI",default=2005,\
 		type=float)
 	parser.add_argument("--loop",help="If True, then loop over each spatial point when QQ-matching",default=True,\
 		type=str2bool)
@@ -562,7 +562,7 @@ if __name__ == "__main__":
 		type=str2bool)
 	parser.add_argument("--force_cmip_regrid",help="Force regridding of CMIP data?",default=False,\
 		type=str2bool)
-	parser.add_argument("--lsm",help="Mask ocean values using the ERA5 lsm?",default=True,\
+	parser.add_argument("--lsm",help="Mask ocean values using the ERAI lsm?",default=True,\
 		type=str2bool)
 	parser.add_argument("--log",help="Make plots with a LogNorm color-scale, and log y-axis?",default=False,\
 		type=str2bool)
@@ -590,8 +590,8 @@ if __name__ == "__main__":
 	p = args.p
 	y1 = args.y1
 	y2 = args.y2
-	era5_y1 = args.era5_y1
-	era5_y2 = args.era5_y2
+	erai_y1 = args.erai_y1
+	erai_y2 = args.erai_y2
 	loop = args.loop
 	force_compute = args.force_compute
 	force_cmip_regrid = args.force_cmip_regrid
@@ -616,7 +616,7 @@ if __name__ == "__main__":
 		replace_zeros=False
 	#subplots = [5,3]
 	subplots = [1,2]
-	models = [ ["ERA5",""] ,\
+	models = [ ["ERAI",""] ,\
 	#		["ACCESS1-3","r1i1p1",5,""] ,\
 	#		["ACCESS1-0","r1i1p1",5,""] , \
 	#		["ACCESS-ESM1-5","r1i1p1f1",6,"CSIRO"] ,\
@@ -635,8 +635,8 @@ if __name__ == "__main__":
 	#For all diagnostics (except logit models), load/coarsen data and quantile-map
 	if p not in ["logit_sta","logit_aws"]:
 		out = load_model_data(models, p, lsm=lsm, force_cmip_regrid=force_cmip_regrid,\
-			y1=y1, y2=y2, era5_y1=era5_y1, era5_y2=era5_y2) 
-		print("Quantile mapping to ERA5...")
+			y1=y1, y2=y2, erai_y1=erai_y1, erai_y2=erai_y2) 
+		print("Quantile mapping to ERAI...")
 		#out_qm = load_all_qm(out, models, p, lsm, replace_zeros, force_compute=force_compute)
 		out_qm = load_all_qm(out, models, p, lsm, replace_zeros, force_compute=force_compute, loop=loop)
 	#Or else, Load quantile mapped variables and calculate logit model

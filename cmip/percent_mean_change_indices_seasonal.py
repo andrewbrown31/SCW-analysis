@@ -1,3 +1,4 @@
+import matplotlib.lines as mlines
 from mpl_toolkits.axes_grid1 import inset_locator
 import numpy as np
 import pandas as pd
@@ -44,7 +45,7 @@ def get_mean(models, p, y1, y2, era5_y1, era5_y2, experiment=""):
 			    models[i][0]+"_"+models[i][1]+"_mean_"+p+"_"+experiment+"_"+str(y1)+"_"+str(y2)+".nc"))
 	return mean_out
 
-def get_seasonal_freq(models, p, y1, y2, era5_y1, era5_y2, threshold, experiment=""):
+def get_seasonal_freq(models, p, y1, y2, era5_y1, era5_y2, experiment=""):
 
 	mean_out = []
 	for i in np.arange(len(models)):
@@ -54,10 +55,10 @@ def get_seasonal_freq(models, p, y1, y2, era5_y1, era5_y2, threshold, experiment
 			    str(era5_y1)+"_"+str(era5_y2)+".nc"))
 		else:
 			mean_out.append(xr.open_dataset("/g/data/eg3/ab4502/ExtremeWind/aus/regrid_1.5/"+\
-			    models[i][0]+"_"+models[i][1]+"_seasonal_freq_"+p+"_"+str(threshold)+"_"+experiment+"_"+str(y1)+"_"+str(y2)+".nc"))
+			    models[i][0]+"_"+models[i][1]+"_seasonal_freq_"+p+"_"+experiment+"_"+str(y1)+"_"+str(y2)+".nc"))
 	return mean_out
 
-def plot_boxplot(v, models, data_list, cmip6, barpa, nrm_da, spatial_diff, spatial_diff_sig, mean_envs, min_envs=0, plot_map=True):
+def plot_boxplot(v_list, models, data_list, cmip6, barpa, nrm_da, spatial_diff, spatial_diff_sig, mean_envs, min_envs=0, plot_map=True):
 
 	#min_envs is the minimum number of environments at a spatial point per season, required to draw statistical significance at that point.
 
@@ -66,66 +67,113 @@ def plot_boxplot(v, models, data_list, cmip6, barpa, nrm_da, spatial_diff, spati
 	f2 = geopandas.read_file(geopandas.datasets.get_path("naturalearth_lowres"))
 	titles = ["a) Northern Australia", "b) Rangelands", "c) Eastern Australia", \
 		    "d) Southern Australia"]
-	ranges = [-5,5]
-	for i in np.arange(len(data_list)):
-		ax=plt.subplot2grid((5,4), (i, 0), colspan=4, rowspan=1)
+	ranges = [-17,17]
+	#For each NRM region...
+	for i in np.arange(len(data_list[0])):
+		ax=plt.subplot2grid((4,4), (i, 0), colspan=4, rowspan=1)
 		boxes = []
-		for month in return_months():
-			temp = data_list[i].loc[month].values
-			boxes.append({"med":np.percentile(temp, 50, interpolation="nearest"),\
-			    "q1":np.percentile(temp, 16.67, interpolation="nearest"),\
-			    "q3":np.percentile(temp, 83.33, interpolation="nearest"),\
-			    "whislo":temp.min(),"whishi":temp.max()})
-		ax.bxp(boxes, showfliers=False)
+		#For each month...
+		for month in ["DJF","MAM","JJA","SON"]:
+			#For each variable...
+			for v in np.arange(len(v_list)+1):
+				if v == len(v_list):
+					temp = np.ones(12)*-999
+				else:
+					temp = data_list[v][i].loc[month].values
+				boxes.append({"med":np.percentile(temp, 50, interpolation="nearest"),\
+				    "q1":np.percentile(temp, 16.67, interpolation="nearest"),\
+				    "q3":np.percentile(temp, 83.33, interpolation="nearest"),\
+				    "whislo":temp.min(),"whishi":temp.max()})
+		for v in np.arange(len(v_list)+1):
+			if v < len(v_list):
+				ax.plot(np.arange(0,4)*4 + (v+1), np.percentile(data_list[v][i], 50, interpolation="nearest", axis=1),lw=2, ls=":")
+		box=ax.bxp(boxes, showfliers=False)
+		bcnt = 0
+		for b in box["boxes"]:
+			if bcnt%4 == 0:
+				b.set_color("tab:blue")
+			elif bcnt%4 == 1:
+				b.set_color("tab:orange")
+			elif bcnt%4 == 2:
+				b.set_color("tab:green")
+			bcnt=bcnt+1
+		[b.set_color("k") for b in box["medians"]]
 		#ax.grid(b=True, which="both", axis="both")
 		plt.ylim(ranges)
 		plt.axhline(0,ls="--", color="k")
 		if i not in [3]:
+			ax.set_xticks(np.arange(0,4)*4 + 2.5)
 			ax.set_xticklabels("")
 		else:
-			ax.set_xticks(np.arange(1,13))
-			ax.set_xticklabels(return_months())
-		#plt.plot(np.arange(1,13),cmip6[i].values[:,0], marker="o", color="k", linestyle="none")
+			ax.set_xticks(np.arange(0,4)*4 + 2.5)
+			ax.set_xticklabels(["DJF","MAM","JJA","SON"])
+		#cmip6plot = []
+		#for m in np.arange(12):
+		#	for v in np.arange(len(v_list)):
+		#		cmip6plot.append(cmip6[v][i].iloc[m,0])
+		#plt.plot((np.arange(len(cmip6plot))+1)[0:-1:3],cmip6plot[0:-1:3], marker="o", color="tab:blue", linestyle="none")
+		#plt.plot((np.arange(len(cmip6plot))+1)[1:-1:3],cmip6plot[1:-1:3], marker="o", color="tab:orange", linestyle="none")
+		#plt.plot((np.arange(len(cmip6plot))+1)[2:-1:3],cmip6plot[2:-1:3], marker="o", color="tab:green", linestyle="none")
+		#plt.plot((np.arange(len(cmip6plot))+1)[-1],cmip6plot[-1], marker="o", color="tab:green", linestyle="none")
 		#if i == 2:
 		#    plt.plot(np.arange(1,13),barpa[i].values[:,0], marker="o", color="tab:red", linestyle="none")
 
 		plt.title(titles[i])
 		if plot_map:
 			if i==0:
-				inset = inset_locator.inset_axes(ax, width="10%", height="30%",loc=8)
+				inset = inset_locator.inset_axes(ax, width="10%", height="30%",loc=3)
 			else:
 				inset = inset_locator.inset_axes(ax, width="10%", height="30%",loc=3)
-			xr.plot.contour((nrm_da["nrm"].isin([0,1,2,3]).values*1), levels=[0.5,1.5], colors="k", ax=inset)
-			xr.plot.contourf((nrm_da["nrm"].isin([i]).values*1), levels=[0,0.5], colors=["none","grey"],extend="max", ax=inset)
+			xr.plot.contour((nrm_da["nrm"].isin([0,1,2,3])), levels=[0.5,1.5], colors="k", ax=inset, add_labels=False)
+			xr.plot.contourf((nrm_da["nrm"].isin([i])), levels=[0,0.5], colors=["none","grey"],extend="max", ax=inset,\
+			    add_labels=False, add_colorbar=False)
 			plt.tick_params(axis='both',which='both', bottom=False, top=False, labelbottom=False, left=False,\
 				labelleft=False)
 
-	cnt=0
-	seasons = ["DJF","MAM","JJA","SON"]
-	for spatial_diff, spatial_diff_sig in zip(spatial_diffs, spatial_diff_sigs):
-		ax=plt.subplot2grid((5,4), (4,cnt), colspan=1, rowspan=1)
-		xr.plot.contour(xr.where(nrm_da["aus"]==1, 1, 0), levels=[0.5,1.5], colors="k", ax=ax, add_labels=False)
-		[xr.plot.contour(xr.where((nrm_da["nrm"]==i) & (~(nrm_da["aus"].isnull())), 1, 0), levels=[0.5,1.5], colors="k", ax=ax, add_labels=False) for i in [0,1,2,3]]
-		spatial_diff = xr.DataArray(data=spatial_diff, coords=(nrm_da.lat, nrm_da.lon))
-		spatial_diff_sig = xr.DataArray(data=spatial_diff_sig, coords=(nrm_da.lat, nrm_da.lon))
-		c=xr.plot.contourf(xr.where((~(nrm_da["aus"].isnull())), spatial_diff, np.nan), cmap=plt.get_cmap("RdBu_r"), vmin=-6, vmax=6, extend="both", ax=ax, add_colorbar=False, add_labels=False)
-		xr.plot.contourf(xr.where((~(nrm_da["aus"].isnull()) & (spatial_diff_sig==1) & (mean_envs[cnt]>=min_envs)), spatial_diff_sig, 0), colors="none", hatches=[None,"////"], levels=[0.5,1.5], add_colorbar=False, add_labels=False)
-		ax.text(115,-42,seasons[cnt])
-		ax.set_xticklabels("")
-		ax.set_yticklabels("")
-		plt.tick_params(axis='both',which='both', bottom=False, top=False, labelbottom=False, left=False,\
-			labelleft=False)
-		cnt=cnt+1
+	
+	fig.text(0.025, 0.3, "Mean environmental frequency change per season (days)", rotation=90)
+	plt.subplots_adjust(hspace=0.4, top=0.95)
 
-	fig.text(0.08, 0.22, "e)")
+	l1 = mlines.Line2D([], [], color='tab:blue', label='DCP')
+	l2 = mlines.Line2D([], [], color='tab:orange', label='CS6')
+	l3 = mlines.Line2D([], [], color='tab:green', label='MUCAPE')
+	ax.legend(handles=[l1,l2,l3], ncol=3, loc='lower right')
+	plt.savefig("/g/data/eg3/ab4502/figs/CMIP/percent_mean_change_indices.png")
+
+def plot_spatial_diffs(v_list, models, nrm_da, spatial_diffs, spatial_diff_sigs, mean_envs, min_envs=1):
+	seasons = ["DJF","MAM","JJA","SON"]
+	a=ord("a"); alph=[chr(i) for i in range(a,a+26)]; alph = [alph[i]+")" for i in np.arange(len(alph))]
+	fig=plt.figure(figsize=[10,10])
+	p_cnt=0
+	for v in np.arange(len(v_list)):
+		cnt=0
+		for spatial_diff, spatial_diff_sig in zip(spatial_diffs[v], spatial_diff_sigs[v]):
+			ax=plt.subplot(len(v_list),4,p_cnt+1)
+			xr.plot.contour(xr.where(nrm_da["aus"]==1, 1, 0), levels=[0.5,1.5], colors="k", ax=ax, add_labels=False)
+			#[xr.plot.contour(xr.where((nrm_da["nrm"]==i) & (~(nrm_da["aus"].isnull())), 1, 0), levels=[0.5,1.5], colors="k", ax=ax, add_labels=False) for i in [0,1,2,3]]
+			spatial_diff = xr.DataArray(data=spatial_diff, coords=(nrm_da.lat, nrm_da.lon))
+			spatial_diff_sig = xr.DataArray(data=spatial_diff_sig, coords=(nrm_da.lat, nrm_da.lon))
+			c=xr.plot.contourf(xr.where((~(nrm_da["aus"].isnull())), spatial_diff, np.nan), cmap=plt.get_cmap("RdBu_r"), vmin=-12, vmax=12, extend="both", ax=ax, add_colorbar=False, add_labels=False)
+			xr.plot.contourf(xr.where((~(nrm_da["aus"].isnull()) & (spatial_diff_sig==1) & (mean_envs[v][cnt]>=min_envs)), spatial_diff_sig, 0), colors="none", hatches=[None,"////"], levels=[0.5,1.5], add_colorbar=False, add_labels=False)
+			ax.text(115,-42,alph[p_cnt])
+			ax.set_xticklabels("")
+			ax.set_yticklabels("")
+			plt.tick_params(axis='both',which='both', bottom=False, top=False, labelbottom=False, left=False,\
+				labelleft=False)
+			if cnt == 0:
+				if v_list[v] == "mu_cape":
+					plt.ylabel("MUCAPE")
+				else:
+					plt.ylabel(v_list[v].upper())
+			if v == 0:
+				plt.title(seasons[cnt])
+			cnt=cnt+1
+			p_cnt=p_cnt+1
 
 	cax = plt.axes([0.2, 0.075, 0.6, 0.015])
 	cb = plt.colorbar(c, cax=cax, orientation = "horizontal")
 	cb.set_label("Mean environmental frequency change per season (days)")
-	
-	fig.text(0.05, 0.3, "Mean environmental frequency change per month (days)", rotation=90)
-	plt.subplots_adjust(hspace=0.4, top=0.95)
-	plt.savefig("/g/data/eg3/ab4502/figs/CMIP/percent_mean_change_"+v+".png")
+	plt.savefig("/g/data/eg3/ab4502/figs/CMIP/percent_mean_change_indices_map.png")
 
 def plot_lines(models, lr36_diff, mhgt_diff, ml_el_diff, qmean01_diff, srhe_left_diff, \
 	Umean06_diff, logit_aws_diff):
@@ -181,7 +229,7 @@ def return_months():
 
 def get_diff(hist, scenario, models, shapes, nrm, rel=True):
 	
-	months = return_months()
+	months = ["DJF","MAM","JJA","SON"]
 	mnames = [m[0] for m in models]
 	df = pd.DataFrame(columns=mnames, index=months)
 	hist[0]["nrm"] = rasterize(shapes, hist[0].coords)
@@ -233,7 +281,7 @@ if __name__ == "__main__":
 	lon1 = 112; lon2 = 156
 	lat1 = -45; lat2 = -10
 	experiment = "rcp85"
-	v = "logit_sta"
+	v_list = ["dcp","cs6","mu_cape"]
 	nrm = [0,1,2,3]	#0: Northern Australia;  1: Rangelands ; 2: Eastern Australia; 3: Suthern Australia
 
 	#Get NRM shapes with geopandas
@@ -242,47 +290,36 @@ if __name__ == "__main__":
 	shapes = [(shape, n) for n, shape in enumerate(f.geometry)]
 
 	#Load mean netcdf files
-	if v in ["logit_aws","scp","dcp","cs6","logit_sta"]:
-		hist = get_seasonal_freq(models, v, hist_y1, hist_y2, None, None, 0.83, "historical")
-		scenario = get_seasonal_freq(models, v, scenario_y1, scenario_y2, None, None, 0.83, experiment)
-		#hist_cmip6 = get_seasonal_freq([["ACCESS-CM2","r1i1p1f1",6,""]], v, hist_y1, hist_y2, None, None, "historical")
-		#scenario_cmip6 = get_seasonal_freq([["ACCESS-CM2","r1i1p1f1",6,""]], v, scenario_y1, scenario_y2, None, None, "ssp585")
-		#hist_barp = get_seasonal_freq([["BARPA",""]], v, hist_y1, hist_y2, None, None, "historical")
-		#scenario_barp = get_seasonal_freq([["BARPA",""]], v, 2080, 2099, None, None, "rcp85")
-	else:
-		hist = get_mean(models, v, hist_y1, hist_y2, None, None, "historical")
-		scenario = get_mean(models, v, scenario_y1, scenario_y2, None, None, experiment)
+	hist = []; scenario = []; hist_cmip6 = []; scenario_cmip6 = []
+	diff = []; diff_cmip6 = []
+	spatial_diffs = []; spatial_diff_sigs = []; mean_envs = []
+	cnt = 0
+	for v in v_list:
+		hist.append(get_seasonal_freq(models, v, hist_y1, hist_y2, None, None, "historical"))
+		scenario.append(get_seasonal_freq(models, v, scenario_y1, scenario_y2, None, None, experiment))
 
-	#Get pandas dataframes which summarise percentage changes for each month/model
-	diff0 = get_diff(hist, scenario, models, shapes, [0], rel=False)
-	diff1 = get_diff(hist, scenario, models, shapes, [1], rel=False)
-	diff2 = get_diff(hist, scenario, models, shapes, [2], rel=False)
-	diff3 = get_diff(hist, scenario, models, shapes, [3], rel=False)
-	diff = [diff0, diff1, diff2, diff3]
+		#Get pandas dataframes which summarise percentage changes for each month/model
+		diff0 = get_diff(hist[cnt], scenario[cnt], models, shapes, [0], rel=False)
+		diff1 = get_diff(hist[cnt], scenario[cnt], models, shapes, [1], rel=False)
+		diff2 = get_diff(hist[cnt], scenario[cnt], models, shapes, [2], rel=False)
+		diff3 = get_diff(hist[cnt], scenario[cnt], models, shapes, [3], rel=False)
+		diff.append([diff0, diff1, diff2, diff3])
 
-	#Get pandas dataframes which summarise percentage changes for each month/model
-	#diff0 = get_diff(hist_cmip6, scenario_cmip6, [["ACCESS-CM2","r1i1p1f1",6,""]], shapes, [0], rel=False)
-	#diff1 = get_diff(hist_cmip6, scenario_cmip6, [["ACCESS-CM2","r1i1p1f1",6,""]], shapes, [1], rel=False)
-	#diff2 = get_diff(hist_cmip6, scenario_cmip6, [["ACCESS-CM2","r1i1p1f1",6,""]], shapes, [2], rel=False)
-	#diff3 = get_diff(hist_cmip6, scenario_cmip6, [["ACCESS-CM2","r1i1p1f1",6,""]], shapes, [3], rel=False)
-	#diff_cmip6 = [diff0, diff1, diff2, diff3]
-
-	#Same but for BARPA
-	#diff_barp = [None, None, get_diff(hist_barp, scenario_barp, [["BARPA",""]], shapes, [2], rel=False), None]
-
-	#The MME median spatial diff
-	spatial_diff_djf, spatial_diff_sig_djf, mean_envs_djf = get_spatial_diff(hist, scenario, models, "DJF")
-	spatial_diff_mam, spatial_diff_sig_mam, mean_envs_mam = get_spatial_diff(hist, scenario, models, "MAM")
-	spatial_diff_jja, spatial_diff_sig_jja, mean_envs_jja = get_spatial_diff(hist, scenario, models, "JJA")
-	spatial_diff_son, spatial_diff_sig_son, mean_envs_son = get_spatial_diff(hist, scenario, models, "SON")
-	spatial_diffs = [spatial_diff_djf, spatial_diff_mam, spatial_diff_jja, spatial_diff_son]
-	spatial_diff_sigs = [spatial_diff_sig_djf, spatial_diff_sig_mam, spatial_diff_sig_jja, spatial_diff_sig_son]
-	mean_envs = [mean_envs_djf, mean_envs_mam, mean_envs_jja, mean_envs_son]
+		#The MME median spatial diff
+		spatial_diff_djf, spatial_diff_sig_djf, mean_envs_djf = get_spatial_diff(hist[cnt], scenario[cnt], models, "DJF")
+		spatial_diff_mam, spatial_diff_sig_mam, mean_envs_mam = get_spatial_diff(hist[cnt], scenario[cnt], models, "MAM")
+		spatial_diff_jja, spatial_diff_sig_jja, mean_envs_jja = get_spatial_diff(hist[cnt], scenario[cnt], models, "JJA")
+		spatial_diff_son, spatial_diff_sig_son, mean_envs_son = get_spatial_diff(hist[cnt], scenario[cnt], models, "SON")
+		spatial_diffs.append([spatial_diff_djf, spatial_diff_mam, spatial_diff_jja, spatial_diff_son])
+		spatial_diff_sigs.append([spatial_diff_sig_djf, spatial_diff_sig_mam, spatial_diff_sig_jja, spatial_diff_sig_son])
+		mean_envs.append([mean_envs_djf, mean_envs_mam, mean_envs_jja, mean_envs_son])
+	    
+		cnt=cnt+1
 
 	#Raster info
-	temp = hist[0]
+	temp = hist[0][0]
 	temp["nrm"] = rasterize(shapes, {"lon":temp.lon,"lat":temp.lat})
 	temp["aus"] = rasterize([f2.loc[f2.name=="Australia"].geometry.values[0]], {"lon":temp.lon,"lat":temp.lat})
 
-	#plot_boxplot(v, models, diff, diff_cmip6, diff_barp, temp, spatial_diffs, spatial_diff_sigs, mean_envs, min_envs=1, plot_map=False)
-	plot_boxplot(v, models, diff, None, None, temp, spatial_diffs, spatial_diff_sigs, mean_envs, min_envs=1, plot_map=False)
+	plot_boxplot(v_list, models, diff, None, None, temp, spatial_diffs, spatial_diff_sigs, mean_envs, min_envs=1, plot_map=True)
+	#plot_spatial_diffs(v_list, models, temp, spatial_diffs, spatial_diff_sigs, mean_envs, min_envs=1)

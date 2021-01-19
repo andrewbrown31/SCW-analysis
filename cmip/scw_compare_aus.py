@@ -1,3 +1,4 @@
+from dask.diagnostics import ProgressBar
 from mpl_toolkits.axes_grid1 import inset_locator
 import seaborn as sns
 import pandas as pd
@@ -10,10 +11,7 @@ import xarray as xr
 from percent_mean_change import transform_from_latlon, rasterize
 import netCDF4 as nc
 
-#This script provides functions to compare Quantile-matched CMIP5 logit model with ERA5
-#Because the data has been quantile-matched monthly and for each grid point, the only 
-#   way of independantly assessing GCM reliability is through interannual variability. Namely,
-#   by comparing an annual occurrence time series and trends with ERA5.
+#As in scw_compare.py but for one region (all of Aus) and multiple parameters
 
 def std_boot(x):
 	x=np.array(x)
@@ -89,7 +87,23 @@ def load_resampled_logit(model, ensemble, p, thresh, p2=False, cmip6=False):
 	
 	return model_monthly
 
-def polyfit(df):
+def load_resampled_era5(p, thresh, p2=False):
+	if p == "dcp":
+		fname = "/g/data/eg3/ab4502/ExtremeWind/aus/threshold_data/era5_dcp_6hr_0.04_daily.nc"
+	elif p == "scp":
+		fname = "/g/data/eg3/ab4502/ExtremeWind/aus/threshold_data/era5_scp_fixed_6hr_0.04_daily.nc"
+	elif p == "cs6":
+		fname = "/g/data/eg3/ab4502/ExtremeWind/aus/threshold_data/era5_mucape*s06_6hr_33864.0_daily.nc"
+	if p2:
+		da = xr.open_mfdataset(fname)
+		da_monthly = da.sel({"time":(da["time.year"]>=2006) & (da["time.year"] <= 2018)})
+	else:
+		da = xr.open_mfdataset(fname)
+		da_monthly = da.sel({"time":(da["time.year"]>=1979) & (da["time.year"] <= 2005)})
+
+	return da_monthly
+
+def polyfit(df, p):
 
 	x = np.arange(df.time.unique().shape[0])
 	m,y0 = np.polyfit(x, df.groupby("time").median()[p].values.squeeze(), deg=1)
@@ -97,8 +111,8 @@ def polyfit(df):
 
 if __name__ == "__main__":
 
-	p = "logit_aws"
-	thresh = 0.72
+	p_list = ["dcp","scp","cs6"]
+	thresh = {"logit_aws":0.72, "dcp":0.04, "scp":0.04, "cs6":33864}
 
 	load = True
 	path = "/g/data/eg3/ab4502/ExtremeWind/trends/"
@@ -112,156 +126,192 @@ if __name__ == "__main__":
 
 	lsm = get_era5_lsm()
 
+	ProgressBar().register()
+
 	#If load is false, then instead of loading in the annual dataframes, load in the entire model datasets, and
 	#	create the dataframes
 
 	if not load:
-
-		#Load 1970-2005 historical experiment data, from CMIP5
-		access0 = load_resampled_logit("ACCESS1-0","r1i1p1", p, thresh)
-		access3 = load_resampled_logit("ACCESS1-3","r1i1p1", p, thresh)
-		bnu = load_resampled_logit("BNU-ESM","r1i1p1", p, thresh)
-		cnrm = load_resampled_logit("CNRM-CM5","r1i1p1", p, thresh)
-		gfdl_cm3 = load_resampled_logit("GFDL-CM3","r1i1p1", p, thresh)
-		gfdl2g = load_resampled_logit("GFDL-ESM2G","r1i1p1", p, thresh)
-		gfdl2m = load_resampled_logit("GFDL-ESM2M","r1i1p1", p, thresh)
-		ipsll = load_resampled_logit("IPSL-CM5A-LR","r1i1p1", p, thresh)
-		ipslm = load_resampled_logit("IPSL-CM5A-MR","r1i1p1", p, thresh)
-		miroc = load_resampled_logit("MIROC5","r1i1p1", p, thresh)
-		mri = load_resampled_logit("MRI-CGCM3","r1i1p1", p, thresh)
-		bcc = load_resampled_logit("bcc-csm1-1","r1i1p1", p, thresh)
-
-		#Load the ERA5 dataset, 1979-2018
-		era5 = load_resampled_logit("ERA5","", p, thresh)
-		era52 = load_resampled_logit("ERA5","", p, thresh,p2=True)
-
-		#Load 2006-2018 RCP85 data from the reduced CMIP5 ensemble
-		gfdl_cm3_2 = load_resampled_logit("GFDL-CM3","r1i1p1", p, thresh,p2=True)
-		gfdl2g_2 = load_resampled_logit("GFDL-ESM2G","r1i1p1", p, thresh,p2=True)
-		gfdl2m_2 = load_resampled_logit("GFDL-ESM2M","r1i1p1", p, thresh,p2=True)
-		ipsll_2 = load_resampled_logit("IPSL-CM5A-LR","r1i1p1", p, thresh,p2=True)
-		ipslm_2 = load_resampled_logit("IPSL-CM5A-MR","r1i1p1", p, thresh,p2=True)
-		miroc_2 = load_resampled_logit("MIROC5","r1i1p1", p, thresh,p2=True)
-		mri_2 = load_resampled_logit("MRI-CGCM3","r1i1p1", p, thresh,p2=True)
-
-		#Load historical CMIP6 data from 1970-2014
-		access_esm = load_resampled_logit("ACCESS-ESM1-5","r1i1p1f1", p, thresh, cmip6=True)
-		access_cm2 = load_resampled_logit("ACCESS-CM2","r1i1p1f1", p, thresh, cmip6=True)
-
 		data = []
+		nrm = [0,1,2,3]
+		for p in p_list:
 
-		for nrm in [ [0], [1], [2], [3] ]:
+			print("Resampling "+p+" using a threshold of "+str(thresh[p]))
+
+			#Load 1970-2005 historical experiment data, from CMIP5
+			access0 = load_resampled_logit("ACCESS1-0","r1i1p1", p, thresh[p])
+			access3 = load_resampled_logit("ACCESS1-3","r1i1p1", p, thresh[p])
+			bnu = load_resampled_logit("BNU-ESM","r1i1p1", p, thresh[p])
+			cnrm = load_resampled_logit("CNRM-CM5","r1i1p1", p, thresh[p])
+			gfdl_cm3 = load_resampled_logit("GFDL-CM3","r1i1p1", p, thresh[p])
+			gfdl2g = load_resampled_logit("GFDL-ESM2G","r1i1p1", p, thresh[p])
+			gfdl2m = load_resampled_logit("GFDL-ESM2M","r1i1p1", p, thresh[p])
+			ipsll = load_resampled_logit("IPSL-CM5A-LR","r1i1p1", p, thresh[p])
+			ipslm = load_resampled_logit("IPSL-CM5A-MR","r1i1p1", p, thresh[p])
+			miroc = load_resampled_logit("MIROC5","r1i1p1", p, thresh[p])
+			mri = load_resampled_logit("MRI-CGCM3","r1i1p1", p, thresh[p])
+			bcc = load_resampled_logit("bcc-csm1-1","r1i1p1", p, thresh[p])
+
+			#Load the ERA5 dataset, 1979-2018
+			try:
+				era5 = load_resampled_logit("ERA5","", p, thresh[p])
+				era52 = load_resampled_logit("ERA5","", p, thresh[p],p2=True)
+			except:
+				era5 = load_resampled_era5(p, thresh[p])
+				era52 = load_resampled_era5(p, thresh[p], p2=True)
+
+			#Load 2006-2018 RCP85 data from the reduced CMIP5 ensemble
+			gfdl_cm3_2 = load_resampled_logit("GFDL-CM3","r1i1p1", p, thresh[p],p2=True)
+			gfdl2g_2 = load_resampled_logit("GFDL-ESM2G","r1i1p1", p, thresh[p],p2=True)
+			gfdl2m_2 = load_resampled_logit("GFDL-ESM2M","r1i1p1", p, thresh[p],p2=True)
+			ipsll_2 = load_resampled_logit("IPSL-CM5A-LR","r1i1p1", p, thresh[p],p2=True)
+			ipslm_2 = load_resampled_logit("IPSL-CM5A-MR","r1i1p1", p, thresh[p],p2=True)
+			miroc_2 = load_resampled_logit("MIROC5","r1i1p1", p, thresh[p],p2=True)
+			mri_2 = load_resampled_logit("MRI-CGCM3","r1i1p1", p, thresh[p],p2=True)
+
+			#Load historical CMIP6 data from 1970-2014
+			access_esm = load_resampled_logit("ACCESS-ESM1-5","r1i1p1f1", p, thresh[p], cmip6=True)
+			access_cm2 = load_resampled_logit("ACCESS-CM2","r1i1p1f1", p, thresh[p], cmip6=True)
 
 			#Create historical CMIP5 dataframe
 			df = pd.concat([\
 			    create_df(xr.where(nrm_da.isin(nrm) & lsm==1,\
 				    access0.resample({"time":"1Y"}).sum("time")[p],\
-				    np.nan).mean(("lat","lon")), "ACCESS1-0"),
+				    np.nan).mean(("lat","lon")), "ACCESS1-0", p),
 			    create_df(xr.where(nrm_da.isin(nrm) & lsm==1,\
 				    access3.resample({"time":"1Y"}).sum("time")[p],\
-				    np.nan).mean(("lat","lon")), "ACCESS1-3"),
+				    np.nan).mean(("lat","lon")), "ACCESS1-3", p),
 			    create_df(xr.where(nrm_da.isin(nrm) & lsm==1,\
 				    bnu.resample({"time":"1Y"}).sum("time")[p],\
-				    np.nan).mean(("lat","lon")), "BNU-ESM"),
+				    np.nan).mean(("lat","lon")), "BNU-ESM", p),
 			    create_df(xr.where(nrm_da.isin(nrm) & lsm==1,\
 				    cnrm.resample({"time":"1Y"}).sum("time")[p],\
-				    np.nan).mean(("lat","lon")), "CNRM-CM5"),
+				    np.nan).mean(("lat","lon")), "CNRM-CM5", p),
 			    create_df(xr.where(nrm_da.isin(nrm) & lsm==1,\
 				    gfdl_cm3.resample({"time":"1Y"}).sum("time")[p],\
-				    np.nan).mean(("lat","lon")), "GFDL-CM3"),
+				    np.nan).mean(("lat","lon")), "GFDL-CM3", p),
 			    create_df(xr.where(nrm_da.isin(nrm) & lsm==1,\
 				    gfdl2g.resample({"time":"1Y"}).sum("time")[p],\
-				    np.nan).mean(("lat","lon")), "GFDL-ESM2G"),
+				    np.nan).mean(("lat","lon")), "GFDL-ESM2G", p),
 			    create_df(xr.where(nrm_da.isin(nrm) & lsm==1,\
 				    gfdl2m.resample({"time":"1Y"}).sum("time")[p],\
-				    np.nan).mean(("lat","lon")), "GFDL-ESM2M"),
+				    np.nan).mean(("lat","lon")), "GFDL-ESM2M", p),
 			    create_df(xr.where(nrm_da.isin(nrm) & lsm==1,\
 				    ipsll.resample({"time":"1Y"}).sum("time")[p],\
-				    np.nan).mean(("lat","lon")), "IPSL-CM5A-LR"),
+				    np.nan).mean(("lat","lon")), "IPSL-CM5A-LR", p),
 			    create_df(xr.where(nrm_da.isin(nrm) & lsm==1,\
 				    ipslm.resample({"time":"1Y"}).sum("time")[p],\
-				    np.nan).mean(("lat","lon")), "IPSL-CM5A-MR"),
+				    np.nan).mean(("lat","lon")), "IPSL-CM5A-MR", p),
 			    create_df(xr.where(nrm_da.isin(nrm) & lsm==1,\
 				    miroc.resample({"time":"1Y"}).sum("time")[p],\
-				    np.nan).mean(("lat","lon")), "MIROC5"),
+				    np.nan).mean(("lat","lon")), "MIROC5", p),
 			    create_df(xr.where(nrm_da.isin(nrm) & lsm==1,\
 				    bcc.resample({"time":"1Y"}).sum("time")[p],\
-				    np.nan).mean(("lat","lon")), "bcc-csm1-1"),
+				    np.nan).mean(("lat","lon")), "bcc-csm1-1", p),
 			    create_df(xr.where(nrm_da.isin(nrm) & lsm==1,\
 				    mri.resample({"time":"1Y"}).sum("time")[p],\
-				    np.nan).mean(("lat","lon")), "MRI-CGCM3")])
+				    np.nan).mean(("lat","lon")), "MRI-CGCM3", p)])
 			#Create RCP85 CMIP5 dataframe
 			df2 = pd.concat([\
 			    create_df(xr.where(nrm_da.isin(nrm) & lsm==1,\
 				    gfdl_cm3_2.resample({"time":"1Y"}).sum("time")[p],\
-				    np.nan).mean(("lat","lon")), "GFDL-CM3"),
+				    np.nan).mean(("lat","lon")), "GFDL-CM3", p),
 			    create_df(xr.where(nrm_da.isin(nrm) & lsm==1,\
 				    gfdl2g_2.resample({"time":"1Y"}).sum("time")[p],\
-				    np.nan).mean(("lat","lon")), "GFDL-ESM2G"),
+				    np.nan).mean(("lat","lon")), "GFDL-ESM2G", p),
 			    create_df(xr.where(nrm_da.isin(nrm) & lsm==1,\
 				    gfdl2m_2.resample({"time":"1Y"}).sum("time")[p],\
-				    np.nan).mean(("lat","lon")), "GFDL-ESM2M"),
+				    np.nan).mean(("lat","lon")), "GFDL-ESM2M", p),
 			    create_df(xr.where(nrm_da.isin(nrm) & lsm==1,\
 				    ipsll_2.resample({"time":"1Y"}).sum("time")[p],\
-				    np.nan).mean(("lat","lon")), "IPSL-CM5A-LR"),
+				    np.nan).mean(("lat","lon")), "IPSL-CM5A-LR", p),
 			    create_df(xr.where(nrm_da.isin(nrm) & lsm==1,\
 				    ipslm_2.resample({"time":"1Y"}).sum("time")[p],\
-				    np.nan).mean(("lat","lon")), "IPSL-CM5A-MR"),
+				    np.nan).mean(("lat","lon")), "IPSL-CM5A-MR", p),
 			    create_df(xr.where(nrm_da.isin(nrm) & lsm==1,\
 				    miroc_2.resample({"time":"1Y"}).sum("time")[p],\
-				    np.nan).mean(("lat","lon")), "MIROC5"),\
+				    np.nan).mean(("lat","lon")), "MIROC5", p),\
 			    create_df(xr.where(nrm_da.isin(nrm) & lsm==1,\
 				    mri_2.resample({"time":"1Y"}).sum("time")[p],\
-				    np.nan).mean(("lat","lon")), "MRI-CGCM3")])
+				    np.nan).mean(("lat","lon")), "MRI-CGCM3", p)])
 			#Create historical CMIP6 dataframe
 			df3 = pd.concat([\
 			    create_df(xr.where(nrm_da.isin(nrm) & lsm==1,\
 				    access_esm.resample({"time":"1Y"}).sum("time")[p],\
-				    np.nan).mean(("lat","lon")), "ACCESS-ESM1-5"),
+				    np.nan).mean(("lat","lon")), "ACCESS-ESM1-5", p),
 			    create_df(xr.where(nrm_da.isin(nrm) & lsm==1,\
 				    access_cm2.resample({"time":"1Y"}).sum("time")[p],\
-				    np.nan).mean(("lat","lon")), "ACCESS-CM2")])
+				    np.nan).mean(("lat","lon")), "ACCESS-CM2", p)])
 			#Create ERA5 dataframe
-			era5_df = create_df(\
-				    xr.where(nrm_da.isin(nrm) & lsm==1,\
-				    era5.resample({"time":"1Y"}).sum("time")[p],\
-				    np.nan).mean(("lat","lon")),"ERA5")
-			era5_df2 = create_df(\
-				    xr.where(nrm_da.isin(nrm) & lsm==1,\
-				    era52.resample({"time":"1Y"}).sum("time")[p],\
-				    np.nan).mean(("lat","lon")),"ERA5")
+			if p == "scp":
+				era5_df = create_df(\
+					    xr.where(nrm_da.isin(nrm) & lsm==1,\
+					    era5.resample({"time":"1Y"}).sum("time")["scp_fixed"],\
+					    np.nan).mean(("lat","lon")),"ERA5",p)
+				era5_df2 = create_df(\
+					    xr.where(nrm_da.isin(nrm) & lsm==1,\
+					    era52.resample({"time":"1Y"}).sum("time")["scp_fixed"],\
+					    np.nan).mean(("lat","lon")),"ERA5",p)
+			elif p == "cs6":
+				era5_df = create_df(\
+					    xr.where(nrm_da.isin(nrm) & lsm==1,\
+					    era5.resample({"time":"1Y"}).sum("time")["mucape*s06"],\
+					    np.nan).mean(("lat","lon")),"ERA5",p)
+				era5_df2 = create_df(\
+					    xr.where(nrm_da.isin(nrm) & lsm==1,\
+					    era52.resample({"time":"1Y"}).sum("time")["mucape*s06"],\
+					    np.nan).mean(("lat","lon")),"ERA5",p)
+			else:
+				try:
+					era5_df = create_df(\
+						    xr.where(nrm_da.isin(nrm) & lsm==1,\
+						    era5.resample({"time":"1Y"}).sum("time")[p],\
+						    np.nan).mean(("lat","lon")),"ERA5",p)
+					era5_df2 = create_df(\
+						    xr.where(nrm_da.isin(nrm) & lsm==1,\
+						    era52.resample({"time":"1Y"}).sum("time")[p],\
+						    np.nan).mean(("lat","lon")),"ERA5",p)
+				except:
+					era5_df = create_df(\
+						    xr.where(nrm_da.isin(nrm) & lsm==1,\
+						    era5.resample({"time":"1Y"}).sum("time"),\
+						    np.nan).mean(("lat","lon")),"ERA5",p)
+					era5_df2 = create_df(\
+						    xr.where(nrm_da.isin(nrm) & lsm==1,\
+						    era52.resample({"time":"1Y"}).sum("time"),\
+						    np.nan).mean(("lat","lon")),"ERA5",p)
 			era5_df3 = pd.concat([era5_df, era5_df2], axis=0).reset_index()
 			era5_df3["time_ind"] = era5_df3.index
 		
 			#Save dataframes for each NRM region to disk
-			df.to_csv(path+"cmip5_"+p+"_1970_2005_nrm"+str(nrm[0])+".csv", index=False)
-			df2.to_csv(path+"cmip5_"+p+"_2006_2018_nrm"+str(nrm[0])+".csv", index=False)
-			df3.to_csv(path+"cmip6_"+p+"_1970_2014_nrm"+str(nrm[0])+".csv", index=False)
-			era5_df.to_csv(path+"era5_"+p+"_1979_2005_nrm"+str(nrm[0])+".csv", index=False)
-			era5_df2.to_csv(path+"era5_"+p+"_2006_2018_nrm"+str(nrm[0])+".csv", index=False)
-			era5_df3.to_csv(path+"era5_"+p+"_1979_2018_nrm"+str(nrm[0])+".csv", index=False)
+			df.to_csv(path+"cmip5_"+p+"_1970_2005_aus.csv", index=False)
+			df2.to_csv(path+"cmip5_"+p+"_2006_2018_aus.csv", index=False)
+			df3.to_csv(path+"cmip6_"+p+"_1970_2014_aus.csv", index=False)
+			era5_df.to_csv(path+"era5_"+p+"_1979_2005_aus.csv", index=False)
+			era5_df2.to_csv(path+"era5_"+p+"_2006_2018_aus.csv", index=False)
+			era5_df3.to_csv(path+"era5_"+p+"_1979_2018_aus.csv", index=False)
 
 			data.append([df, df2, df3, era5_df, era5_df2, era5_df3])
 
 	else:
 		#Or else, just load the df
 		data = []
-		for nrm in [ [0], [1], [2], [3] ]:
-			df = pd.read_csv(path+"cmip5_"+p+"_1970_2005_nrm"+str(nrm[0])+".csv")
-			df2 = pd.read_csv(path+"cmip5_"+p+"_2006_2018_nrm"+str(nrm[0])+".csv")
-			df3 = pd.read_csv(path+"cmip6_"+p+"_1970_2014_nrm"+str(nrm[0])+".csv")
-			era5_df = pd.read_csv(path+"era5_"+p+"_1979_2005_nrm"+str(nrm[0])+".csv")
-			era5_df2 = pd.read_csv(path+"era5_"+p+"_2006_2018_nrm"+str(nrm[0])+".csv")
-			era5_df3 = pd.read_csv(path+"era5_"+p+"_1979_2018_nrm"+str(nrm[0])+".csv")
+		for p in p_list:
+			df = pd.read_csv(path+"cmip5_"+p+"_1970_2005_aus.csv")
+			df2 = pd.read_csv(path+"cmip5_"+p+"_2006_2018_aus.csv")
+			df3 = pd.read_csv(path+"cmip6_"+p+"_1970_2014_aus.csv")
+			era5_df = pd.read_csv(path+"era5_"+p+"_1979_2005_aus.csv")
+			era5_df2 = pd.read_csv(path+"era5_"+p+"_2006_2018_aus.csv")
+			era5_df3 = pd.read_csv(path+"era5_"+p+"_1979_2018_aus.csv")
 
 			data.append([df, df2, df3, era5_df, era5_df2, era5_df3])
 
 	#Plot the data
 	fig=plt.figure(figsize=[12,10])
 	seaborn=False
-	titles = ["a) Northern Australia", "b) Rangelands", "c) Eastern Australia", "d) Southern Australia"]
+	titles = ["a) DCP", "b) SCP", "c) CS6"]
 	cnt=1
-	for i in np.arange(4):
+	for i in np.arange(len(p_list)):
 
 		df = data[i][0]
 		df2 = data[i][1]
@@ -271,12 +321,12 @@ if __name__ == "__main__":
 		era5_df2 = data[i][4]
 		era5_df3 = data[i][5]
 		era5_df3["time_ind"] = era5_df3["time_ind"] + 9
-		x,y=polyfit(df)
-		erax,eray=polyfit(era5_df)
-		erax2,eray2=polyfit(era5_df3)
+		x,y=polyfit(df, p_list[i])
+		erax,eray=polyfit(era5_df, p_list[i])
+		erax2,eray2=polyfit(era5_df3, p_list[i])
 		group = df.groupby("model")
 		group2 = df2.groupby("model")
-		ax=plt.subplot(4,1,cnt)
+		ax=plt.subplot(len(p_list),1,cnt)
 		if seaborn is True:
 			for n, g in group:
 				g.plot(x="time_ind",y=p,ax=ax,color="grey", alpha=0.25, legend=False)
@@ -286,21 +336,21 @@ if __name__ == "__main__":
 			sns.regplot(x="time_ind",y=p,data=era5_df,color="tab:red",line_kws={"linestyle":"--"})
 			era5_df.plot(x="time_ind",y=p,ax=ax,color="tab:red", legend=False)
 			era5_df3.loc[era5_df3.time_ind>=26].plot(x="time_ind",y=p,ax=ax,color="tab:orange", legend=False)
-			df.groupby("time_ind").median()[p].plot(color="k", legend=False, ax=ax)
+			df.groupby("time_ind").median()[p_list[i]].plot(color="k", legend=False, ax=ax)
 		else:
 			std_cmip5 = []            
 			for mod in df.model.unique():
-				pd.concat([df[df.model==mod], df2[df2.model==mod]]).plot(x="time_ind",y=p,ax=ax,color="grey", alpha=0.4, legend=False)
-				std_cmip5.append(pd.concat([df[df.model==mod], df2[df2.model==mod]])[p].std()) 
+				pd.concat([df[df.model==mod], df2[df2.model==mod]]).plot(x="time_ind",y=p_list[i],ax=ax,color="grey", alpha=0.4, legend=False)
+				std_cmip5.append(pd.concat([df[df.model==mod], df2[df2.model==mod]])[p_list[i]].std()) 
 			cmip_low, cmip_up = std_boot(std_cmip5)
-			a=era5_df3.plot(x="time_ind",y=p,ax=ax,color="tab:red", legend=False, marker="o")
-			b=pd.concat([df.groupby("time_ind").median()[p], df2.groupby("time_ind").median()[p]]).plot(color="k", legend=False, ax=ax, marker="o")
-			c=df3[df3["model"]=="ACCESS-ESM1-5"].plot(x="time_ind",y=p,color="tab:green", legend=False, ax=ax, marker="o")
-			d=df3[df3["model"]=="ACCESS-CM2"].plot(x="time_ind",y=p,color="tab:blue", legend=False, ax=ax, marker="o")
+			a=era5_df3.plot(x="time_ind",y=p_list[i],ax=ax,color="tab:red", legend=False, marker="o")
+			b=pd.concat([df.groupby("time_ind").median()[p_list[i]], df2.groupby("time_ind").median()[p_list[i]]]).plot(color="k", legend=False, ax=ax, marker="o")
+			c=df3[df3["model"]=="ACCESS-ESM1-5"].plot(x="time_ind",y=p_list[i],color="tab:green", legend=False, ax=ax, marker="o")
+			d=df3[df3["model"]=="ACCESS-CM2"].plot(x="time_ind",y=p_list[i],color="tab:blue", legend=False, ax=ax, marker="o")
 		plt.xlabel("")
 		ax.set_xticks([0,8,16,24,32,40,48])
 		ax.set_xticks(np.arange(0,50,2), minor=True)
-		if i == 3:
+		if i == 2:
 			ax.set_xticklabels(["1970","1978","1986","1994","2002","2010","2018"])
 			plt.legend((a.lines[-4],b.lines[-3],c.lines[-2],d.lines[-1]),("ERA5","CMIP5","ACCESS-ESM1-5","ACCESS-CM2"),ncol=4,bbox_to_anchor=(.5,-.5), loc=8)
 		else:
@@ -311,23 +361,11 @@ if __name__ == "__main__":
 		plt.title(titles[i])
 		plt.xlim([0,49.5])
 
-		if i == 0:
-			plt.text(0.5,20,str(round(np.median(std_cmip5),1))+" ("+str(round(cmip_low,1))+", "+str(round(cmip_up,1))+")", fontdict={"weight":"bold"})
-			plt.text(9,20,str(round(era5_df3[p].std(),1)), fontdict={"weight":"bold", "color":"tab:red"})
-			plt.text(12,20,str(round(df3[df3["model"]=="ACCESS-ESM1-5"][p].std(),1)), fontdict={"weight":"bold", "color":"tab:green"})
-			plt.text(15,20,str(round(df3[df3["model"]=="ACCESS-CM2"][p].std(),1)), fontdict={"weight":"bold", "color":"tab:blue"})
-			inset = inset_locator.inset_axes(ax, width="12%", height="40%",loc=4)
-		else:
-			plt.text(0.5,90,str(round(np.median(std_cmip5),1))+" ("+str(round(cmip_low,1))+", "+str(round(cmip_up,1))+")", fontdict={"weight":"bold"})
-			plt.text(9,90,str(round(era5_df3[p].std(),1)), fontdict={"weight":"bold", "color":"tab:red"})
-			plt.text(12,90,str(round(df3[df3["model"]=="ACCESS-ESM1-5"][p].std(),1)), fontdict={"weight":"bold", "color":"tab:green"})
-			plt.text(15,90,str(round(df3[df3["model"]=="ACCESS-CM2"][p].std(),1)), fontdict={"weight":"bold", "color":"tab:blue"})
-			inset = inset_locator.inset_axes(ax, width="12%", height="40%",loc=1)
-		xr.plot.contour(xr.where(aus_da==1, 1.5, 0.5), colors=["k"], levels=[1], ax=inset, add_labels=False)
-		xr.plot.contourf(xr.where(nrm_da==i, 1, 0), colors=["none","gray"], levels=[0.5,1], ax=inset, add_labels=False, add_colorbar=False)
-		inset.yaxis.set_ticks([]) 
-		inset.xaxis.set_ticks([])
+		plt.text(0.5,20,str(round(np.median(std_cmip5),1))+" ("+str(round(cmip_low,1))+", "+str(round(cmip_up,1))+")", fontdict={"weight":"bold"})
+		plt.text(9,20,str(round(era5_df3[p_list[i]].std(),1)), fontdict={"weight":"bold", "color":"tab:red"})
+		plt.text(12,20,str(round(df3[df3["model"]=="ACCESS-ESM1-5"][p_list[i]].std(),1)), fontdict={"weight":"bold", "color":"tab:green"})
+		plt.text(15,20,str(round(df3[df3["model"]=="ACCESS-CM2"][p_list[i]].std(),1)), fontdict={"weight":"bold", "color":"tab:blue"})
 		cnt=cnt+1
 	fig.text(0.05, 0.4, "Mean annual environments (days)", rotation=90)
 	plt.subplots_adjust(hspace=0.3, top=0.95)    
-	plt.savefig("out.png",bbox_inches="tight")
+	plt.savefig("/g/data/eg3/ab4502/figs/CMIP/interannual_ts_indices.png",bbox_inches="tight")

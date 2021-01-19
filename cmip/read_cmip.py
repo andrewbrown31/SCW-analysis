@@ -56,6 +56,9 @@ def read_cmip(model, experiment, ensemble, year, domain, cmip_ver=5, group = "",
 			ps_files = np.sort(glob.glob("/g/data/al33/replicas/CMIP5/combined/"+\
 				    group+"/"+model+"/"+experiment+\
 				    "/3hr/atmos/3hr/"+ensemble+"/"+ver3hr+"/ps/*"))
+			pr_files = np.sort(glob.glob("/g/data/al33/replicas/CMIP5/combined/"+\
+				    group+"/"+model+"/"+experiment+\
+				    "/3hr/atmos/3hr/"+ensemble+"/"+ver3hr+"/pr/*"))
 
 		else:
 
@@ -87,6 +90,9 @@ def read_cmip(model, experiment, ensemble, year, domain, cmip_ver=5, group = "",
 			ps_files = np.sort(glob.glob("/g/data/r87/DRSv3/CMIP5/"+\
 				    model+"/"+experiment+\
 				    "/3hr/atmos/"+ensemble+"/ps/latest/*"))
+			pr_files = np.sort(glob.glob("/g/data/r87/DRSv3/CMIP5/"+\
+				    model+"/"+experiment+\
+				    "/3hr/atmos/"+ensemble+"/pr/latest/*"))
 	elif cmip_ver == 6:
 
 		#Get CMIP6 file paths
@@ -124,6 +130,7 @@ def read_cmip(model, experiment, ensemble, year, domain, cmip_ver=5, group = "",
 	uas_fid = get_fid( uas_files, year)
 	vas_fid = get_fid( vas_files, year)
 	ps_fid = get_fid( ps_files, year)
+	pr_fid = get_fid( pr_files, year)
 
 	#Load the data
 	hus = xr.open_mfdataset([hus_files[i] for i in hus_fid], use_cftime=True)
@@ -137,6 +144,26 @@ def read_cmip(model, experiment, ensemble, year, domain, cmip_ver=5, group = "",
 	uas = xr.open_mfdataset([uas_files[i] for i in uas_fid], use_cftime=True)
 	vas = xr.open_mfdataset([vas_files[i] for i in vas_fid], use_cftime=True)
 	ps = xr.open_mfdataset([ps_files[i] for i in ps_fid], use_cftime=True)
+	try:
+		pr = xr.open_mfdataset([pr_files[i] for i in pr_fid], use_cftime=True).interp({"time":ps.time}, method="linear")
+	except:
+		pass
+
+	#If lon ranges from 0-360, reassign coordinates to be in the range -180-180
+	if hus.lon.values.max() >= 350:
+		hus.coords['lon'] = (hus.coords['lon'] + 180) % 360 - 180; hus = hus.sortby(hus.lon)
+		ta.coords['lon'] = (ta.coords['lon'] + 180) % 360 - 180; ta = ta.sortby(ta.lon)
+		ua.coords['lon'] = (ua.coords['lon'] + 180) % 360 - 180; ua = ua.sortby(ua.lon)
+		va.coords['lon'] = (va.coords['lon'] + 180) % 360 - 180; va = va.sortby(va.lon)
+		huss.coords['lon'] = (huss.coords['lon'] + 180) % 360 - 180; huss = huss.sortby(huss.lon)
+		tas.coords['lon'] = (tas.coords['lon'] + 180) % 360 - 180; tas = tas.sortby(tas.lon)
+		uas.coords['lon'] = (uas.coords['lon'] + 180) % 360 - 180; uas = uas.sortby(uas.lon)
+		vas.coords['lon'] = (vas.coords['lon'] + 180) % 360 - 180; vas = vas.sortby(vas.lon)
+		ps.coords['lon'] = (ps.coords['lon'] + 180) % 360 - 180; ps = ps.sortby(ps.lon)
+		try:
+			pr.coords['lon'] = (pr.coords['lon'] + 180) % 360 - 180; pr = pr.sortby(pr.lon)
+		except:
+			pass
 
 	#Trim to the domain given by "domain", as well as the year given by "year". Expand domain 
 	# for later compairsons with ERA5, and for interpolation of U/V
@@ -150,6 +177,10 @@ def read_cmip(model, experiment, ensemble, year, domain, cmip_ver=5, group = "",
 	huss = trim_cmip5(huss, domain, year)
 	tas = trim_cmip5(tas, domain, year)
 	ps = trim_cmip5(ps, domain, year)
+	try:
+		pr = trim_cmip5(pr, domain, year)
+	except:
+		pass
 
 	#Interpolate u, v, uas and vas, using a slightly bigger domain, then trim to "domain"
 	ua = trim_cmip5(ua, [domain[0],domain[1],domain[2],domain[3]], year)
@@ -166,9 +197,14 @@ def read_cmip(model, experiment, ensemble, year, domain, cmip_ver=5, group = "",
 	vas = trim_cmip5(vas, domain, year)
 
 	#Get common times for all datasets
-	common_times = np.array(list(set(hus.time.values) & set(ta.time.values) & set(ua.time.values)\
-		 & set(va.time.values) & set(huss.time.values) & set(tas.time.values)\
-		 & set(uas.time.values) & set(vas.time.values) & set(ps.time.values)))
+	try:
+		common_times = np.array(list(set(hus.time.values) & set(ta.time.values) & set(ua.time.values)\
+			 & set(va.time.values) & set(huss.time.values) & set(tas.time.values)\
+			& set(uas.time.values) & set(vas.time.values) & set(ps.time.values) & set(pr.time.values)))
+	except:
+		common_times = np.array(list(set(hus.time.values) & set(ta.time.values) & set(ua.time.values)\
+			 & set(va.time.values) & set(huss.time.values) & set(tas.time.values)\
+			& set(uas.time.values) & set(vas.time.values) & set(ps.time.values)))
 
 	#Restrict all data to common times
 	hus = hus.sel({"time": np.in1d(hus.time, common_times)})
@@ -180,6 +216,10 @@ def read_cmip(model, experiment, ensemble, year, domain, cmip_ver=5, group = "",
 	uas = uas.sel({"time": np.in1d(uas.time, common_times)})
 	vas = vas.sel({"time": np.in1d(vas.time, common_times)})
 	ps = ps.sel({"time": np.in1d(ps.time, common_times)})
+	try:
+		pr = pr.sel({"time": np.in1d(pr.time, common_times)})
+	except:
+		pass
 
 	#Either convert vertical coordinate to height or pressure, depending on the model 
 	names = [] 
@@ -212,9 +252,11 @@ def read_cmip(model, experiment, ensemble, year, domain, cmip_ver=5, group = "",
 		q = hus.hus / (1 - hus.hus)
 		tv = ta.ta * ( ( q + 0.622) / (0.622 * (1+q) ) )
 		z = (-287 * tv * (np.log( p / ps.ps)).transpose("time","lev","lat","lon") ) / 9.8
-		orog = trim_cmip5( xr.open_dataset(glob.glob("/g/data/r87/DRSv3/CMIP5/"+\
-		    model+"/historical/fx/atmos/r0i0p0/orog/latest/orog*.nc")[0]).orog,\
-		    domain, year).values
+		orog = xr.open_dataset(glob.glob("/g/data/r87/DRSv3/CMIP5/"+\
+		    model+"/historical/fx/atmos/r0i0p0/orog/latest/orog*.nc")[0])
+		if orog.lon.values.max() >= 350:
+			orog.coords['lon'] = (orog.coords['lon'] + 180) % 360 - 180; orog = orog.sortby(orog.lon)
+		orog = trim_cmip5(orog.orog, domain, year).values
 		orog[orog<0] = 0
 		z = (z + orog).values
 	else:
@@ -245,6 +287,12 @@ def read_cmip(model, experiment, ensemble, year, domain, cmip_ver=5, group = "",
 	uas=uas.values
 	vas=vas.values
 
+	try:
+		pr = pr.pr.values * (60*60*3)
+		pr = np.where(pr<0, 0, pr)
+	except:
+		pr = np.zeros(sfc_pres.shape)
+
 	#Mask all data above 100 hPa. For ACCESS-CM2, mask data below 20 m
 	if model == "ACCESS-CM2":
 		ta[(pres < 100) | (p == 0) | (p == np.inf)] = np.nan
@@ -262,7 +310,7 @@ def read_cmip(model, experiment, ensemble, year, domain, cmip_ver=5, group = "",
 	date_list = p.time.values
 	date_list = np.array([dt.datetime.strptime(date_list[t].strftime(), "%Y-%m-%d %H:%M:%S") for t in np.arange(len(date_list))]) 
 
-	return [ta, hur, z, orog, pres, sfc_pres, ua, va, uas, vas, tas, ta2d, lon,\
+	return [ta, hur, z, orog, pres, sfc_pres, ua, va, uas, vas, tas, ta2d, pr, lon,\
 		    lat, date_list]
 
 def read_cmip6(group, model, experiment, ensemble, year, domain):
@@ -392,7 +440,7 @@ def trim_cmip5(dataset, domain, year):
 	try:
 		dataset = dataset.sel({"lon":slice(domain[2], domain[3]),\
 		    "lat":slice(domain[0],domain[1]),\
-		    "time":dataset["time.year"]==year})
+		    "time":np.in1d(dataset["time.year"],year)})
 	except:
 		dataset = dataset.sel({"lon":slice(domain[2], domain[3]),\
 		    "lat":slice(domain[0],domain[1])})

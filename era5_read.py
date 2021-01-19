@@ -11,13 +11,163 @@ import pandas as pd
 from barra_read import date_seq
 from calc_param import get_dp
 
-def read_era5(domain,times,pres=True):
+def read_era5_rt52(domain,times,pres=True,delta_t=1):
 	#Open ERA5 netcdf files and extract variables needed for a range of times 
 	# and given spatial domain
 
 	ref = dt.datetime(1900,1,1,0,0,0)
 	if len(times) > 1:
-		date_list = date_seq(times,"hours",1)
+		date_list = date_seq(times,"hours",delta_t)
+	else:
+		date_list = times
+	formatted_dates = [format_dates(x) for x in date_list]
+	unique_dates = np.unique(formatted_dates)
+	time_hours = np.empty(len(date_list))
+	for t in np.arange(0,len(date_list)):
+		time_hours[t] = (date_list[t] - ref).total_seconds() / (3600)
+	if (date_list[0].day==1) & (date_list[0].hour<3):
+		fc_unique_dates = np.insert(unique_dates, 0, format_dates(date_list[0] - dt.timedelta(1)))
+	else:
+		fc_unique_dates = np.copy(unique_dates)
+
+	#Get time-invariant pressure and spatial info
+	no_p, p, p_ind = get_pressure(100)
+	p = p[p_ind]
+	lon,lat = get_lat_lon_rt52()
+	lon_ind = np.where((lon >= domain[2]) & (lon <= domain[3]))[0]
+	lat_ind = np.where((lat >= domain[0]) & (lat <= domain[1]))[0]
+	lon = lon[lon_ind]
+	lat = lat[lat_ind]
+	terrain = reform_terrain(lon,lat)
+	sfc_lon,sfc_lat = get_lat_lon_sfc()
+	sfc_lon_ind = np.where((sfc_lon >= domain[2]) & (sfc_lon <= domain[3]))[0]
+	sfc_lat_ind = np.where((sfc_lat >= domain[0]) & (sfc_lat <= domain[1]))[0]
+	sfc_lon = sfc_lon[sfc_lon_ind]
+	sfc_lat = sfc_lat[sfc_lat_ind]
+
+	#Initialise arrays for each variable
+	if pres:
+		ta = np.empty((len(date_list),no_p,len(lat_ind),len(lon_ind)))
+		dp = np.empty((len(date_list),no_p,len(lat_ind),len(lon_ind)))
+		hur = np.empty((len(date_list),no_p,len(lat_ind),len(lon_ind)))
+		hgt = np.empty((len(date_list),no_p,len(lat_ind),len(lon_ind)))
+		ua = np.empty((len(date_list),no_p,len(lat_ind),len(lon_ind)))
+		va = np.empty((len(date_list),no_p,len(lat_ind),len(lon_ind)))
+		wap = np.empty((len(date_list),no_p,len(lat_ind),len(lon_ind)))
+	uas = np.empty((len(date_list),len(sfc_lat_ind),len(sfc_lon_ind)))
+	vas = np.empty((len(date_list),len(sfc_lat_ind),len(sfc_lon_ind)))
+	ps = np.empty((len(date_list),len(sfc_lat_ind),len(sfc_lon_ind)))
+	cp = np.zeros(ps.shape) * np.nan
+	tp = np.zeros(ps.shape) * np.nan
+	cape = np.zeros(ps.shape) * np.nan
+	wg10 = np.zeros(ps.shape) * np.nan
+
+	tas = np.empty((len(date_list),len(sfc_lat_ind),len(sfc_lon_ind)))
+	ta2d = np.empty((len(date_list),len(sfc_lat_ind),len(sfc_lon_ind)))
+
+	for date in unique_dates:
+
+	#Load ERA-Interim reanalysis files
+		if pres:
+			ta_file = nc.Dataset(glob.glob("/g/data/rt52/era5/pressure-levels/reanalysis/t/"+date[0:4]+\
+				"/t_era5_oper_pl_"+date+"*.nc")[0])
+			z_file = nc.Dataset(glob.glob("/g/data/rt52/era5/pressure-levels/reanalysis/z/"+date[0:4]+\
+				"/z_era5_oper_pl_"+date+"*.nc")[0])
+			ua_file = nc.Dataset(glob.glob("/g/data/rt52/era5/pressure-levels/reanalysis/u/"+date[0:4]+\
+				"/u_era5_oper_pl_"+date+"*.nc")[0])
+			va_file = nc.Dataset(glob.glob("/g/data/rt52/era5/pressure-levels/reanalysis/v/"+date[0:4]+\
+				"/v_era5_oper_pl_"+date+"*.nc")[0])
+			hur_file = nc.Dataset(glob.glob("/g/data/rt52/era5/pressure-levels/reanalysis/r/"+date[0:4]+\
+				"/r_era5_oper_pl_"+date+"*.nc")[0])
+
+		uas_file = nc.Dataset(glob.glob("/g/data/ub4/era5/netcdf/surface/u10/"+date[0:4]+\
+			"/u10_era5_global_"+date+"*.nc")[0])
+		vas_file = nc.Dataset(glob.glob("/g/data/ub4/era5/netcdf/surface/v10/"+date[0:4]+\
+			"/v10_era5_global_"+date+"*.nc")[0])
+		ta2d_file = nc.Dataset(glob.glob("/g/data/ub4/era5/netcdf/surface/d2m/"+date[0:4]+\
+			"/d2m_era5_global_"+date+"*.nc")[0])
+		tas_file = nc.Dataset(glob.glob("/g/data/ub4/era5/netcdf/surface/t2m/"+date[0:4]+\
+			"/t2m_era5_global_"+date+"*.nc")[0])
+		ps_file = nc.Dataset(glob.glob("/g/data/ub4/era5/netcdf/surface/sp/"+date[0:4]+\
+			"/sp_era5_global_"+date+"*.nc")[0])
+		cape_file = nc.Dataset(glob.glob("/g/data/ub4/era5/netcdf/surface/cape/"+date[0:4]+\
+			"/cape_era5_global_"+date+"*.nc")[0])
+		cp_file = xr.open_dataset(glob.glob("/g/data/ub4/era5/netcdf/surface/cp/"+date[0:4]+\
+			"/cp_era5_global_"+date+"*.nc")[0]).isel({"longitude":sfc_lon_ind, "latitude":sfc_lat_ind})\
+			    .resample(indexer={"time":str(delta_t)+"H"},\
+			    label="right",closed="right").sum("time")["cp"][1:,:,:]
+		tp_file = xr.open_dataset(glob.glob("/g/data/ub4/era5/netcdf/surface/tp/"+date[0:4]+\
+			"/tp_era5_global_"+date+"*.nc")[0]).isel({"longitude":sfc_lon_ind, "latitude":sfc_lat_ind})\
+			    .resample(indexer={"time":str(delta_t)+"H"},\
+			    label="right",closed="right").sum("time")["tp"][1:,:,:]
+		wg10_file = nc.Dataset(glob.glob("/g/data/ub4/era5/netcdf/surface/fg10/"+date[0:4]+\
+			"/fg10_era5_global_"+date+"*.nc")[0])
+
+		#Get times to load in from file
+		if pres:
+			times = ta_file["time"][:]
+			time_ind = [np.where(x==times)[0][0] for x in time_hours if (x in times)]
+			date_ind = np.where(np.array(formatted_dates) == date)[0]
+		else:
+			times = uas_file["time"][:]
+			time_ind = [np.where(x==times)[0][0] for x in time_hours if (x in times)]
+			date_ind = np.where(np.array(formatted_dates) == date)[0]
+
+		#Get times to load in from forecast files (wg10)
+		fc_times = wg10_file["time"][:]
+		fc_time_ind = [np.where(x==fc_times)[0][0] for x in time_hours if (x in fc_times)]
+
+		#Get times to load in from precip files (tp)
+		tp_time_ind = np.in1d(tp_file.time, [np.datetime64(date_list[i]) for i in np.arange(len(date_list))])
+
+		#Load analysis data
+		if pres:
+			ta[date_ind,:,:,:] = ta_file["t"][time_ind,p_ind,lat_ind,lon_ind] - 273.15
+			#wap[date_ind,:,:,:] = wap_file["wap"][time_ind,p_ind,lat_ind,lon_ind]
+			ua[date_ind,:,:,:] = ua_file["u"][time_ind,p_ind,lat_ind,lon_ind]
+			va[date_ind,:,:,:] = va_file["v"][time_ind,p_ind,lat_ind,lon_ind]
+			hgt[date_ind,:,:,:] = z_file["z"][time_ind,p_ind,lat_ind,lon_ind] / 9.8
+			hur[date_ind,:,:,:] = hur_file["r"][time_ind,p_ind,lat_ind,lon_ind]
+			hur[hur<0] = 0
+			hur[hur>100] = 100
+			dp[date_ind,:,:,:] = get_dp(ta[date_ind,:,:,:],hur[date_ind,:,:,:])
+		uas[date_ind,:,:] = uas_file["u10"][time_ind,sfc_lat_ind,sfc_lon_ind]
+		vas[date_ind,:,:] = vas_file["v10"][time_ind,sfc_lat_ind,sfc_lon_ind]
+		tas[date_ind,:,:] = tas_file["t2m"][time_ind,sfc_lat_ind,sfc_lon_ind] - 273.15
+		ta2d[date_ind,:,:] = ta2d_file["d2m"][time_ind,sfc_lat_ind,sfc_lon_ind] - 273.15
+		ps[date_ind,:,:] = ps_file["sp"][time_ind,sfc_lat_ind,sfc_lon_ind] / 100
+		fc_date_ind = np.in1d(date_list, nc.num2date(wg10_file["time"][fc_time_ind], wg10_file["time"].units))
+		tp_date_ind = np.in1d([np.datetime64(date_list[i]) for i in np.arange(len(date_list))],tp_file.time.values)
+		#cp[fc_date_ind,:,:] = cp_file["cp"][fc_time_ind,sfc_lat_ind,sfc_lon_ind]
+		#tp[fc_date_ind,:,:] = tp_file["tp"][fc_time_ind,sfc_lat_ind,sfc_lon_ind]
+		cp[tp_date_ind,:,:] = cp_file.isel({"time":tp_time_ind}).values * 1000
+		tp[tp_date_ind,:,:] = tp_file.isel({"time":tp_time_ind}).values * 1000
+		cape[fc_date_ind,:,:] = cape_file["cape"][fc_time_ind,sfc_lat_ind,sfc_lon_ind]
+		wg10[fc_date_ind,:,:] = wg10_file["fg10"][fc_time_ind,sfc_lat_ind,sfc_lon_ind]
+
+		if pres:
+			ta_file.close();z_file.close();ua_file.close();va_file.close();hur_file.close()
+		uas_file.close();vas_file.close();tas_file.close();ta2d_file.close();ps_file.close()
+
+	if pres:
+		p = np.flip(p)
+		ta = np.flip(ta, axis=1)
+		dp = np.flip(dp, axis=1)
+		hur = np.flip(hur, axis=1)
+		hgt = np.flip(hgt, axis=1)
+		ua = np.flip(ua, axis=1)
+		va = np.flip(va, axis=1)
+		return [ta,dp,hur,hgt,terrain,p,ps,ua,va,uas,vas,tas,ta2d,cp,tp,wg10,cape,lon,lat,date_list]
+	else:
+		return [ps,uas,vas,tas,ta2d,cp,tp,wg10,cape,sfc_lon,sfc_lat,date_list]
+
+def read_era5(domain,times,pres=True,delta_t=1):
+	#Open ERA5 netcdf files and extract variables needed for a range of times 
+	# and given spatial domain
+
+	ref = dt.datetime(1900,1,1,0,0,0)
+	if len(times) > 1:
+		date_list = date_seq(times,"hours",delta_t)
 	else:
 		date_list = times
 	formatted_dates = [format_dates(x) for x in date_list]
@@ -89,6 +239,8 @@ def read_era5(domain,times,pres=True):
 			"/t2m_era5_global_"+date+"*.nc")[0])
 		ps_file = nc.Dataset(glob.glob("/g/data/ub4/era5/netcdf/surface/sp/"+date[0:4]+\
 			"/sp_era5_global_"+date+"*.nc")[0])
+		cape_file = nc.Dataset(glob.glob("/g/data/ub4/era5/netcdf/surface/cape/"+date[0:4]+\
+			"/cape_era5_global_"+date+"*.nc")[0])
 		cp_file = nc.Dataset(glob.glob("/g/data/ub4/era5/netcdf/surface/cp/"+date[0:4]+\
 			"/cp_era5_global_"+date+"*.nc")[0])
 		wg10_file = nc.Dataset(glob.glob("/g/data/ub4/era5/netcdf/surface/fg10/"+date[0:4]+\
@@ -126,6 +278,7 @@ def read_era5(domain,times,pres=True):
 		ps[date_ind,:,:] = ps_file["sp"][time_ind,sfc_lat_ind,sfc_lon_ind] / 100
 		fc_date_ind = np.in1d(date_list, nc.num2date(cp_file["time"][fc_time_ind], cp_file["time"].units))
 		cp[fc_date_ind,:,:] = cp_file["cp"][fc_time_ind,sfc_lat_ind,sfc_lon_ind]
+		cape[fc_date_ind,:,:] = cape_file["cape"][fc_time_ind,sfc_lat_ind,sfc_lon_ind]
 		wg10[fc_date_ind,:,:] = wg10_file["fg10"][fc_time_ind,sfc_lat_ind,sfc_lon_ind]
 
 		if pres:
@@ -202,6 +355,14 @@ def get_lat_lon_sfc():
 	lon = uas_file["longitude"][:]
 	lat = uas_file["latitude"][:]
 	uas_file.close()
+	return [lon,lat]
+
+def get_lat_lon_rt52():
+	ta_file = nc.Dataset(glob.glob("/g/data/rt52/era5/pressure-levels/reanalysis/t/2012/"+\
+"t_era5_oper_pl_"+"201201"+"*.nc")[0])
+	lon = ta_file["longitude"][:]
+	lat = ta_file["latitude"][:]
+	ta_file.close()
 	return [lon,lat]
 
 def get_lat_lon():
@@ -564,14 +725,17 @@ if __name__ == "__main__":
 		start_time = int(sys.argv[1])
 		end_time = int(sys.argv[2])
 
-	#loc_id, points = get_aus_stn_info()
-	loc_id = ['Melbourne', 'Wollongong', 'Gympie', 'Grafton', 'Canberra', 'Marburg', \
-		'Adelaide', 'Namoi', 'Perth', 'Hobart']
-	radar_latitude = [-37.8553, -34.2625, -25.9574, -29.622, -35.6614, -27.608, -34.6169,\
-			-31.0236, -32.3917, -43.1122]
-	radar_longitude = [144.7554, 150.8752, 152.577, 152.951, 149.5122, 152.539, 138.4689, \
-			150.1917, 115.867, 147.8057]
-	points = [(radar_longitude[i], radar_latitude[i]) for i in np.arange(len(radar_latitude))]
+	loc_id, points = get_aus_stn_info()
+	#loc_id = ['Melbourne', 'Wollongong', 'Gympie', 'Grafton', 'Canberra', 'Marburg', \
+	#	'Adelaide', 'Namoi', 'Perth', 'Hobart']
+	#radar_latitude = [-37.8553, -34.2625, -25.9574, -29.622, -35.6614, -27.608, -34.6169,\
+	#		-31.0236, -32.3917, -43.1122]
+	#radar_longitude = [144.7554, 150.8752, 152.577, 152.951, 149.5122, 152.539, 138.4689, \
+	#		150.1917, 115.867, 147.8057]
+	#points = [(radar_longitude[i], radar_latitude[i]) for i in np.arange(len(radar_latitude))]
 
-	to_points_loop_rad(loc_id, points, "era5_hail_"+str(start_time)+"_"+str(end_time), \
-			start_time, end_time, rad=100, lsm=True, variables=["ml_cape","ship","s06","mhgt","mlcape*s06"], pb=False)
+	#to_points_loop(loc_id,points,"era5_allvars_v3_"+str(start_time)+"_"+str(end_time),start_time,end_time,variables=False)
+	to_points_loop_rad(loc_id, points, "era5_rad50km_"+str(start_time)+"_"+str(end_time), \
+			start_time, end_time, rad=50, lsm=True, pb=True,\
+			variables=["t_totals","eff_sherb","dcp","k_index","gustex","sweat","mucape*s06","mmp","mlcape*s06","scp_fixed","Uwindinf",\
+			"effcape*s06","ml_el","ship","ml_cape","eff_lcl","cp","Umeanwindinf","wg10","ebwd","sbcape*s06"])

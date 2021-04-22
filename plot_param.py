@@ -488,10 +488,10 @@ def plot_ranked_hss_proximity_test_barra():
 	plt.plot(barra.values, np.arange(barra1.shape[0],0,-1), linestyle="none",color="tab:blue", marker="D",label="Next hour",ms=ms,mfc="none")
 	barra2 = barra_floor2.rename(index=renames).loc[sorted_vars,"pss_conv_aws"]
 	plt.plot(barra2.values, np.arange(barra2.shape[0],0,-1), linestyle="none",color="tab:blue", marker="o",label="Second most recent hour",mfc="none",ms=ms)
-	#barra3 = barra_max_floor.rename(index=renames).loc[sorted_vars,"pss_conv_aws"]
-	#plt.plot(barra3.values, np.arange(barra3.shape[0],0,-1), linestyle="none",color="tab:blue", marker="s",label="Most recent hour, spatial max",mfc="none",ms=ms)
-	#barra4 = barra_mean_floor.rename(index=renames).loc[sorted_vars,"pss_conv_aws"]
-	#plt.plot(barra4.values, np.arange(barra4.shape[0],0,-1), linestyle="none",color="tab:blue", marker="^",label="Most recent hour, spatial mean",mfc="none",ms=ms)
+	barra3 = barra_max_floor.rename(index=renames).loc[sorted_vars,"pss_conv_aws"]
+	plt.plot(barra3.values, np.arange(barra3.shape[0],0,-1), linestyle="none",color="tab:blue", marker="s",label="Most recent hour, spatial max",mfc="none",ms=ms)
+	barra4 = barra_mean_floor.rename(index=renames).loc[sorted_vars,"pss_conv_aws"]
+	plt.plot(barra4.values, np.arange(barra4.shape[0],0,-1), linestyle="none",color="tab:blue", marker="^",label="Most recent hour, spatial mean",mfc="none",ms=ms)
 	plt.yticks(np.arange(barra1.shape[0],0,-1))
 	plt.gca().set_yticklabels(barra1.index.values.astype(str))
 	plt.gca().tick_params(axis="y",labelrotation=45)
@@ -505,10 +505,10 @@ def plot_ranked_hss_proximity_test_barra():
 	plt.plot(barra.values, np.arange(barra1.shape[0],0,-1), linestyle="none",color="tab:blue", marker="D",label="Next hour",ms=ms,mfc="none")
 	barra2 = barra_floor2.rename(index=renames).loc[sorted_vars,"pss_sta"]
 	plt.plot(barra2.values, np.arange(barra2.shape[0],0,-1), linestyle="none",color="tab:blue", marker="o",label="Second most recent hour",mfc="none",ms=ms)
-	#barra3 = barra_max_floor.rename(index=renames).loc[sorted_vars,"pss_sta"]
-	#plt.plot(barra3.values, np.arange(barra3.shape[0],0,-1), linestyle="none",color="tab:blue", marker="s",label="Most recent hour, spatial max",mfc="none",ms=ms)
-	#barra4 = barra_mean_floor.rename(index=renames).loc[sorted_vars,"pss_sta"]
-	#plt.plot(barra4.values, np.arange(barra4.shape[0],0,-1), linestyle="none",color="tab:blue", marker="^",label="Most recent hour, spatial mean",mfc="none",ms=ms)
+	barra3 = barra_max_floor.rename(index=renames).loc[sorted_vars,"pss_sta"]
+	plt.plot(barra3.values, np.arange(barra3.shape[0],0,-1), linestyle="none",color="tab:blue", marker="s",label="Most recent hour, spatial max",mfc="none",ms=ms)
+	barra4 = barra_mean_floor.rename(index=renames).loc[sorted_vars,"pss_sta"]
+	plt.plot(barra4.values, np.arange(barra4.shape[0],0,-1), linestyle="none",color="tab:blue", marker="^",label="Most recent hour, spatial mean",mfc="none",ms=ms)
 
 	plt.yticks(np.arange(barra1.shape[0],0,-1))
 	plt.gca().set_yticklabels(barra1.index.values.astype(str))
@@ -569,15 +569,15 @@ def plot_ranked_hss_proximity_test():
 	plt.subplot(1,2,1)
 	plt.title("Measured events")
 	era1 = era5_floor.rename(index=renames).loc[sorted_vars,"pss_conv_aws"]
-	plt.plot(era1.values, np.arange(era1.shape[0],0,-1), linestyle="none",color="tab:blue", marker="x",label="Most recent hour",ms=ms)
+	plt.plot(era1.values, np.arange(era1.shape[0],0,-1), linestyle="none",color="tab:blue", marker="x",label="Most recent hour, closest point",ms=ms)
 	era5 = era5_ceil.rename(index=renames).loc[sorted_vars,"pss_conv_aws"]
-	plt.plot(era5.values, np.arange(era1.shape[0],0,-1), linestyle="none",color="tab:blue", marker="D",label="Next hour",ms=ms,mfc="none")
+	plt.plot(era5.values, np.arange(era1.shape[0],0,-1), linestyle="none",color="tab:blue", marker="D",label="Next hour, closest point",ms=ms,mfc="none")
 	era2 = era5_floor2.rename(index=renames).loc[sorted_vars,"pss_conv_aws"]
-	plt.plot(era2.values, np.arange(era2.shape[0],0,-1), linestyle="none",color="tab:blue", marker="o",label="Second most recent hour",mfc="none",ms=ms)
-	#era3 = era5_max_floor.rename(index=renames).loc[sorted_vars,"pss_conv_aws"]
-	#plt.plot(era3.values, np.arange(era3.shape[0],0,-1), linestyle="none",color="tab:blue", marker="s",label="Most recent hour, spatial max",mfc="none",ms=ms)
-	#era4 = era5_mean_floor.rename(index=renames).loc[sorted_vars,"pss_conv_aws"]
-	#plt.plot(era4.values, np.arange(era4.shape[0],0,-1), linestyle="none",color="tab:blue", marker="^",label="Most recent hour, spatial mean",mfc="none",ms=ms)
+	plt.plot(era2.values, np.arange(era2.shape[0],0,-1), linestyle="none",color="tab:blue", marker="o",label="Second most recent hour, closest point",mfc="none",ms=ms)
+	era3 = era5_max_floor.rename(index=renames).loc[sorted_vars,"pss_conv_aws"]
+	plt.plot(era3.values, np.arange(era3.shape[0],0,-1), linestyle="none",color="tab:blue", marker="s",label="Most recent hour, spatial max",mfc="none",ms=ms)
+	era4 = era5_mean_floor.rename(index=renames).loc[sorted_vars,"pss_conv_aws"]
+	plt.plot(era4.values, np.arange(era4.shape[0],0,-1), linestyle="none",color="tab:blue", marker="^",label="Most recent hour, spatial mean",mfc="none",ms=ms)
 	plt.yticks(np.arange(era1.shape[0],0,-1))
 	plt.gca().set_yticklabels(era1.index.values.astype(str))
 	plt.gca().tick_params(axis="y",labelrotation=45)
@@ -586,15 +586,15 @@ def plot_ranked_hss_proximity_test():
 	ax=plt.subplot(1,2,2)
 	plt.title("Reported events")
 	era1 = era5_floor.rename(index=renames).loc[sorted_vars,"pss_sta"]
-	plt.plot(era1.values, np.arange(era1.shape[0],0,-1), linestyle="none",color="tab:blue", marker="x",label="Most recent hour",ms=ms)
+	plt.plot(era1.values, np.arange(era1.shape[0],0,-1), linestyle="none",color="tab:blue", marker="x",label="Most recent hour, closest point",ms=ms)
 	era5 = era5_ceil.rename(index=renames).loc[sorted_vars,"pss_sta"]
-	plt.plot(era5.values, np.arange(era1.shape[0],0,-1), linestyle="none",color="tab:blue", marker="D",label="Next hour",ms=ms,mfc="none")
+	plt.plot(era5.values, np.arange(era1.shape[0],0,-1), linestyle="none",color="tab:blue", marker="D",label="Next hour, closest point",ms=ms,mfc="none")
 	era2 = era5_floor2.rename(index=renames).loc[sorted_vars,"pss_sta"]
-	plt.plot(era2.values, np.arange(era2.shape[0],0,-1), linestyle="none",color="tab:blue", marker="o",label="Second most recent hour",mfc="none",ms=ms)
-	#era3 = era5_max_floor.rename(index=renames).loc[sorted_vars,"pss_sta"]
-	#plt.plot(era3.values, np.arange(era3.shape[0],0,-1), linestyle="none",color="tab:blue", marker="s",label="Most recent hour, spatial max",mfc="none",ms=ms)
-	#era4 = era5_mean_floor.rename(index=renames).loc[sorted_vars,"pss_sta"]
-	#plt.plot(era4.values, np.arange(era4.shape[0],0,-1), linestyle="none",color="tab:blue", marker="^",label="Most recent hour, spatial mean",mfc="none",ms=ms)
+	plt.plot(era2.values, np.arange(era2.shape[0],0,-1), linestyle="none",color="tab:blue", marker="o",label="Second most recent hour, closest point",mfc="none",ms=ms)
+	era3 = era5_max_floor.rename(index=renames).loc[sorted_vars,"pss_sta"]
+	plt.plot(era3.values, np.arange(era3.shape[0],0,-1), linestyle="none",color="tab:blue", marker="s",label="Most recent hour, spatial max",mfc="none",ms=ms)
+	era4 = era5_mean_floor.rename(index=renames).loc[sorted_vars,"pss_sta"]
+	plt.plot(era4.values, np.arange(era4.shape[0],0,-1), linestyle="none",color="tab:blue", marker="^",label="Most recent hour, spatial mean",mfc="none",ms=ms)
 
 	plt.yticks(np.arange(era1.shape[0],0,-1))
 	plt.gca().set_yticklabels(era1.index.values.astype(str))

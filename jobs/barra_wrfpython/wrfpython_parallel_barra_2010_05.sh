@@ -2,7 +2,7 @@
 
 #PBS -P eg3 
 #PBS -q normal
-#PBS -l walltime=48:00:00,mem=64GB 
+#PBS -l walltime=24:00:00,mem=64GB 
 #PBS -l ncpus=1
 #PBS -o /home/548/ab4502/working/ExtremeWind/jobs/messages/barra_fc_wrf_python_2010_05.o 
 #PBS -e /home/548/ab4502/working/ExtremeWind/jobs/messages/barra_fc_wrf_python_2010_05.e 
@@ -19,12 +19,12 @@ while [ "$d" != 2010-09-01 ]; do
 
   start_time=$(date -d "$d" +%Y%m%d)"00"
   end_time=$(date -d "$d"  +%Y%m%d)"23"
-  file="/g/data/eg3/ab4502/ExtremeWind/aus/barra_fc/barra_fc_$(date -d "$d" +%Y%m%d)_$(date -d "$d"  +%Y%m%d).nc"
+  file="/g/data/eg3/ab4502/ExtremeWind/vic/barra_fc/barra_fc_$(date -d "$d" +%Y%m%d)_$(date -d "$d"  +%Y%m%d).nc"
   if [ -e ${file} ]; then
      echo "INFO: FILE ALREADY EXISTS, GOING TO THE NEXT DAY,,,"
   else
      echo "INFO: RUNNING WRFPYTHON ON DATA FROM" $start_time "to" $end_time
-     python /home/548/ab4502/working/ExtremeWind/wrf_non_parallel.py -m barra_fc -r aus -t1 $start_time -t2 $end_time --issave True --outname barra_fc
+     python /home/548/ab4502/working/ExtremeWind/wrf_non_parallel.py -m barra_fc -r vic -t1 $start_time -t2 $end_time --issave True --outname barra_fc
   fi
 
   #REMOVE OLD MONTHLY FILES (done every day, but will only work the first day each month for one of the potential "month_end_date"s)
@@ -33,10 +33,10 @@ while [ "$d" != 2010-09-01 ]; do
   month_end_date2=$(date -d "$d" +%Y%m)"29"
   month_end_date3=$(date -d "$d" +%Y%m)"30"
   month_end_date4=$(date -d "$d" +%Y%m)"31"
-  rm -f "/g/data/eg3/ab4502/ExtremeWind/aus/barra_fc/barra_fc_${month_start_date}_${month_end_date1}.nc"
-  rm -f "/g/data/eg3/ab4502/ExtremeWind/aus/barra_fc/barra_fc_${month_start_date}_${month_end_date2}.nc"
-  rm -f "/g/data/eg3/ab4502/ExtremeWind/aus/barra_fc/barra_fc_${month_start_date}_${month_end_date3}.nc"
-  rm -f "/g/data/eg3/ab4502/ExtremeWind/aus/barra_fc/barra_fc_${month_start_date}_${month_end_date4}.nc"
+  rm -f "/g/data/eg3/ab4502/ExtremeWind/vic/barra_fc/barra_fc_${month_start_date}_${month_end_date1}.nc"
+  rm -f "/g/data/eg3/ab4502/ExtremeWind/vic/barra_fc/barra_fc_${month_start_date}_${month_end_date2}.nc"
+  rm -f "/g/data/eg3/ab4502/ExtremeWind/vic/barra_fc/barra_fc_${month_start_date}_${month_end_date3}.nc"
+  rm -f "/g/data/eg3/ab4502/ExtremeWind/vic/barra_fc/barra_fc_${month_start_date}_${month_end_date4}.nc"
 
   #Advance date
   d=$(date -I -d "$d + 1 day")
@@ -46,7 +46,7 @@ done
 
 #Concaternate daily netcdf output into monthly files
 module load cdo
-path="/g/data/eg3/ab4502/ExtremeWind/aus/barra_fc/"
+path="/g/data/eg3/ab4502/ExtremeWind/vic/barra_fc/"
 d=2010-05-01
 while [ "$d" != 2010-09-01 ]; do
 

@@ -2,7 +2,7 @@
 
 #PBS -P eg3 
 #PBS -q hugemem
-#PBS -l walltime=36:00:00,mem=1024GB 
+#PBS -l walltime=48:00:00,mem=1500GB 
 #PBS -l ncpus=1
 #PBS -o /home/548/ab4502/working/ExtremeWind/jobs/messages/wrf_python_BNU-ESM_rcp85.o 
 #PBS -e /home/548/ab4502/working/ExtremeWind/jobs/messages/wrf_python_BNU-ESM_rcp85.e 
@@ -11,6 +11,6 @@
 #Set up conda/shell environments 
 source activate wrfpython3.6 
 
-python /home/548/ab4502/working/ExtremeWind/wrf_non_parallel.py -m BNU-ESM -r aus -t1 2026010100 -t2 2045123123 --issave True --outname BNU-ESM_rcp85_r1i1p1 -e rcp85 --ens r1i1p1
-python /home/548/ab4502/working/ExtremeWind/wrf_non_parallel.py -m BNU-ESM -r aus -t1 2081010100 -t2 2100123123 --issave True --outname BNU-ESM_rcp85_r1i1p1 -e rcp85 --ens r1i1p1
+#python /home/548/ab4502/working/ExtremeWind/wrf_non_parallel.py -m BNU-ESM -r aus -t1 2026010100 -t2 2045123123 --issave True --outname BNU-ESM_rcp85_r1i1p1 -e rcp85 --ens r1i1p1
+python /home/548/ab4502/working/ExtremeWind/wrf_non_parallel_reduced.py -m BNU-ESM -r global -t1 2081010100 -t2 2100123123 --issave True --outname BNU-ESM_rcp85_r1i1p1 -e rcp85 --ens r1i1p1
 

@@ -20,57 +20,133 @@ import xarray as xr
 from obs_read import read_clim_ind
 
 def diagnostics_aws_compare():
-    
-	matplotlib.rcParams.update({'font.size': 14})
 
-	barra_hss, barra_wg10, barra_sta = optimise_pss("/g/data/eg3/ab4502/ExtremeWind/points/"+\
-		"barra_allvars_2005_2018.pkl",\
+	#Plot 2-d histogram comparing ~4 diagnostics from BARRA and ERA5 with measured gust speeds
+
+	#Load model data and obs at station locations.
+	barra = pd.read_pickle("/g/data/eg3/ab4502/ExtremeWind/points/barra_allvars_2005_2018_2.pkl")
+	era5 = pd.read_pickle("/g/data/eg3/ab4502/ExtremeWind/points/era5_allvars_2005_2018.pkl")
+	obs = pd.read_pickle("/g/data/eg3/ab4502/ExtremeWind/obs/aws/convective_wind_gust_aus_2005_2018.pkl")
+	obs["hourly_ceil_utc"] = pd.DatetimeIndex(obs["gust_time_utc"]).ceil("1H")
+
+	#Merge model data and obs into same dataframe. For diagnostic wind gust, use the ceiling of the hourly gust time (as diagnostic is defined as maximum in the previous hour). Otherwise, use the floor (environmental diagnostics are essentially forecasting tools).
+	barra_sta_wg = pd.merge(obs[["stn_name","wind_gust","hourly_ceil_utc","tc_affected","lightning","is_sta"]],\
+                barra, how="left",left_on=["stn_name","hourly_ceil_utc"], right_on=["loc_id","time"]).dropna(subset=["ml_cape"])
+	barra_aws_wg = barra_sta_wg.dropna(subset=["wind_gust"])
+	barra_sta_p = pd.merge(obs[["stn_name","wind_gust","hourly_floor_utc","tc_affected","lightning","is_sta"]],\
+                barra, how="left",left_on=["stn_name","hourly_floor_utc"], right_on=["loc_id","time"]).dropna(subset=["ml_cape"])
+	barra_aws_p = barra_sta_p.dropna(subset=["wind_gust"])
+	era5_sta_wg = pd.merge(obs[["stn_name","wind_gust","hourly_ceil_utc","tc_affected","lightning","is_sta"]],\
+                era5, how="left",left_on=["stn_name","hourly_ceil_utc"], right_on=["loc_id","time"]).dropna(subset=["ml_cape"])
+	era5_aws_wg = era5_sta_wg.dropna(subset=["wind_gust"])
+	era5_sta_p = pd.merge(obs[["stn_name","wind_gust","hourly_floor_utc","tc_affected","lightning","is_sta"]],\
+                era5, how="left",left_on=["stn_name","hourly_floor_utc"], right_on=["loc_id","time"]).dropna(subset=["ml_cape"])
+	era5_aws_p = era5_sta_p.dropna(subset=["wind_gust"])
+
+	#Load HSS and thresholds
+	barra_hss_floor, temp, temp1 = optimise_pss("/g/data/eg3/ab4502/ExtremeWind/points/"+\
+		"barra_allvars_2005_2018_2.pkl",\
 		T=1000, compute=False, l_thresh=2, is_pss="hss", model_name="barra_fc") 
-	era5_hss, era5_wg10, barra_sta = optimise_pss("/g/data/eg3/ab4502/ExtremeWind/points/"+\
+	era5_hss_floor, temp, temp1 = optimise_pss("/g/data/eg3/ab4502/ExtremeWind/points/"+\
 		"era5_allvars_2005_2018.pkl",\
 		T=1000, compute=False, l_thresh=2, is_pss="hss", model_name="era5")
+	barra_hss_ceil, temp, temp1 = optimise_pss("/g/data/eg3/ab4502/ExtremeWind/points/"+\
+		"barra_allvars_2005_2018_2.pkl",time="ceil",\
+		T=1000, compute=False, l_thresh=2, is_pss="hss", model_name="barra_fc") 
+	era5_hss_ceil, temp, temp1 = optimise_pss("/g/data/eg3/ab4502/ExtremeWind/points/"+\
+		"era5_allvars_2005_2018.pkl",time="ceil",\
+		T=1000, compute=False, l_thresh=2, is_pss="hss", model_name="era5")
 
+	#Plotting settings
+	matplotlib.rcParams.update({'font.size': 14})
 	params = ["wg10","t_totals","dcp","mlcape*s06"]
 	fancy_names = ["WindGust10", "T-Totals", "DCP", "MLCS6"]
 	is_log = [False, False, .01, 10]
 	ylims = [ [0,40], [0,65], [0,2], [0,400000] ]
 	bins = [ np.linspace(0,40,20), np.linspace(0,65,20), \
 		    np.concatenate([ [0], np.logspace(-2,1,19)] ), np.concatenate([ [0], np.logspace(1,6,19)] ) ] 
+	label_a = ["a)","c)","e)","g)"]
+	label_b = ["b)","d)","f)","h)"]
+	plt.figure(figsize=[8,8])
+
+	#Plot for each parameter
 	for p in np.arange(len(params)):
 		plt.subplot(4,2,2*p+1)
-		plt.hist2d(era5_wg10.loc[:, "wind_gust"], era5_wg10.loc[:, params[p]], cmap=plt.get_cmap("Greys"), \
-			norm=matplotlib.colors.SymLogNorm(1),\
-			vmax=10000, bins=[20,bins[p]], range = [[0,40],ylims[p]])
-		plt.plot(era5_wg10.loc[(era5_wg10["wind_gust"]>=25) & (era5_wg10["lightning"]>=2), "wind_gust"], \
-			era5_wg10.loc[(era5_wg10["wind_gust"]>=25) & (era5_wg10["lightning"]>=2), params[p]], "rx",\
-			markersize=4)
-		plt.gca().axhline(era5_hss.loc[params[p], "threshold_conv_aws"])
+		plt.text(0.05,0.9,label_a[p],transform=plt.gca().transAxes,fontsize=14)
+		if params[p] == "wg10":
+			plt.hist2d(era5_aws_wg.loc[:, "wind_gust"], era5_aws_wg.loc[:, params[p]], cmap=plt.get_cmap("Greys"), \
+				norm=matplotlib.colors.SymLogNorm(1),\
+				vmax=10000, bins=[20,bins[p]], range = [[0,40],ylims[p]])
+			plt.plot(era5_aws_wg.loc[(era5_aws_wg["wind_gust"]>=25) & (era5_aws_wg["lightning"]>=2), "wind_gust"], \
+				era5_aws_wg.loc[(era5_aws_wg["wind_gust"]>=25) & (era5_aws_wg["lightning"]>=2), params[p]], "rx",\
+				markersize=4)
+			plt.gca().axhline(era5_hss_ceil.loc[params[p], "threshold_conv_aws"])
+			plt.text(10, era5_hss_ceil.loc[params[p], "threshold_conv_aws"], \
+				str(round(era5_hss_ceil.loc[params[p], "threshold_conv_aws"], 2) ),\
+				va="top", color="tab:blue")
+		else:
+			plt.hist2d(era5_aws_p.loc[:, "wind_gust"], era5_aws_p.loc[:, params[p]], cmap=plt.get_cmap("Greys"), \
+				norm=matplotlib.colors.SymLogNorm(1),\
+				vmax=10000, bins=[20,bins[p]], range = [[0,40],ylims[p]])
+			plt.plot(era5_aws_p.loc[(era5_aws_p["wind_gust"]>=25) & (era5_aws_p["lightning"]>=2), "wind_gust"], \
+				era5_aws_p.loc[(era5_aws_p["wind_gust"]>=25) & (era5_aws_p["lightning"]>=2), params[p]], "rx",\
+				markersize=4)
+			plt.gca().axhline(era5_hss_floor.loc[params[p], "threshold_conv_aws"])
+			if params[p] == "mlcape*s06":
+				plt.text(10, era5_hss_floor.loc[params[p], "threshold_conv_aws"], \
+					str(int(round(era5_hss_floor.loc[params[p], "threshold_conv_aws"]) )),\
+					va="top", color="tab:blue")
+			else:
+				plt.text(10, era5_hss_floor.loc[params[p], "threshold_conv_aws"], \
+					str(round(era5_hss_floor.loc[params[p], "threshold_conv_aws"], 2) ),\
+					va="top", color="tab:blue")
 		if is_log[p]:
 			plt.yscale("symlog",linthreshy=is_log[p])
 
 		if p < 3:
 			plt.gca().set_xticklabels("")
 		else:
-			plt.xlabel("Measured gust speed")
+			plt.xlabel("Measured gust speed ($m.s^{-1}$)")
 		plt.ylabel(fancy_names[p])
 		if p == 0:
 			plt.title("ERA5")
 
 		plt.subplot(4,2,2*p+2)
-		plt.hist2d(barra_wg10.loc[:, "wind_gust"], barra_wg10.loc[:, params[p]], cmap=plt.get_cmap("Greys"), \
-			norm=matplotlib.colors.SymLogNorm(1),\
-			vmax=10000, bins=[20,bins[p]], range = [[0,40],ylims[p]])
-		plt.plot(barra_wg10.loc[(barra_wg10["wind_gust"]>=25) & (barra_wg10["lightning"]>=2), "wind_gust"], \
-			barra_wg10.loc[(barra_wg10["wind_gust"]>=25) & (barra_wg10["lightning"]>=2), params[p]], "rx",\
-			markersize=4)
-		plt.gca().axhline(barra_hss.loc[params[p], "threshold_conv_aws"])
+		plt.text(0.05,0.9,label_b[p],transform=plt.gca().transAxes,fontsize=14)
+		if params[p] == "wg10":
+			plt.hist2d(barra_aws_wg.loc[:, "wind_gust"], barra_aws_wg.loc[:, params[p]], cmap=plt.get_cmap("Greys"), \
+				norm=matplotlib.colors.SymLogNorm(1),\
+				vmax=10000, bins=[20,bins[p]], range = [[0,40],ylims[p]])
+			plt.plot(barra_aws_wg.loc[(barra_aws_wg["wind_gust"]>=25) & (barra_aws_wg["lightning"]>=2), "wind_gust"], \
+				barra_aws_wg.loc[(barra_aws_wg["wind_gust"]>=25) & (barra_aws_wg["lightning"]>=2), params[p]], "rx",\
+				markersize=4)
+			plt.gca().axhline(barra_hss_ceil.loc[params[p], "threshold_conv_aws"])
+			plt.text(10, barra_hss_ceil.loc[params[p], "threshold_conv_aws"], \
+				str(round(barra_hss_ceil.loc[params[p], "threshold_conv_aws"], 2) ),\
+				va="top", color="tab:blue")
+		else:
+			plt.hist2d(barra_aws_p.loc[:, "wind_gust"], barra_aws_p.loc[:, params[p]], cmap=plt.get_cmap("Greys"), \
+				norm=matplotlib.colors.SymLogNorm(1),\
+				vmax=10000, bins=[20,bins[p]], range = [[0,40],ylims[p]])
+			plt.plot(barra_aws_p.loc[(barra_aws_p["wind_gust"]>=25) & (barra_aws_p["lightning"]>=2), "wind_gust"], \
+				barra_aws_p.loc[(barra_aws_p["wind_gust"]>=25) & (barra_aws_p["lightning"]>=2), params[p]], "rx",\
+				markersize=4)
+			plt.gca().axhline(barra_hss_floor.loc[params[p], "threshold_conv_aws"])
+			if params[p] == "mlcape*s06":
+				plt.text(10, barra_hss_floor.loc[params[p], "threshold_conv_aws"], \
+					str(int(round(barra_hss_floor.loc[params[p], "threshold_conv_aws"]) )),\
+					va="top", color="tab:blue")
+			else:
+				plt.text(10, barra_hss_floor.loc[params[p], "threshold_conv_aws"], \
+					str(round(barra_hss_floor.loc[params[p], "threshold_conv_aws"], 2) ),\
+					va="top", color="tab:blue")
 		if is_log[p]:
 			plt.yscale("symlog",linthreshy=is_log[p])
 	    
 		if p < 3:
 			plt.gca().set_xticklabels("")
 		else:
-			plt.xlabel("Measured gust speed (m/s)")
+			plt.xlabel("Measured gust speed ($m.s^{-1}$)")
 		plt.gca().set_yticklabels("")
 		if p == 0:
 			plt.title("BARRA")
@@ -78,6 +154,7 @@ def diagnostics_aws_compare():
 	c = plt.colorbar(cax=ax, orientation="horizontal")
 	c.set_label("Days")
 	plt.subplots_adjust(top=0.95, bottom=0.2)
+	plt.savefig("fig3.png",bbox_inches="tight")
 
 
 def compare_obs_soundings():
@@ -85,17 +162,17 @@ def compare_obs_soundings():
 	#Compare observed soundings (2005 - 2015) at Adelaide AP, Woomera, Darwin and Sydney to
 	# ERA-Interim (and later, ERA5 and BARRA-R)
 
-	barra = pd.read_pickle("/g/data/eg3/ab4502/ExtremeWind/points/barra_allvars_2005_2018.pkl")
+	barra = pd.read_pickle("/g/data/eg3/ab4502/ExtremeWind/points/barra_allvars_2005_2018_2.pkl")
 	era5 = pd.read_pickle("/g/data/eg3/ab4502/ExtremeWind/points/era5_allvars_2005_2018.pkl")
 	obs = pd.read_pickle("/g/data/eg3/ab4502/ExtremeWind/points/UA_wrfpython.pkl").\
 		reset_index().rename(columns={"index":"time"})
-	temp, barra_wg10, barra_sta = optimise_pss("/g/data/eg3/ab4502/ExtremeWind/points/barra_allvars_2005_2018.pkl",
+	temp, barra_wg10, barra_sta = optimise_pss("/g/data/eg3/ab4502/ExtremeWind/points/barra_allvars_2005_2018_2.pkl",
 		T=1000, compute=False, l_thresh=2, is_pss="hss", model_name="barra_fc") 
 	temp, era5_wg10, barra_sta = optimise_pss("/g/data/eg3/ab4502/ExtremeWind/points/era5_allvars_2005_2018.pkl",
 		T=1000, compute=False, l_thresh=2, is_pss="hss", model_name="era5") 
 	stn_map = {14015:"Darwin",66037:"Sydney",16001:"Woomera",23034:"Adelaide"}
 	obs["stn_name"] = obs["stn_id"].map(stn_map)
-	mod_cols = ["k_index","t_totals","ml_cape","s06","ml_el","dcape","ml_cin","Umean800_600","time","loc_id"]
+	mod_cols = ["k_index","t_totals","ml_cape","s06","ml_el","dcape","ml_cin","Umean800_600","Umean01","time","loc_id"]
 	df = pd.merge(barra[mod_cols], era5[mod_cols], suffixes=("_barra", "_era5"), on=["time","loc_id"])
 	df = pd.merge(df, obs, left_on=["time","loc_id"], right_on=["time","stn_name"]).dropna()
 	#df.loc[:,"s06"] = df.loc[:,"s06"] * 1.94384
@@ -103,17 +180,18 @@ def compare_obs_soundings():
 
 	locs = ["Adelaide", "Woomera", "Sydney", "Darwin"]
 	stn_id = [23034, 16001, 66037, 14015]
-	params = ['ml_cape','ml_el','ml_cin','t_totals','dcape','s06','Umean800_600']
+	params = ['ml_cape','ml_el','ml_cin','t_totals','dcape','s06','Umean800_600','Umean01']
 	
 	is_log = {"k_index":False, "ml_cape":True, "ml_cin":True, "mu_cape":True, "ml_el":False,\
-			"t_totals":False, "dcape":False, "wg10":False, "s06":False, "Umean800_600":False}
+			"t_totals":False, "dcape":False, "wg10":False, "s06":False, "Umean800_600":False,"Umean01":False}
 	rename_params = {"ml_cape":"MLCAPE", "ml_el":"MLEL", "k_index":"K-index", "t_totals":"T-totals",\
-		"dcape":"DCAPE", "ml_cin":"MLCIN", "Umean800_600":"Umean800-600", "s06":"S06", "wg10":"WindGust10"}
+		"dcape":"DCAPE", "ml_cin":"MLCIN", "Umean800_600":"Umean800-600", "s06":"S06", "wg10":"WindGust10","Umean01":"Umean01"}
 	pmax = {"ml_cape":10000, "ml_el":17000, "k_index":50, "t_totals":60,\
-		"dcape":2500, "ml_cin":1000, "Umean800_600":40, "s06":60, "wg10":45}
+		"dcape":2500, "ml_cin":1000, "Umean800_600":40, "s06":60, "wg10":45,"Umean01":40}
 	rename_mod = {"era5":"ERA5","barra":"BARRA"}
-	cnt=3
+	cnt=1
 	fig = ['a','b','c','d','e','f','g','h','i','j','k','l','m','n','o','p']
+	plt.figure(figsize=[18,10])
 	for i in itertools.product(params, ["_barra","_era5"]):
 
 		ax = plt.subplot(4,4,cnt)
@@ -149,49 +227,19 @@ def compare_obs_soundings():
 		plt.title(fig[cnt-1] + ") " + rename_mod[m] + " " + rename_params[p])
 		cnt = cnt+1
 
-	ax = plt.subplot(4,4,1)
-	plt.hist2d(barra_wg10.loc[:, "wind_gust"], barra_wg10.loc[:, "wg10"], cmap=plt.get_cmap("Greys"), \
-		norm=matplotlib.colors.SymLogNorm(1),\
-		vmax=1000, bins=20, range = [[0,40],[0,40]])
-	xb, xt = plt.gca().get_xlim()
-	yb, yt = plt.gca().get_ylim()
-	plt.text(0, 40, \
-		"\n r = "+str(round(spr(barra_wg10.loc[:, "wg10"], barra_wg10.loc[:, "wind_gust"]).correlation, 3)), \
-		horizontalalignment="left", verticalalignment="center", fontsize=14)
-	plt.plot(barra_wg10.loc[(barra_wg10["wind_gust"]>=25) & (barra_wg10["lightning"]>=2), "wind_gust"], \
-			barra_wg10.loc[(barra_wg10["wind_gust"]>=25) & (barra_wg10["lightning"]>=2), "wg10"], "o", \
-			markeredgecolor="r", markerfacecolor="r", markersize=2)
-	plt.plot([min(xb, yb), max(xt,yt)], [min(xb, yb), max(xt,yt)], color="r")
-	m = "barra"; p = "wg10"
-	plt.title(fig[0] + ") " + rename_mod[m] + " " + rename_params[p])
-	cnt = cnt+1
-	ax = plt.subplot(4,4,2)
-	plt.hist2d(era5_wg10.loc[:, "wind_gust"], era5_wg10.loc[:, "wg10"], cmap=plt.get_cmap("Greys"), \
-		norm=matplotlib.colors.SymLogNorm(1),\
-		vmax=1000, bins=20, range = [[0,40],[0,40]])
-	xb, xt = plt.gca().get_xlim()
-	yb, yt = plt.gca().get_ylim()
-	plt.text(0, 40, \
-		"\n r = "+str(round(spr(era5_wg10.loc[:, "wg10"], era5_wg10.loc[:, "wind_gust"]).correlation, 3)), \
-		horizontalalignment="left", verticalalignment="center", fontsize=14)
-	plt.plot(era5_wg10.loc[(era5_wg10["wind_gust"]>=25) & (era5_wg10["lightning"]>=2), "wind_gust"], \
-			era5_wg10.loc[(era5_wg10["wind_gust"]>=25) & (era5_wg10["lightning"]>=2), "wg10"], "ro",\
-			markersize=2)
-	plt.plot([min(xb, yb), max(xt,yt)], [min(xb, yb), max(xt,yt)], color="r")
-	m = "era5"; p = "wg10"
-	plt.title(fig[1] + ") " + rename_mod[m] + " " + rename_params[p])
-	
-	plt.subplots_adjust(hspace=0.4)
+	plt.subplots_adjust(hspace=0.5,wspace=0.4)
 	ax = plt.axes([0.2, 0.04, 0.6, 0.02])
 	plt.text(0.5, 0.0675, "Observed sounding", fontsize=14, transform=plt.gcf().transFigure,\
 		horizontalalignment="center")
 	plt.text(0.08, 0.5, "Model sounding", fontsize=14, transform=plt.gcf().transFigure,\
 		rotation=90, verticalalignment="center")
 	plt.colorbar(cax=ax, orientation="horizontal")
+	plt.savefig("figA1.png",bbox_inches="tight")
 
-def create_mean_variable(variable, native=False, native_dir=None):
+def create_mean_variable(variable, model, native=False, native_dir=None):
 
-	#From ERA5, compute the monthly mean of a variable. Do this for hourly and daily maximum data
+	#From sub-daily model data (barra_fc, barpa_erai, era5), compute the monthly mean of a variable.
+	# Do this for houry and daily maximum data
 	#If native, then get data from the ub4 surface variables directory. Need to then specify the 
 	# "native_dir" name for the variable, which is different from the variable within the netcdf 
 	# file (e.g. for 2 m dew point, native_dir="2D" but variable="d2m")
@@ -202,7 +250,7 @@ def create_mean_variable(variable, native=False, native_dir=None):
 		f_years = np.array([int(files[i].split("_")[3][0:4]) for i in np.arange(len(files))])
 		files = files[f_years < 2019]
 	else:
-		files = glob.glob("/g/data/eg3/ab4502/ExtremeWind/aus/era5/era5*")
+		files = glob.glob("/g/data/eg3/ab4502/ExtremeWind/aus/"+model+"/"+model+"*")
 	files.sort()
 
 	#Initialise output
@@ -218,12 +266,13 @@ def create_mean_variable(variable, native=False, native_dir=None):
 	times = []
 	steps = []
 
-	#For each file, apply the equation
+	#For each file, calculate the mean
 	for f in np.arange(len(files)):
 		ds = xr.open_dataset(files[f])
 		start = dt.datetime.now()
 		print(files[f])
 		if native:
+			ds = ds.isel({"time":np.in1d(ds["time.hour"].values, [0,6,12,18])})
 			ds = ds.sel({"latitude":(ds.latitude <= -9.975) & \
 				(ds.latitude >= -44.525)\
 				,"longitude":(ds.longitude <= 156.275) & \
@@ -244,8 +293,8 @@ def create_mean_variable(variable, native=False, native_dir=None):
 			coords = {"time":times,"lat":ds.latitude.values,"lon":ds.longitude.values},\
 			name = variable,\
 			attrs = {"steps":steps} ).to_netcdf(\
-					path = "/g/data/eg3/ab4502/ExtremeWind/aus/"+\
-						"era5_"+variable+"_mean.nc",\
+					path = "/g/data/eg3/ab4502/ExtremeWind/aus/threshold_data/"+\
+						"era5_"+variable+"_6hr_mean.nc",\
 					mode = "w",\
 					format = "NETCDF4")
 		xr.DataArray( dims = ("time","lat","lon"),\
@@ -253,8 +302,8 @@ def create_mean_variable(variable, native=False, native_dir=None):
 			coords = {"time":times,"lat":ds.latitude.values,"lon":ds.longitude.values},\
 			name = variable,\
 			attrs = {"steps":steps} ).to_netcdf(\
-					path = "/g/data/eg3/ab4502/ExtremeWind/aus/"+\
-						"era5_"+variable+"_daily_max_mean.nc",\
+					path = "/g/data/eg3/ab4502/ExtremeWind/aus/threshold_data/"+\
+						"era5_"+variable+"_6hr_daily_max_mean.nc",\
 					mode = "w",\
 					format = "NETCDF4")
 	else:
@@ -263,8 +312,8 @@ def create_mean_variable(variable, native=False, native_dir=None):
 			coords = {"time":times,"lat":ds.lat.values,"lon":ds.lon.values},\
 			name = variable,\
 			attrs = {"steps":steps} ).to_netcdf(\
-					path = "/g/data/eg3/ab4502/ExtremeWind/aus/"+\
-						"era5_"+variable+"_mean.nc",\
+					path = "/g/data/eg3/ab4502/ExtremeWind/aus/threshold_data/"+\
+						model+"_"+variable+"_6hr_mean.nc",\
 					mode = "w",\
 					format = "NETCDF4")
 		xr.DataArray( dims = ("time","lat","lon"),\
@@ -272,11 +321,10 @@ def create_mean_variable(variable, native=False, native_dir=None):
 			coords = {"time":times,"lat":ds.lat.values,"lon":ds.lon.values},\
 			name = variable,\
 			attrs = {"steps":steps} ).to_netcdf(\
-					path = "/g/data/eg3/ab4502/ExtremeWind/aus/"+\
-						"era5_"+variable+"_daily_max_mean.nc",\
+					path = "/g/data/eg3/ab4502/ExtremeWind/aus/threshold_data/"+\
+						model+"_"+variable+"_6hr_daily_max_mean.nc",\
 					mode = "w",\
 					format = "NETCDF4")
-
 
 def create_annmax_variable(var, start_year, end_year):
 
@@ -515,6 +563,7 @@ def create_threshold_variable(variable, threshold, model, event=None, predictors
 		start = dt.datetime.now()
 		print(files[f])
 		ds = xr.open_dataset(files[f])
+		ds = ds.isel({"time":np.in1d(ds["time.hour"].values, [0,6,12,18])})
 		if variable == "logit":
 			if len(predictors) == 6:
 				logit = 1 / ( 1 + np.exp( -(\
@@ -597,7 +646,7 @@ def create_threshold_variable(variable, threshold, model, event=None, predictors
 			name = "logit",\
 			attrs = {"steps":steps, "predictors":predictors, "coefs":logit_mod.coef_[0],\
 				"intercept":logit_mod.intercept_, "threshold":threshold} ).to_netcdf(\
-					path = "/g/data/eg3/ab4502/ExtremeWind/aus/"+model+"_logit_"+event+".nc",\
+					path = "/g/data/eg3/ab4502/ExtremeWind/aus/threshold_data/"+model+"_logit_6hr_"+event+".nc",\
 					mode = "w",\
 					format = "NETCDF4")
 		xr.DataArray( dims = ("time","lat","lon"),\
@@ -606,8 +655,8 @@ def create_threshold_variable(variable, threshold, model, event=None, predictors
 			name = "logit",\
 			attrs = {"steps":steps, "predictors":predictors, "coefs":logit_mod.coef_[0],\
 				"intercept":logit_mod.intercept_, "threshold":threshold} ).to_netcdf(\
-					path = "/g/data/eg3/ab4502/ExtremeWind/aus/"+\
-						model+"_logit_"+event+"_daily.nc",\
+					path = "/g/data/eg3/ab4502/ExtremeWind/aus/threshold_data/"+\
+						model+"_logit_6hr_"+event+"_daily.nc",\
 					mode = "w",\
 					format = "NETCDF4")
 		mjo_active_da = xr.DataArray( dims = ("time","lat","lon"),\
@@ -618,8 +667,8 @@ def create_threshold_variable(variable, threshold, model, event=None, predictors
 			attrs = {"mjo_days":mjo_active_days, "predictors":predictors,\
 				"coefs":logit_mod.coef_[0],\
 				"intercept":logit_mod.intercept_, "threshold":threshold} ).to_netcdf(\
-					path = "/g/data/eg3/ab4502/ExtremeWind/aus/"+\
-						model+"_logit_"+event+"_mjo_active.nc",\
+					path = "/g/data/eg3/ab4502/ExtremeWind/aus/threshold_data/"+\
+						model+"_logit_6hr_"+event+"_mjo_active.nc",\
 					mode = "w",\
 					format = "NETCDF4")
 
@@ -631,8 +680,8 @@ def create_threshold_variable(variable, threshold, model, event=None, predictors
 			attrs = {"mjo_days":mjo_inactive_days, "predictors":predictors,\
 				"coefs":logit_mod.coef_[0],\
 				"intercept":logit_mod.intercept_, "threshold":threshold} ).to_netcdf(\
-					path = "/g/data/eg3/ab4502/ExtremeWind/aus/"+\
-						model+"_logit_"+event+"_mjo_inactive.nc",\
+					path = "/g/data/eg3/ab4502/ExtremeWind/aus/threshold_data/"+\
+						model+"_logit_6hr_"+event+"_mjo_inactive.nc",\
 					mode = "w",\
 					format = "NETCDF4")
 	else:
@@ -641,8 +690,8 @@ def create_threshold_variable(variable, threshold, model, event=None, predictors
 			coords = {"time":times,"lat":ds.lat.values,"lon":ds.lon.values},\
 			name = variable,\
 			attrs = {"steps":steps, "threshold":threshold} ).to_netcdf(\
-					path = "/g/data/eg3/ab4502/ExtremeWind/aus/"+\
-						model+"_"+variable+"_"+str(threshold)+".nc",\
+					path = "/g/data/eg3/ab4502/ExtremeWind/aus/threshold_data/"+\
+						model+"_"+variable+"_6hr_"+str(threshold)+".nc",\
 					mode = "w",\
 					format = "NETCDF4")
 		xr.DataArray( dims = ("time","lat","lon"),\
@@ -650,31 +699,31 @@ def create_threshold_variable(variable, threshold, model, event=None, predictors
 			coords = {"time":times,"lat":ds.lat.values,"lon":ds.lon.values},\
 			name = variable,\
 			attrs = {"steps":steps, "threshold":threshold} ).to_netcdf(\
-					path = "/g/data/eg3/ab4502/ExtremeWind/aus/"+\
-						model+"_"+variable+"_"+str(threshold)+"_daily.nc",\
+					path = "/g/data/eg3/ab4502/ExtremeWind/aus/threshold_data/"+\
+						model+"_"+variable+"_6hr_"+str(threshold)+"_daily.nc",\
 					mode = "w",\
 					format = "NETCDF4")
-		mjo_active_da = xr.DataArray( dims = ("time","lat","lon"),\
-			data = np.concatenate(out_mjo_active),\
-			coords = {"lat":ds.lat.values,"lon":ds.lon.values,\
-				"time":np.concatenate(mjo_active_times)},\
-			name = variable,\
-			attrs = {"mjo_days":mjo_active_days, "threshold":threshold} ).to_netcdf(\
-					path = "/g/data/eg3/ab4502/ExtremeWind/aus/"+\
-						model+"_"+variable+"_"+str(threshold)+"_mjo_active.nc",\
-					mode = "w",\
-					format = "NETCDF4")
+		#mjo_active_da = xr.DataArray( dims = ("time","lat","lon"),\
+			#data = np.concatenate(out_mjo_active),\
+			#coords = {"lat":ds.lat.values,"lon":ds.lon.values,\
+				#"time":np.concatenate(mjo_active_times)},\
+			#name = variable,\
+			#attrs = {"mjo_days":mjo_active_days, "threshold":threshold} ).to_netcdf(\
+					#path = "/g/data/eg3/ab4502/ExtremeWind/aus/threshold_data/"+\
+						#model+"_"+variable+"_6hr_"+str(threshold)+"_mjo_active.nc",\
+					#mode = "w",\
+					#format = "NETCDF4")
 
-		mjo_inactive_da = xr.DataArray( dims = ("time","lat","lon"),\
-			data = np.concatenate(out_mjo_inactive),\
-			coords = {"lat":ds.lat.values,"lon":ds.lon.values,\
-				"time":np.concatenate(mjo_inactive_times)},\
-			name = variable,\
-			attrs = {"mjo_days":mjo_inactive_days, "threshold":threshold} ).to_netcdf(\
-					path = "/g/data/eg3/ab4502/ExtremeWind/aus/"+\
-						model+"_"+variable+"_"+str(threshold)+"_mjo_inactive.nc",\
-					mode = "w",\
-					format = "NETCDF4")
+		#mjo_inactive_da = xr.DataArray( dims = ("time","lat","lon"),\
+			#data = np.concatenate(out_mjo_inactive),\
+			#coords = {"lat":ds.lat.values,"lon":ds.lon.values,\
+				#"time":np.concatenate(mjo_inactive_times)},\
+			#name = variable,\
+			#attrs = {"mjo_days":mjo_inactive_days, "threshold":threshold} ).to_netcdf(\
+					#path = "/g/data/eg3/ab4502/ExtremeWind/aus/threshold_data/"+\
+						#model+"_"+variable+"_6hr_"+str(threshold)+"_mjo_inactive.nc",\
+					#mode = "w",\
+					#format = "NETCDF4")
 		
 
 def plot_hail_envs():
@@ -1119,19 +1168,36 @@ def test_pss_location(event, param_list, df=None, pss_df=None, l_thresh=2):
 
 	return pss_df_loc
 
-def optimise_pss(model_fname,T=1000, compute=True, l_thresh=2, is_pss="pss", model_name="erai"):
+def optimise_pss(model_fname,T=1000, compute=True, l_thresh=2, is_pss="pss", model_name="erai", time="floor",\
+	exclude_logit_hits=False, logit_mod="era5"):
 
+	#model_fname is the path to the model point data
 	#T is the number of linear steps between the max and min of a parameter, used to test the pss
+	#compute means that this function will either compute pss (default; True), or just load it from disk (False)
+	#l_thresh is the threshold of lightning to consider a gust "convective". Defaults to 2
+	#is_pss defines the skill score used. Options are "pss", "hss", and "csi"
+	#model_name defines the output file name for skill scores
+	#time defines what obs times are to be used. Options are "floor" (relevant for forecast diagnostics) and "ceil" (for other diagnostics)
+	#For era5: /g/data/eg3/ab4502/ExtremeWind/points/era5_allvars_2005_2018.pkl
+	#For barra: /g/data/eg3/ab4502/ExtremeWind/points/barra_allvars_2005_2018.pkl
 
-	#For erai: /g/data/eg3/ab4502/ExtremeWind/points/erai_points_sharppy_aus_1979_2017.pkl
-	#For barra: /g/data/eg3/ab4502/ExtremeWind/points/barra_allvars_2005_2015.pkl
-
-	model = pd.read_pickle(model_fname)
+	model = pd.read_pickle(model_fname).dropna()
+	param_list = np.delete(np.array(model.columns), \
+		np.where((np.array(model.columns)=="lat") | \
+		(np.array(model.columns)=="lon") | \
+		(np.array(model.columns)=="loc_id") | \
+		(np.array(model.columns)=="time")))
 	obs = pd.read_pickle("/g/data/eg3/ab4502/ExtremeWind/obs/aws/convective_wind_gust_aus_2005_2018.pkl")
+	obs["hourly_ceil_utc"] = pd.DatetimeIndex(obs["gust_time_utc"]).ceil("1H")
 	#There is one missing entry for parameters needing mhgt
-	df_sta = pd.merge(obs[["stn_name","wind_gust","hourly_floor_utc","tc_affected","lightning","is_sta"]],\
-		model, how="left",left_on=["stn_name","hourly_floor_utc"], right_on=["loc_id","time"]).dropna(subset=["ml_cape","mhgt"])
-	df_aws = df_sta.dropna(subset=["wind_gust"])
+	if time == "floor":
+	    df_sta = pd.merge(obs[["stn_name","wind_gust","hourly_floor_utc","tc_affected","lightning","is_sta"]],\
+		    model, how="left",left_on=["stn_name","hourly_floor_utc"], right_on=["loc_id","time"]).dropna(subset=param_list)
+	    df_aws = df_sta.dropna(subset=["wind_gust"])
+	elif time == "ceil":
+	    df_sta = pd.merge(obs[["stn_name","wind_gust","hourly_ceil_utc","tc_affected","lightning","is_sta"]],\
+		    model, how="left",left_on=["stn_name","hourly_ceil_utc"], right_on=["loc_id","time"]).dropna(subset=param_list)
+	    df_aws = df_sta.dropna(subset=["wind_gust"])
 
 	dmax=False
 	if dmax:
@@ -1146,13 +1212,35 @@ def optimise_pss(model_fname,T=1000, compute=True, l_thresh=2, is_pss="pss", mod
 	df_sta = df_sta[df_sta.tc_affected==0]
 	df_aws = df_aws[df_aws.tc_affected==0]
 
+	if exclude_logit_hits:
+		if logit_mod == "era5":
+			z_aws = 6.4e-1*df_aws["lr36"] - 1.2e-4*df_aws["mhgt"] +\
+				     4.4e-4*df_aws["ml_el"] \
+				    -1.0e-1*df_aws["qmean01"] \
+				    + 1.7e-2*df_aws["srhe_left"] \
+				    + 1.8e-1*df_aws["Umean06"] - 7.4
+			z_sta = 3.3e-1*df_sta["lr36"] + 1.6e-3*df_sta["ml_cape"] +\
+				     2.9e-2*df_sta["srhe_left"] \
+				    +1.6e-1*df_sta["Umean06"] - 4.5
+			df_aws = df_aws[( 1 / (1 + np.exp(-z_aws))) < 0.72]
+			df_sta = df_sta[( 1 / (1 + np.exp(-z_sta))) < 0.62]
+		if logit_mod == "barra":
+			z_aws = 8.5e-1*df_aws["lr36"] + 6.2e-1*df_aws["lr_freezing"] +\
+				     3.9e-4*df_aws["ml_el"] \
+				    +3.8e-2*df_aws["s06"] \
+				    + 1.5e-2*df_aws["srhe_left"] \
+				    + 1.6e-1*df_aws["Umean06"] - 14.8
+			z_sta = 4.3e-1*df_sta["lr36"] + 2.0e-1*df_sta["lr_freezing"] \
+				    - 9.5e-5*df_sta["mhgt"] \
+				    + 3.2e-4*df_aws["ml_el"] \
+				    +3.8e-2*df_aws["s06"] \
+				    + 1.4e-2*df_aws["srhe_left"] \
+				    + 1.5e-1*df_aws["Umean06"] - 7.9
+			df_aws = df_aws[( 1 / (1 + np.exp(-z_aws))) < 0.80]
+			df_sta = df_sta[( 1 / (1 + np.exp(-z_sta))) < 0.71]
+
 	if compute:
 
-		param_list = np.delete(np.array(model.columns), \
-				np.where((np.array(model.columns)=="lat") | \
-					(np.array(model.columns)=="lon") | \
-					(np.array(model.columns)=="loc_id") | \
-					(np.array(model.columns)=="time")))
 		pss_df = pd.DataFrame(index=param_list, columns=["threshold_light","pss_light",\
 			"threshold_conv_aws","pss_conv_aws",\
 			"threshold_sta","pss_sta","threshold_conv_aws_cond_light","pss_conv_aws_cond_light"])
@@ -1224,12 +1312,12 @@ def optimise_pss(model_fname,T=1000, compute=True, l_thresh=2, is_pss="pss", mod
 			pss_df.loc[p, "threshold_conv_aws_cond_light"] = thresh[np.argmax(np.array(pss_p))]
 			pss_df.loc[p, "pss_conv_aws_cond_light"] = np.array(pss_p).max()
 
-		pss_df.to_pickle("/g/data/eg3/ab4502/ExtremeWind/"+is_pss+"_df_lightning"+str(l_thresh)+\
+		pss_df.to_pickle("/g/data/eg3/ab4502/ExtremeWind/skill_scores/"+is_pss+"_"+time+"_df_lightning"+str(l_thresh)+\
 				"_"+model_name+".pkl")
 
 	else:
 
-		pss_df = pd.read_pickle("/g/data/eg3/ab4502/ExtremeWind/"+is_pss+"_df_lightning"+str(l_thresh)+\
+		pss_df = pd.read_pickle("/g/data/eg3/ab4502/ExtremeWind/skill_scores/"+is_pss+"_"+time+"_df_lightning"+str(l_thresh)+\
 			"_"+model_name+".pkl")
 
 		df_sta.loc[:,"is_lightning"] = 0
@@ -1703,13 +1791,6 @@ def get_far66(df,event,param):
 	return (fa_ratio,fa_rate,param_thresh)
 
 def get_aus_stn_info():
-	#df = pd.read_pickle("/short/eg3/ab4502/ExtremeWind/aws/all_daily_max_wind_gusts_aus_1979_2017.pkl")
-	#loc_id = list(df.stn_name.unique())
-	#points = []
-	#for loc in loc_id:
-	#	lon = df[df.stn_name==loc]["lon"].unique()[0]
-	#	lat = df[df.stn_name==loc]["lat"].unique()[0]
-	#	points.append((lon,lat))
 
 	names = ["id", "stn_no", "district", "stn_name", "1", "2", "lat", "lon", "3", "4", "5", "6", "7", "8", \
 			"9", "10", "11", "12", "13", "14", "15", "16"]	
@@ -1913,10 +1994,14 @@ if __name__ == "__main__":
 			event = None
 			predictors = None
 
+		print("Creating monthly variables from gridded data...")
 
-		create_threshold_variable(variable,float(threshold),model,event=event,\
-			predictors=predictors)
-		create_mjo_phase_variable(variable,float(threshold),model,event=event,\
-			predictors=predictors)
+		create_mean_variable(variable, model, native=False)
+		#create_threshold_variable(variable,float(threshold),model,event=event,\
+			#predictors=predictors)
+		#create_mjo_phase_variable(variable,float(threshold),model,event=event,\
+		#	predictors=predictors)
 
-
+	else:	
+		create_mean_variable("cape",native=True, native_dir="cape")
+		#compare_obs_soundings()

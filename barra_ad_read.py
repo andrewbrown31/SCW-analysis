@@ -1,13 +1,19 @@
+from tqdm import tqdm
+import gc
+from dask.diagnostics import ProgressBar
+import sys
 import netCDF4 as nc
 import numpy as np
 import datetime as dt
 import glob
-import matplotlib.pyplot as plt
 import pandas as pd
+import xarray as xr
 
-from calc_param import *
 from metpy.calc import vertical_velocity_pressure as omega
+import metpy.calc as mpcalc
 from metpy.units import units
+
+from barra_read import get_aus_stn_info
 
 def read_barra_ad(domain,times,wg_only):
 	#Open BARRA_AD netcdf files and extract variables needed for a range of times and given
@@ -148,7 +154,126 @@ def read_barra_ad(domain,times,wg_only):
 	else:
 		return [max_max_wg,max_wg,ta,dp,hur,hgt,terrain,pres,ps,wap,ua,va,uas,vas,tas,ta2d,lon,lat,date_times]
 	
-#IF WANTING TO LOOP OVER TIME, CHANGE READ_BARRA TO READ ALL TIMES IN A RANGE, THEN LOOP OVER TIME DIMENSION WITHIN CALC_PARAM
+def to_points_loop_wg10_sy(loc_id,points,fname,start_year,end_year,djf=False):
+	#As in to_points_loop_wg10 but for BARRA-SY
+
+	from dask.diagnostics import ProgressBar
+	import gc
+	ProgressBar().register()
+
+	dates = []
+	if djf:
+	    for y in np.arange(start_year,end_year+1):
+		    for m in [1,2,12]:
+			    dates.append(dt.datetime(y,m,1,0,0,0))
+	else:
+	    for y in np.arange(start_year,end_year+1):
+		    for m in np.arange(1,13):
+			    dates.append(dt.datetime(y,m,1,0,0,0))
+
+	df = pd.DataFrame()
+
+	lsm = xr.open_dataset("/g/data/ma05/BARRA_SY/v1/static/lnd_mask-fc-slv-PT0H-BARRA_SY-v1.nc")
+
+	#Read netcdf data
+	for t in np.arange(len(dates)):
+		print(dates[t])
+		year = dt.datetime.strftime(dates[t],"%Y")
+		month =	dt.datetime.strftime(dates[t],"%m")
+		f = xr.open_mfdataset("/g/data/ma05/BARRA_SY/v1/forecast/spec/max_wndgust10m/"+\
+			year+"/"+month+"/*.sub.nc", concat_dim="time")
+
+		#Setup lsm
+		lat = f.coords.get("latitude").values
+		lon = f.coords.get("longitude").values
+		x,y = np.meshgrid(lon,lat)
+		x[lsm.lnd_mask==0] = np.nan
+		y[lsm.lnd_mask==0] = np.nan
+
+		dist_lon = []
+		dist_lat = []
+		for i in np.arange(len(loc_id)):
+
+			dist = np.sqrt(np.square(x-points[i][0]) + \
+				np.square(y-points[i][1]))
+			temp_lat,temp_lon = np.unravel_index(np.nanargmin(dist),dist.shape)
+			dist_lon.append(temp_lon)
+			dist_lat.append(temp_lat)
+
+		temp_df = f["max_wndgust10m"].isel(latitude = xr.DataArray(dist_lat, dims="points"), \
+                                longitude = xr.DataArray(dist_lon, dims="points")).persist().to_dataframe()
+		temp_df = temp_df.reset_index()
+
+		for p in np.arange(len(loc_id)):
+			temp_df.loc[temp_df.points==p,"loc_id"] = loc_id[p]
+
+		temp_df = temp_df.drop(["points",\
+			"forecast_period", "forecast_reference_time"],axis=1)
+		df = pd.concat([df, temp_df])
+		f.close()
+		gc.collect()
+
+	df.sort_values(["loc_id","time"]).to_pickle("/g/data/eg3/ab4502/ExtremeWind/points/"+fname+".pkl")
+
+def to_points_loop_wg10(loc_id,points,fname,start_year,end_year,djf=False):
+
+	from dask.diagnostics import ProgressBar
+	import gc
+	ProgressBar().register()
+
+	dates = []
+	if djf:
+	    for y in np.arange(start_year,end_year+1):
+		    for m in [1,2,12]:
+			    dates.append(dt.datetime(y,m,1,0,0,0))
+	else:
+	    for y in np.arange(start_year,end_year+1):
+		    for m in np.arange(1,13):
+			    dates.append(dt.datetime(y,m,1,0,0,0))
+
+	df = pd.DataFrame()
+
+	lsm = xr.open_dataset("/g/data/ma05/BARRA_AD/v1/static/lnd_mask-fc-slv-PT0H-BARRA_AD-v1.nc")
+
+	#Read netcdf data
+	for t in np.arange(len(dates)):
+		print(dates[t])
+		year = dt.datetime.strftime(dates[t],"%Y")
+		month =	dt.datetime.strftime(dates[t],"%m")
+		f = xr.open_mfdataset("/g/data/ma05/BARRA_AD/v1/forecast/spec/max_max_wndgust10m/"+\
+			year+"/"+month+"/*.sub.nc", concat_dim="time")
+
+		#Setup lsm
+		lat = f.coords.get("latitude").values
+		lon = f.coords.get("longitude").values
+		x,y = np.meshgrid(lon,lat)
+		x[lsm.lnd_mask==0] = np.nan
+		y[lsm.lnd_mask==0] = np.nan
+
+		dist_lon = []
+		dist_lat = []
+		for i in np.arange(len(loc_id)):
+
+			dist = np.sqrt(np.square(x-points[i][0]) + \
+				np.square(y-points[i][1]))
+			temp_lat,temp_lon = np.unravel_index(np.nanargmin(dist),dist.shape)
+			dist_lon.append(temp_lon)
+			dist_lat.append(temp_lat)
+
+		temp_df = f["max_max_wndgust10m"].isel(latitude = xr.DataArray(dist_lat, dims="points"), \
+                                longitude = xr.DataArray(dist_lon, dims="points")).persist().to_dataframe()
+		temp_df = temp_df.reset_index()
+
+		for p in np.arange(len(loc_id)):
+			temp_df.loc[temp_df.points==p,"loc_id"] = loc_id[p]
+
+		temp_df = temp_df.drop(["points",\
+			"forecast_period", "forecast_reference_time"],axis=1)
+		df = pd.concat([df, temp_df])
+		f.close()
+		gc.collect()
+
+	df.sort_values(["loc_id","time"]).to_pickle("/g/data/eg3/ab4502/ExtremeWind/points/"+fname+".pkl")
 
 def date_seq(times,delta_type,delta):
 	start_time = times[0]
@@ -205,3 +330,29 @@ def remove_corrupt_dates(date_list):
 	for i in np.arange(0,len(corrupt_dates)):
 		date_list = date_list[~(date_list==corrupt_dates[i])]
 	return date_list
+
+if __name__ == "__main__":
+	
+	if len(sys.argv) > 1:
+		start_year = int(sys.argv[1])
+		end_year = int(sys.argv[2])
+	if len(sys.argv) > 3:
+		variable = sys.argv[3]
+	
+	#All 35 locs with AWS data
+	loc_id, points = get_aus_stn_info()
+
+	#BARRA-SY comparison locs
+	to_keep = ["Coffs Harbour","Sydney","Wagga Wagga","Williamtown"]
+	points = np.array(points)[np.in1d(loc_id,to_keep)]
+	loc_id = np.array(loc_id)[np.in1d(loc_id,to_keep)]
+	to_points_loop_wg10_sy(loc_id,points,"barra_sy_wg10_"+str(start_year)+"_"+str(end_year),start_year,end_year)
+
+	#All 35 locs with AWS data
+	loc_id, points = get_aus_stn_info()
+
+	#BARRA-AD comparison locs
+	to_keep = ["Adelaide","Ceduna","Coffs Harbour","Mount Gambier","Sydney","Wagga Wagga","Williamtown","Woomera"]
+	points = np.array(points)[np.in1d(loc_id,to_keep)]
+	loc_id = np.array(loc_id)[np.in1d(loc_id,to_keep)]
+	to_points_loop_wg10(loc_id,points,"barra_ad_wg10_"+str(start_year)+"_"+str(end_year),start_year,end_year)

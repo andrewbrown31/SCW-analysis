@@ -1,3 +1,4 @@
+from tqdm import tqdm
 import gc
 from dask.diagnostics import ProgressBar
 import sys
@@ -145,8 +146,7 @@ def read_barra_fc(domain,times,mslp=False):
 
 	#Open BARRA netcdf files and extract variables needed for a range of times and given
 	# spatial domain
-	#NOTE that 10 m v and v winds are not being de-staggered. There is therefore a 0.05 degree
-	# mis-match between the 10 m u and v
+	#Xarray is used to de-stagger the U and V grids
 
 	ref = dt.datetime(1970,1,1,0,0,0)
 	if len(times) > 1:
@@ -201,8 +201,7 @@ def read_barra_fc(domain,times,mslp=False):
 
 		if temp_time.year >= 1990:
 
-			#EDIT TO GET DATA FROM THE "PROD" DIRECTORY
-			temp_fname_prs = glob.glob("/g/data/ma05/prod/BARRA_R/v1/forecast/prs/air_temp/"+\
+			temp_fname_prs = glob.glob("/g/data/ma05/BARRA_R/v1/forecast/prs/air_temp/"+\
 				temp_time.strftime("%Y")+"/"+temp_time.strftime("%m")+\
 				"/air_temp-fc-prs-PT1H-BARRA_R-v1*"+temp_time.strftime("%Y")+\
 				temp_time.strftime("%m")+temp_time.strftime("%d")+"T"+\
@@ -226,8 +225,8 @@ def read_barra_fc(domain,times,mslp=False):
 		#Load BARRA analysis files
 		ta_file = nc.Dataset(prs_fnames[t])
 		z_file = nc.Dataset(glob.glob(prs_fnames[t].replace("air_temp","geop_ht").replace("v1.1","*").replace("v1","*").replace(".nc","*"))[0])
-		ua_file = nc.Dataset(glob.glob(prs_fnames[t].replace("air_temp","wnd_ucmp").replace("v1.1","*").replace("v1","*"))[0])
-		va_file = nc.Dataset(glob.glob(prs_fnames[t].replace("air_temp","wnd_vcmp").replace("v1.1","*").replace("v1","*"))[0])
+		ua_file = xr.open_dataset(glob.glob(prs_fnames[t].replace("air_temp","wnd_ucmp").replace("v1.1","*").replace("v1","*"))[0])["wnd_ucmp"]
+		va_file = xr.open_dataset(glob.glob(prs_fnames[t].replace("air_temp","wnd_vcmp").replace("v1.1","*").replace("v1","*"))[0])["wnd_vcmp"]
 		try:
 			w_file = nc.Dataset(glob.glob(prs_fnames[t].replace("air_temp","vertical_wnd").\
 				replace("v1.1","*").replace("v1","*"))[0])
@@ -239,8 +238,8 @@ def read_barra_fc(domain,times,mslp=False):
 				raise OSError("W file not found")
 		hur_file = nc.Dataset(glob.glob(prs_fnames[t].replace("air_temp","relhum").replace("v1.1","*").replace("v1","*"))[0])
 	
-		uas_file = nc.Dataset(spec_fnames[t])
-		vas_file = nc.Dataset(spec_fnames[t].replace("uwnd10m","vwnd10m"))
+		uas_file = xr.open_dataset(spec_fnames[t])["uwnd10m"]
+		vas_file = xr.open_dataset(spec_fnames[t].replace("uwnd10m","vwnd10m"))["vwnd10m"]
 		tas_file = nc.Dataset(spec_fnames[t].replace("uwnd10m","temp_scrn"))
 		if mslp:
 		    ps_file = nc.Dataset(spec_fnames[t].replace("uwnd10m","mslp"))
@@ -261,8 +260,14 @@ def read_barra_fc(domain,times,mslp=False):
 			#Load data
 			temp_ta = ta_file["air_temp"][np.in1d(times, date_list), ta_file["pressure"][:] >= 100,\
 				lat_ind,lon_ind] - 273.15
-			temp_ua = ua_file["wnd_ucmp"][np.in1d(times, date_list), ua_file["pressure"][:] >= 100,lat_ind,lon_ind]
-			temp_va = va_file["wnd_vcmp"][np.in1d(times, date_list),va_file["pressure"][:] >= 100,lat_ind,lon_ind]
+			temp_ua = ua_file.isel({"longitude":np.insert(lon_ind,[0,len(lon_ind)],[lon_ind[0]-1, lon_ind[-1]+1]),\
+				"latitude":np.insert(lat_ind,[0,len(lat_ind)],[lat_ind[0]-1, lat_ind[-1]+1]),\
+				"pressure":ua_file["pressure"].values>=100, "time":np.in1d(times, date_list)}).\
+				interp({"longitude":ta_file["longitude"][lon_ind], "latitude":ta_file["latitude"][lat_ind]}).values
+			temp_va = va_file.isel({"longitude":np.insert(lon_ind,[0,len(lon_ind)],[lon_ind[0]-1, lon_ind[-1]+1]),\
+				"latitude":np.insert(lat_ind,[0,len(lat_ind)],[lat_ind[0]-1, lat_ind[-1]+1]),\
+				"pressure":va_file["pressure"].values>=100, "time":np.in1d(times, date_list)}).\
+				interp({"longitude":ta_file["longitude"][lon_ind], "latitude":ta_file["latitude"][lat_ind]}).values
 			temp_hgt = z_file["geop_ht"][np.in1d(times, date_list),z_file["pressure"][:] >= 100,lat_ind,lon_ind]
 			temp_hur = hur_file["relhum"][np.in1d(times, date_list),hur_file["pressure"][:] >= 100,lat_ind,lon_ind]
 			temp_hur[temp_hur<0] = 0
@@ -297,8 +302,14 @@ def read_barra_fc(domain,times,mslp=False):
 			va[np.in1d(date_list, times),:,:,:] = np.nan
 
 		
-		uas[np.in1d(date_list, times),:,:] = uas_file["uwnd10m"][np.in1d(times, date_list),lat_ind,lon_ind]
-		vas[np.in1d(date_list, times),:,:] = vas_file["vwnd10m"][np.in1d(times, date_list),lat_ind,lon_ind]
+		uas[np.in1d(date_list, times),:,:] = uas_file.isel({"longitude":np.insert(lon_ind,[0,len(lon_ind)],[lon_ind[0]-1, lon_ind[-1]+1]),\
+				"latitude":np.insert(lat_ind,[0,len(lat_ind)],[lat_ind[0]-1, lat_ind[-1]+1]),\
+				"time":np.in1d(times, date_list)}).\
+				interp({"longitude":tas_file["longitude"][lon_ind], "latitude":tas_file["latitude"][lat_ind]}).values
+		vas[np.in1d(date_list, times),:,:] = vas_file.isel({"longitude":np.insert(lon_ind,[0,len(lon_ind)],[lon_ind[0]-1, lon_ind[-1]+1]),\
+				"latitude":np.insert(lat_ind,[0,len(lat_ind)],[lat_ind[0]-1, lat_ind[-1]+1]),\
+				"time":np.in1d(times, date_list)}).\
+				interp({"longitude":tas_file["longitude"][lon_ind], "latitude":tas_file["latitude"][lat_ind]}).values
 		tas[np.in1d(date_list, times),:,:] = tas_file["temp_scrn"][np.in1d(times, date_list),lat_ind,lon_ind] - 273.15
 		ta2d[np.in1d(date_list, times),:,:] = ta2d_file["dewpt_scrn"][np.in1d(times, date_list),lat_ind,lon_ind] - 273.15
 		if mslp:
@@ -490,7 +501,7 @@ def get_pressure(top, date):
 	hour = dt.datetime.strftime(date,"%H")
 
 	#Load BARRA analysis files
-	ta_file = nc.Dataset(glob.glob("/g/data/ma05/prod/BARRA_R/v1/analysis/prs/air_temp/"\
+	ta_file = nc.Dataset(glob.glob("/g/data/ma05/BARRA_R/v1/analysis/prs/air_temp/"\
 +year+"/"+month+"/air_temp-an-prs-PT0H-BARRA_R-v1*"+year+month+day+"T"+hour+"*.nc")[0])
 
 	p =ta_file["pressure"][:]
@@ -618,7 +629,7 @@ def to_points_loop_rad(loc_id,points,fname,start_year,end_year,rad=50,lsm=True,\
 	for t in np.arange(len(dates)):
 		#Read convective diagnostics from eg3
 		print(dates[t])
-		f=xr.open_dataset(glob.glob("/g/data/eg3/ab4502/ExtremeWind/aus/"+\
+		f=xr.open_dataset(glob.glob("/g/data/eg3/ab4502/ExtremeWind/vic/"+\
 			"barra_fc/barra_fc_"+dates[t].strftime("%Y%m")+"*.nc")[0],\
 			chunks={"lat":100, "lon":100, "time":100}, engine="h5netcdf")
 
@@ -733,6 +744,96 @@ def to_points_loop(loc_id,points,fname,start_year,end_year,variables=False):
 		gc.collect()
 
 	df.sort_values(["loc_id","time"]).to_pickle("/g/data/eg3/ab4502/ExtremeWind/points/"+fname+".pkl")
+
+def fix_wg_spikes(da_vals):
+
+	'''
+	Take a lat, lon, time numpy array of daily maximum max_wndgust10m, and identify/smooth wind gust spikes
+	Identify spikes by considering adjacent points. Spikes are where there is at least one adjacent point with 
+	    a gust less than 50% of the potential spike. Potential spikes are gusts above 25 m/s.
+	Replace spikes using the mean of adjacent points.
+	'''
+	
+	ind = np.where(da_vals >= 25)
+	for i in tqdm(np.arange(len(ind[0]))):
+		pot_spike = da_vals[ind[0][i], ind[1][i], ind[2][i]]
+		adj_gusts = []
+		for ii in [-1, 1]:
+			for jj in [-1, 1]:
+				try:
+					adj_gusts.append( da_vals[ind[0][i], ind[1][i]+ii, ind[2][i]+jj])
+				except:
+					pass
+		if (np.array(adj_gusts) < (0.5*pot_spike)).any():
+			pot_spike = np.median(adj_gusts)
+		da_vals[ind[0][i], ind[1][i], ind[2][i]] = pot_spike
+	return da_vals
+
+def to_points_loop_wg10(loc_id,points,fname,start_year,end_year,djf=False):
+
+	from dask.diagnostics import ProgressBar
+	import gc
+	ProgressBar().register()
+
+	dates = []
+	if djf:
+	    for y in np.arange(start_year,end_year+1):
+		    for m in [1,2,12]:
+			    dates.append(dt.datetime(y,m,1,0,0,0))
+	else:
+	    for y in np.arange(start_year,end_year+1):
+		    for m in np.arange(1,13):
+			    dates.append(dt.datetime(y,m,1,0,0,0))
+
+	df = pd.DataFrame()
+
+	lsm = xr.open_dataset("/g/data/ma05/BARRA_R/v1/static/lnd_mask-an-slv-PT0H-BARRA_R-v1.nc")
+
+	#Read netcdf data
+	for t in np.arange(len(dates)):
+		print(dates[t])
+		year = dt.datetime.strftime(dates[t],"%Y")
+		month =	dt.datetime.strftime(dates[t],"%m")
+		f = xr.open_mfdataset("/g/data/ma05/BARRA_R/v1/forecast/spec/max_wndgust10m/"+\
+			year+"/"+month+"/*.sub.nc", concat_dim="time")
+
+		#Setup lsm
+		lat = f.coords.get("latitude").values
+		lon = f.coords.get("longitude").values
+		x,y = np.meshgrid(lon,lat)
+		x[lsm.lnd_mask==0] = np.nan
+		y[lsm.lnd_mask==0] = np.nan
+
+		dist_lon = []
+		dist_lat = []
+		for i in np.arange(len(loc_id)):
+
+			dist = np.sqrt(np.square(x-points[i][0]) + \
+				np.square(y-points[i][1]))
+			temp_lat,temp_lon = np.unravel_index(np.nanargmin(dist),dist.shape)
+			dist_lon.append(temp_lon)
+			dist_lat.append(temp_lat)
+
+		###Try to fix wind gust spikes
+		da = fix_wg_spikes(f["max_wndgust10m"].values)
+		f = xr.Dataset(data_vars = {"max_wndgust10m": (("time","latitude","longitude"), da)}, coords={"time":f.time, "latitude":f.latitude.values, "longitude":f.longitude.values})
+		###
+
+		temp_df = f["max_wndgust10m"].isel(latitude = xr.DataArray(dist_lat, dims="points"), \
+                                longitude = xr.DataArray(dist_lon, dims="points")).persist().to_dataframe()
+		temp_df = temp_df.reset_index()
+
+		for p in np.arange(len(loc_id)):
+			temp_df.loc[temp_df.points==p,"loc_id"] = loc_id[p]
+
+		temp_df = temp_df.drop(["points",\
+			"forecast_period", "forecast_reference_time"],axis=1)
+		df = pd.concat([df, temp_df])
+		f.close()
+		gc.collect()
+
+	df.sort_values(["loc_id","time"]).to_pickle("/g/data/eg3/ab4502/ExtremeWind/points/"+fname+".pkl")
+
 
 def to_points_loop_wind_dir(loc_id,points,fname,start_year,end_year):
 
@@ -1047,8 +1148,42 @@ if __name__ == "__main__":
 	if len(sys.argv) > 3:
 		variable = sys.argv[3]
 	
-
+	#All 35 locs with AWS data
 	loc_id, points = get_aus_stn_info()
 
-	to_points_loop_wind_dir(loc_id,points,"barra_wind_dir_"+str(start_year)+"_"+str(end_year),\
-			start_year,end_year)
+	#Hail radar locs
+	#loc_id = ['Melbourne', 'Wollongong', 'Gympie', 'Grafton', 'Canberra', 'Marburg', \
+         #       'Adelaide', 'Namoi', 'Perth', 'Hobart']
+	#radar_latitude = [-37.8553, -34.2625, -25.9574, -29.622, -35.6614, -27.608, -34.6169,\
+        #                -31.0236, -32.3917, -43.1122]
+	#radar_longitude = [144.7554, 150.8752, 152.577, 152.951, 149.5122, 152.539, 138.4689, \
+         #               150.1917, 115.867, 147.8057]
+	#points = [(radar_longitude[i], radar_latitude[i]) for i in np.arange(len(radar_latitude))]
+
+	#Thunderstorm asthma loc (Laverton airport, Melbourne)
+	#loc_id = ["Melbourne"]
+	#points = [(144.76,-37.86)]
+
+	#to_points_loop(loc_id,points,"barra_allvars_v3_"+str(start_year),start_year,end_year,variables=False)
+	#to_points_loop_rad(loc_id,points,"barra_ts_asthma_"+str(start_year),start_year,end_year,rad=75,lsm=True,pb=True)
+
+#	to_points_loop_rad(loc_id, points, "barra_rad50km_"+str(start_year)+"_"+str(end_year), \
+#			start_year, end_year, rad=50, lsm=True, pb=True,\
+#			variables=["t_totals","eff_sherb","dcp","k_index","gustex","sweat","mucape*s06","mmp","mlcape*s06","scp_fixed","Uwindinf",\
+#			"effcape*s06","ml_el","ship","ml_cape","eff_lcl","cp","Umeanwindinf","wg10","ebwd","sbcape*s06"])
+
+	#BARPAC-M comparison locs
+	#removed = ['Halls Creek', 'Broome', 'Port Hedland', 'Carnarvon',\
+	 #   'Meekatharra', 'Perth', 'Esperance', 'Kalgoorlie', 'Giles',\
+	  #  'Darwin', 'Gove', 'Tennant Creek', 'Alice Springs', 'Ceduna',\
+	   # 'Weipa', 'Mount Isa', 'Cairns', 'Townsville', 'Mackay',\
+	    #'Rockhampton', 'Amberley', 'Oakey', 'Charleville']
+	#points = np.array(points)[np.in1d(loc_id, removed, invert=True)]
+	#loc_id = loc_id[np.in1d(loc_id, removed, invert=True)]
+	#to_points_loop_wg10(loc_id,points,"barra_wg10_djf_1990_2005",1990,2005)
+
+	#BARRA-AD and BARRA-SY comparison locs
+	to_keep = ["Adelaide","Ceduna","Coffs Harbour","Mount Gambier","Sydney","Wagga Wagga","Williamtown","Woomera"]
+	points = np.array(points)[np.in1d(loc_id,to_keep)]
+	loc_id = np.array(loc_id)[np.in1d(loc_id,to_keep)]
+	to_points_loop_wg10(loc_id,points,"barra_wg10_"+str(start_year)+"_"+str(end_year),start_year,end_year)

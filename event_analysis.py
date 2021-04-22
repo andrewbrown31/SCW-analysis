@@ -86,7 +86,7 @@ def auc_test():
 	df1.to_csv("/g/data/eg3/ab4502/ExtremeWind/skill_scores/scw_aws_auc.csv")
 	df2.to_csv("/g/data/eg3/ab4502/ExtremeWind/skill_scores/scw_sta_auc.csv")
 
-def calc_auc(df, v, event, N=100):
+def calc_auc(df, v, event, N):
 	if v in ["mhgt","qmean01","qmeansubcloud","dpd850","dpd700"]:
 		df[event] = np.where(df[event]==1, 0, 1)
 	fpr, tpr, thresh = roc_curve(df[event], df[v])
@@ -2132,20 +2132,20 @@ if __name__ == "__main__":
 		#	predictors=predictors)
 
 	else:	
-		create_threshold_variable("logit",0.83,"era5","is_conv_aws",["ebwd","Umean800_600","lr13","rhmin13","srhe_left","q_melting","eff_lcl"])
+		#create_threshold_variable("logit",0.83,"era5","is_conv_aws",["ebwd","Umean800_600","lr13","rhmin13","srhe_left","q_melting","eff_lcl"])
 		#create_threshold_variable("logit",0.72,"era5","is_sta",["ebwd","Umean06","ml_cape","lr13"])
 		#create_mean_variable("d2m","era5",native=True, native_dir="d2m")
 		#create_threshold_variable("t_totals",50.9,"era5")
 		#create_threshold_variable("dcp",0.91,"era5")
-		#create_threshold_variable("eff_sherb",0.90,"era5")
-		#create_mean_variable("lr03","era5")
-		#create_mean_variable("lr700_500","era5")
-		#create_mean_variable("ta850","era5")
-		#create_mean_variable("ta500","era5")
-		#create_mean_variable("dp850","era5")
-		#create_mean_variable("ebwd","era5")
-		#create_mean_variable("t_totals","era5")
-		#create_mean_variable("eff_sherb","era5")
+		create_threshold_variable("mlcape*s06",16000,"era5")
+		#create_threshold_variable("era5_aws_logit","barra")
+		#create_mean_variable("mu_cape","barpa_erai")
+		#create_mean_variable("mu_cape","erai")
+		#create_mean_variable("s06","erai")
+		#create_mean_variable("rhmin13","era5")
+		#create_mean_variable("q_melting","era5")
+		#create_mean_variable("eff_lcl","era5")
+		#create_mean_variable("srhe_left","era5")
 		#compare_obs_soundings()
 		#diagnostics_aws_compare()
 		#auc_test()

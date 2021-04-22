@@ -17,7 +17,7 @@ while [ "$d" != 2010-01-01 ]; do
 	start_time=$(date -d "$d" +%Y)"010100"
 	end_time=$(date -d "$d + 9 year"  +%Y)"123118"
 
-	python /home/548/ab4502/working/ExtremeWind/wrf_non_parallel.py -m GFDL-ESM2G -r aus -t1 $start_time -t2 $end_time --issave True --outname GFDL-ESM2G_historical_r1i1p1 -e historical --ens r1i1p1
+	python /home/548/ab4502/working/ExtremeWind/wrf_non_parallel_reduced.py -m GFDL-ESM2G -r global -t1 $start_time -t2 $end_time --issave True --outname GFDL-ESM2G_historical_r1i1p1 -e historical --ens r1i1p1
 
 	d=$(date -I -d "$d + 10 year")
 

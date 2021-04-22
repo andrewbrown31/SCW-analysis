@@ -18,6 +18,44 @@ from scipy.stats import weibull_min as wb
 from tqdm import tqdm
 import netCDF4 as nc
 
+def get_erai_lsm():
+        #Load the ERA-Interim land-sea mask (land = 1)
+        lsm_file = nc.Dataset("/g/data/eg3/ab4502/erai_lsm.nc")
+        lsm = np.squeeze(lsm_file.variables["lsm"][:])
+        lsm_lon = np.squeeze(lsm_file.variables["longitude"][:])
+        lsm_lat = np.squeeze(lsm_file.variables["latitude"][:])
+        lsm_file.close()
+        return [lsm,lsm_lon,lsm_lat]
+
+def reform_erai_lsm(lon,lat):
+        #Re-shape the land sea mask to go from longitude:[0,360] to [-180,180]
+        [lsm,lsm_lon,lsm_lat] = get_erai_lsm()
+        lsm_new = np.empty(lsm.shape)
+
+        lsm_lon[lsm_lon>=180] = lsm_lon[lsm_lon>=180]-360
+        for i in np.arange(0,len(lat)):
+                for j in np.arange(0,len(lon)):
+                        lsm_new[i,j] = lsm[lat[i]==lsm_lat, lon[j]==lsm_lon]
+        return lsm_new
+
+def get_erai_lat_lon():
+        ta_file = nc.Dataset(glob.glob("/g/data/ub4/erai/netcdf/6hr/atmos/oper_an_pl/v01/ta/\
+ta_6hrs_ERAI_historical_an-pl_"+"201201"+"*.nc")[0])
+        lon = ta_file["lon"][:]
+        lat = ta_file["lat"][:]
+        ta_file.close()
+        return [lon,lat]
+
+def get_erai_mask(lon,lat):
+        #Return lsm for a given domain (with lats=lat and lons=lon)
+        nat_lon,nat_lat = get_erai_lat_lon()
+        lon_ind = np.where((nat_lon >= lon[0]) & (nat_lon <= lon[-1]))[0]
+        lat_ind = np.where((nat_lat >= lat[-1]) & (nat_lat <= lat[0]))[0]
+        lsm = reform_erai_lsm(nat_lon,nat_lat)
+        lsm_domain = lsm[(lat_ind[0]):(lat_ind[-1]+1),(lon_ind[0]):(lon_ind[-1]+1)]
+
+        return lsm_domain
+
 def date_seq(times,delta_type,delta):
 	start_time = times[0]
 	end_time = times[1]
@@ -125,6 +163,67 @@ def get_shapes():
 	f2 = geopandas.read_file(geopandas.datasets.get_path("naturalearth_lowres"))
 	shapes = [(shape, n) for n, shape in enumerate(f.geometry)]
 	return [f, f2, shapes]
+
+def load_erai(y1, y2, shapes, nrm=[0,1,2,3], djf=False):
+
+	'''Load ERAI 10-m wind gust data (max in previous hour), for years between y1 and y2.
+	    Resample to daily maximum, and return a numpy array, loaded into memory.
+	   Returns "da" (daily maximum gridded wind gusts), "da_dmax" (domain-maximum daily maximum gusts), 
+		"da_annmax" (annual maximum gridded wind gusts), "da_dmax_annmax" (domain and annual maximum gust)
+	'''
+
+	ProgressBar().register()
+	lat_bounds = [-44.525, -9.975]
+	lon_bounds = [111.975, 156.275]
+	years = np.arange(y1, y2+1)
+	files = np.sort(glob.glob("/g/data/ub4/erai/netcdf/3hr/atmos/oper_fc_sfc/v01/wg10/*.nc"))
+	ds = xr.open_mfdataset(files[np.in1d([int(f.split("/")[-1].split("_")[-2][0:4]) for f in files], years)],\
+		combine='by_coords')
+	ds = ds.sel({"lat":slice(lat_bounds[1], lat_bounds[0]), \
+		    "lon":slice(lon_bounds[0], lon_bounds[1])}).\
+		    isel({"time":(ds["time.year"]>=y1) & (ds["time.year"]<=y2)})
+	da = ds["wg10"].resample({"time":"1D"}).max("time")
+	if djf:
+		da = da.sel({"time":np.in1d(da["time.month"], [12,1,2])})
+	times = da.time.values
+	da = fix_wg_spikes(da.values)
+	x,y = np.meshgrid(ds.lon.values, ds.lat.values)
+
+	#Turn the numpy array, da, into a dataarray, so that it can be resampled to annual maximum frequency.
+	da_da = xr.Dataset(data_vars = {"da": (("time","lat","lon"), da)}, coords={"time":times, "lat":ds.lat.values, "lon":ds.lon.values})["da"]
+	da_annmax = da_da.resample({"time":"1Y"}).max("time")
+
+	if djf:
+		djf_str="djf"
+	else:
+		djf_str="annual"
+	da_annmax.to_netcdf("/g/data/eg3/ab4502/gev/erai_annmax_"+djf_str+"_"+str(y1)+"_"+str(y2)+".nc")
+
+	ann_times = da_annmax.time.values
+	da_annmax = da_annmax.values
+
+	transform = transform_from_latlon(ds.coords['lat'], ds.coords['lon'])
+	out_shape = (len(ds.coords['lat']), len(ds.coords['lon']))
+	raster = features.rasterize(shapes, out_shape=out_shape,
+                                fill=np.nan, transform=transform,
+                                dtype=float)
+
+	lsm = get_erai_mask(ds.lon.values, ds.lat.values)
+
+	da_dmax = []
+	da_dmax_annmax = []
+	for n in nrm:
+	    mask = np.zeros(da.shape, dtype=bool)
+	    mask[:,:,:] = np.isin(raster[np.newaxis,:,:], n)
+	    da_dmax.append(\
+		np.ma.masked_where((~mask) | (lsm==0), da ).max(axis=(1,2)).data )
+
+	    mask_annmax = np.zeros(da_annmax.shape, dtype=bool)
+	    mask_annmax[:,:,:] = np.isin(raster[np.newaxis,:,:], n)
+	    da_dmax_annmax.append(\
+		np.ma.masked_where((~mask_annmax) | (lsm==0), da_annmax ).max(axis=(1,2)).data )
+
+	return [x, y, times, da, da_dmax, da_annmax, da_dmax_annmax, ann_times]
 
 def load_era5(y1, y2, shapes, nrm=[0,1,2,3], djf=False):
 
@@ -306,6 +405,129 @@ def load_barpa(y1, y2, shapes, forcing_mdl="ACCESS1-0", nrm=[0,1,2,3], djf=False
 		    "longitude":slice(lon_bounds[0], lon_bounds[1])}).values
 
     #For each NRM region, get the domain-maximum annual maximum
+	da_dmax = []
+	da_dmax_annmax = []
+	for n in nrm:
+	    mask = np.zeros(da.shape, dtype=bool)
+	    mask[:,:,:] = np.isin(raster[np.newaxis,:,:], n)
+	    da_dmax.append(\
+		np.ma.masked_where((~mask) | (lsm==0), da ).max(axis=(1,2)).data )
+
+	    mask_annmax = np.zeros(da_annmax.shape, dtype=bool)
+	    mask_annmax[:,:,:] = np.isin(raster[np.newaxis,:,:], n)
+	    da_dmax_annmax.append(\
+		np.ma.masked_where((~mask_annmax) | (lsm==0), da_annmax ).max(axis=(1,2)).data )
+
+	return [x, y, times, da, da_dmax, da_annmax, da_dmax_annmax, ann_times]
+
+def load_barpac_t(y1, y2, shapes, forcing_mdl, nrm=[0,1,2,3], djf=False):
+
+	'''Load BARPAC-M 10-m wind gust data (max in previous hour), for years between y1 and y2.
+	    Forcing model either "ACCESS1-0" or "erai"
+	'''
+
+	ProgressBar().register()
+	lat_bounds = [-44.525, -9.975]
+	lon_bounds = [111.975, 156.275]
+	years = np.arange(y1, y2+1)
+	query_dates = date_seq([dt.datetime(y1,1,1,12), dt.datetime(y2,12,31,12)], "hours", 24)
+	if forcing_mdl=="ACCESS1-0":
+		files = np.sort(glob.glob("/g/data/du7/barpa/trials/BARPAC-T_km4p4/cmip5/ACCESS1-0/r1i1p1/*/*/pp0/max_wndgust10m*"))
+	elif forcing_mdl=="erai":
+		files = np.sort(glob.glob("/g/data/du7/barpa/trials/BARPAC-T_km4p4/era/erai/r0/*/*/pp0/max_wndgust10m*"))
+	else:
+		raise ValueError("Give correct forcing model (ACCESS1-0 or erai)")
+	files = files[file_dates(files, query_dates)]
+	ds = xr.open_mfdataset(files, concat_dim="time", combine='nested')
+	ds = ds.sel({"latitude":slice(lat_bounds[0], lat_bounds[1]), \
+		    "longitude":slice(lon_bounds[0], lon_bounds[1])}).\
+		    isel({"time":(ds["time.year"]>=y1) & (ds["time.year"]<=y2)})
+	da = drop_duplicates(ds["max_wndgust10m"])
+	if djf:
+		da = da.sel({"time":np.in1d(da["time.month"], [12,1,2])})
+	times = da.time.values
+	da = fix_wg_spikes(da.values)
+	x,y = np.meshgrid(ds.longitude.values, ds.latitude.latitude.values)
+
+	#Turn the numpy array, da, into a dataarray, so that it can be resampled to annual maximum frequency.
+	da_da = xr.Dataset(data_vars = {"da": (("time","lat","lon"), da)}, coords={"time":times, "lat":ds.latitude.values, "lon":ds.longitude.values})["da"]
+	da_annmax = da_da.resample({"time":"1Y"}).max("time")
+
+	ann_times = da_annmax.time.values
+	da_annmax = da_annmax.values
+
+	transform = transform_from_latlon(ds.coords['latitude'], ds.coords['longitude'])
+	out_shape = (len(ds.coords['latitude']), len(ds.coords['longitude']))
+	raster = features.rasterize(shapes, out_shape=out_shape,
+                                fill=np.nan, transform=transform,
+                                dtype=float)
+
+	lsm = xr.open_dataset("/g/data/du7/barpa/trials/BARPAC-T_km4p4/static/lnd_mask-BARPAC-T_km4p4.nc")["lnd_mask"]
+	lsm = lsm.sel({"latitude":slice(lat_bounds[0], lat_bounds[1]), \
+		    "longitude":slice(lon_bounds[0], lon_bounds[1])}).values
+
+	da_dmax = []
+	da_dmax_annmax = []
+	for n in nrm:
+	    mask = np.zeros(da.shape, dtype=bool)
+	    mask[:,:,:] = np.isin(raster[np.newaxis,:,:], n)
+	    da_dmax.append(\
+		np.ma.masked_where((~mask) | (lsm==0), da ).max(axis=(1,2)).data )
+
+	    mask_annmax = np.zeros(da_annmax.shape, dtype=bool)
+	    mask_annmax[:,:,:] = np.isin(raster[np.newaxis,:,:], n)
+	    da_dmax_annmax.append(\
+		np.ma.masked_where((~mask_annmax) | (lsm==0), da_annmax ).max(axis=(1,2)).data )
+
+	return [x, y, times, da, da_dmax, da_annmax, da_dmax_annmax, ann_times]
+
+
+def load_barpac_m(y1, y2, shapes, nrm=[0,1,2,3], djf=False, forcing_mdl="ACCESS1-0"):
+
+	'''Load BARPAC-M 10-m wind gust data (max in previous hour), for years between y1 and y2.
+	    Forcing model either "ACCESS1-0" or "erai"
+	'''
+
+	ProgressBar().register()
+	lat_bounds = [-44.525, -9.975]
+	lon_bounds = [111.975, 156.275]
+	years = np.arange(y1, y2+1)
+	query_dates = date_seq([dt.datetime(y1,1,1,12), dt.datetime(y2,12,31,12)], "hours", 24)
+	if forcing_mdl=="ACCESS1-0":
+		files = np.sort(glob.glob("/g/data/du7/barpa/trials/BARPAC-M_km2p2/cmip5/ACCESS1-0/r1i1p1/*/*/pp0/max_wndgust10m*"))
+	elif forcing_mdl=="erai":
+		files = np.sort(glob.glob("/g/data/du7/barpa/trials/BARPAC-M_km2p2/era/erai/r0/*/*/pp0/max_wndgust10m*"))
+	else:
+		raise ValueError("Give correct forcing model (ACCESS1-0 or erai)")
+	files = files[file_dates(files, query_dates)]
+	ds = xr.open_mfdataset(files, concat_dim="time", combine='nested')
+	ds = ds.sel({"latitude":slice(lat_bounds[0], lat_bounds[1]), \
+		    "longitude":slice(lon_bounds[0], lon_bounds[1])}).\
+		    isel({"time":(ds["time.year"]>=y1) & (ds["time.year"]<=y2)})
+	da = drop_duplicates(ds["max_wndgust10m"])
+	if djf:
+		da = da.sel({"time":np.in1d(da["time.month"], [12,1,2])})
+	times = da.time.values
+	da = fix_wg_spikes(da.values)
+	x,y = np.meshgrid(ds.longitude.values, ds.latitude.latitude.values)
+
+	#Turn the numpy array, da, into a dataarray, so that it can be resampled to annual maximum frequency.
+	da_da = xr.Dataset(data_vars = {"da": (("time","lat","lon"), da)}, coords={"time":times, "lat":ds.latitude.values, "lon":ds.longitude.values})["da"]
+	da_annmax = da_da.resample({"time":"1Y"}).max("time")
+
+	ann_times = da_annmax.time.values
+	da_annmax = da_annmax.values
+
+	transform = transform_from_latlon(ds.coords['latitude'], ds.coords['longitude'])
+	out_shape = (len(ds.coords['latitude']), len(ds.coords['longitude']))
+	raster = features.rasterize(shapes, out_shape=out_shape,
+                                fill=np.nan, transform=transform,
+                                dtype=float)
+
+	lsm = xr.open_dataset("/g/data/du7/barpa/trials/BARPAC-M_km2p2/static/lnd_mask-BARPAC-M_km2p2.nc")["lnd_mask"]
+	lsm = lsm.sel({"latitude":slice(lat_bounds[0], lat_bounds[1]), \
+		    "longitude":slice(lon_bounds[0], lon_bounds[1])}).values
+
 	da_dmax = []
 	da_dmax_annmax = []
 	for n in nrm:
@@ -706,6 +928,17 @@ if __name__ == "__main__":
 		ari_out = ari_cdf(da, da_dmax, da_annmax, da_dmax_annmax,lats[:,0], lons[0,:], "era5_cdf_djf_"+str(y1)+"_"+str(y2))
 		ari_out = ari_gev(da_annmax, da_dmax_annmax, lats[:,0], lons[0,:], "era5_gev_djf_"+str(y1)+"_"+str(y2))
 
+	if "ERAI" in models:
+		#Compute GEV/CDF for ERAI
+		lons, lats, t, da, da_dmax, da_annmax, da_dmax_annmax, ann_times  = load_erai(y1,y2,shapes,nrm,djf=False)
+		ari_out = ari_cdf(da, da_dmax, da_annmax, da_dmax_annmax, lats[:,0], lons[0,:], "erai_cdf_"+str(y1)+"_"+str(y2))
+		ari_out = ari_gev(da_annmax, da_dmax_annmax, lats[:,0], lons[0,:], "erai_gev_"+str(y1)+"_"+str(y2))
+	
+		#Compute GEV/CDF for ERAI for summer only
+		lons, lats, t, da, da_dmax, da_annmax, da_dmax_annmax, ann_times  = load_erai(y1,y2,shapes,nrm,djf=True)
+		ari_out = ari_cdf(da, da_dmax, da_annmax, da_dmax_annmax,lats[:,0], lons[0,:], "erai_cdf_djf_"+str(y1)+"_"+str(y2))
+		ari_out = ari_gev(da_annmax, da_dmax_annmax, lats[:,0], lons[0,:], "erai_gev_djf_"+str(y1)+"_"+str(y2))
+
 	if "BARRA" in models:
 		#Compute GEV/CDF for BARRA
 		lons, lats, t, da, da_dmax, da_annmax, da_dmax_annmax, ann_times = load_barra(y1,y2,shapes,nrm,djf=False)
@@ -727,9 +960,38 @@ if __name__ == "__main__":
 		ari_out = ari_gev(da_annmax, da_dmax_annmax, lats[:,0], lons[0,:], "barpa_access_gev_"+str(y1)+"_"+str(y2))
 
 		#Compute GEV/CDF for BARRA for summer only
-		#lons, lats, t, da, da_dmax, da_annmax, da_dmax_annmax, ann_times = load_barpa(y1,y2,shapes,nrm=nrm,djf=True,forcing_mdl="ACCESS1-0")
-		#ari_out = ari_cdf(da, da_dmax, da_annmax, da_dmax_annmax,lats[:,0], lons[0,:],"barpa_access_cdf_djf_"+str(y1)+"_"+str(y2))
-		#ari_out = ari_gev(da_annmax, da_dmax_annmax, lats[:,0], lons[0,:], "barpa_access_gev_djf_"+str(y1)+"_"+str(y2))
+		lons, lats, t, da, da_dmax, da_annmax, da_dmax_annmax, ann_times = load_barpa(y1,y2,shapes,nrm=nrm,djf=True,forcing_mdl="ACCESS1-0")
+		ari_out = ari_cdf(da, da_dmax, da_annmax, da_dmax_annmax,lats[:,0], lons[0,:],"barpa_access_cdf_djf_"+str(y1)+"_"+str(y2))
+		ari_out = ari_gev(da_annmax, da_dmax_annmax, lats[:,0], lons[0,:], "barpa_access_gev_djf_"+str(y1)+"_"+str(y2))
+
+	if "BARPAC-M-ACCESS1-0" in models:
+		#Compute GEV/CDF for BARRA for summer only
+		lons, lats, t, da, da_dmax, da_annmax, da_dmax_annmax, ann_times = load_barpac_m(y1,y2,shapes,nrm=nrm,djf=True)
+		ari_out = ari_cdf(da, da_dmax, da_annmax, da_dmax_annmax,lats[:,0], lons[0,:],"barpac_m_access_cdf_djf_"+str(y1)+"_"+str(y2))
+		ari_out = ari_gev(da_annmax, da_dmax_annmax, lats[:,0], lons[0,:], "barpac_m_access_gev_djf_"+str(y1)+"_"+str(y2))
+
+	if "BARPAC-T-ACCESS1-0" in models:
+		#Compute GEV/CDF for BARRA for summer only
+		lons, lats, t, da, da_dmax, da_annmax, da_dmax_annmax, ann_times = load_barpac_t(y1,y2,shapes,"ACCESS1-0",nrm=nrm,djf=True)
+		ari_out = ari_cdf(da, da_dmax, da_annmax, da_dmax_annmax,lats[:,0], lons[0,:],"barpac_t_access_cdf_djf_"+str(y1)+"_"+str(y2))
+		ari_out = ari_gev(da_annmax, da_dmax_annmax, lats[:,0], lons[0,:], "barpac_t_access_gev_djf_"+str(y1)+"_"+str(y2))
+
+	if "BARPAC-M-ERAI" in models:
+		#Compute GEV/CDF for BARRA for summer only
+		lons, lats, t, da, da_dmax, da_annmax, da_dmax_annmax, ann_times = load_barpac_m(y1,y2,shapes,"erai",nrm=nrm,djf=True)
+		ari_out = ari_cdf(da, da_dmax, da_annmax, da_dmax_annmax,lats[:,0], lons[0,:],"barpac_m_erai_cdf_djf_"+str(y1)+"_"+str(y2))
+		ari_out = ari_gev(da_annmax, da_dmax_annmax, lats[:,0], lons[0,:], "barpac_m_erai_gev_djf_"+str(y1)+"_"+str(y2))
+
+	if "BARPA-ERAI" in models:
+		#Compute GEV/CDF for BARRA
+		lons, lats, t, da, da_dmax, da_annmax, da_dmax_annmax, ann_times = load_barpa(y1,y2,shapes,nrm=nrm,djf=False,forcing_mdl="erai")
+		ari_out = ari_cdf(da, da_dmax, da_annmax, da_dmax_annmax,lats[:,0], lons[0,:],"barpa_erai_access_cdf_"+str(y1)+"_"+str(y2))
+		ari_out = ari_gev(da_annmax, da_dmax_annmax, lats[:,0], lons[0,:], "barpa_erai_access_gev_"+str(y1)+"_"+str(y2))
+
+		#Compute GEV/CDF for BARRA for summer only
+		lons, lats, t, da, da_dmax, da_annmax, da_dmax_annmax, ann_times = load_barpa(y1,y2,shapes,nrm=nrm,djf=True,forcing_mdl="erai")
+		ari_out = ari_cdf(da, da_dmax, da_annmax, da_dmax_annmax,lats[:,0], lons[0,:],"barpa_erai_access_cdf_djf_"+str(y1)+"_"+str(y2))
+		ari_out = ari_gev(da_annmax, da_dmax_annmax, lats[:,0], lons[0,:], "barpa_erai_access_gev_djf_"+str(y1)+"_"+str(y2))
 
 	if "BARRA-SY" in models:
 	

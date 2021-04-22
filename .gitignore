@@ -6,3 +6,4 @@ jobs/messages/
 *.swp
 *.swo
 *.csh
+.ipynb*

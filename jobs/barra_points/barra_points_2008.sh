@@ -2,7 +2,7 @@
 
 #PBS -P eg3 
 #PBS -q express
-#PBS -l walltime=2:00:00,mem=32GB 
+#PBS -l walltime=04:00:00,mem=64GB 
 #PBS -l ncpus=1
 #PBS -o /home/548/ab4502/working/ExtremeWind/jobs/messages/barra_points_2008.o 
 #PBS -e /home/548/ab4502/working/ExtremeWind/jobs/messages/barra_points_2008.e 

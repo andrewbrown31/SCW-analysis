@@ -1,3 +1,4 @@
+from tqdm import tqdm
 import warnings
 import sys
 import netCDF4 as nc
@@ -19,12 +20,12 @@ def drop_duplicates(ds):
         a, ind = np.unique(ds.time.values, return_index=True)
         return(ds.isel({"time":ind}))
 
-def file_dates(files, query):
+def file_dates(files, query, day_delta=10):
 
 	is_in = []
 	for i in np.arange(len(files)):
 		t = dt.datetime.strptime(files[i].split("/")[11][:-1], "%Y%m%dT%H%M")
-		t_list = date_seq([t + dt.timedelta(hours=6), t + dt.timedelta(days=10)], "hours", 6) 
+		t_list = date_seq([t + dt.timedelta(hours=6), t + dt.timedelta(days=day_delta)], "hours", 6) 
 		if any(np.in1d(query, t_list)):
 			is_in.append(True)
 		else:
@@ -233,6 +234,340 @@ def read_barpa(domain, time, experiment, forcing_mdl, ensemble):
 	return [ta, hur, geopt, terrain, p[:,0,0], ps, ua, va, uas, vas, tas, dewpt, wg, lon,\
                     lat, out_times]
 
+def to_points_loop_erai(loc_id,points,fname,start_year,end_year,variables=False):
+
+	from dask.diagnostics import ProgressBar
+	import gc
+	ProgressBar().register()
+
+	dates = []
+	for y in np.arange(start_year,end_year+1):
+		for m in np.arange(1,13):
+			dates.append(dt.datetime(y,m,1,0,0,0))
+
+	df = pd.DataFrame()
+
+	lsm = xr.open_dataset("/g/data/du7/barpa/trials/BARPA-EASTAUS_12km/static/lnd_mask-BARPA-EASTAUS_12km.nc")
+	temp = xr.open_dataset(glob.glob("/g/data/eg3/ab4502/ExtremeWind/aus/"+\
+			"barpa_erai/barpa_erai_199001*")[0])
+	lsm = lsm.interp({"latitude":temp.lat, "longitude":temp.lon}, method="nearest")
+	temp.close()
+
+	#Read netcdf data
+	for t in np.arange(len(dates)):
+		print(dates[t])
+		f=xr.open_dataset(glob.glob("/g/data/eg3/ab4502/ExtremeWind/aus/"+\
+			"barpa_erai/barpa_erai_"+dates[t].strftime("%Y%m")+"*.nc")[0],\
+			 engine="h5netcdf")
+
+                #Setup lsm
+		lat = f.coords.get("lat").values
+		lon = f.coords.get("lon").values
+		x,y = np.meshgrid(lon,lat)
+		x[lsm.lnd_mask==0] = np.nan
+		y[lsm.lnd_mask==0] = np.nan
+
+		dist_lon = []
+		dist_lat = []
+		for i in np.arange(len(loc_id)):
+
+			dist = np.sqrt(np.square(x-points[i][0]) + \
+				np.square(y-points[i][1]))
+			temp_lat,temp_lon = np.unravel_index(np.nanargmin(dist),dist.shape)
+			dist_lon.append(temp_lon)
+			dist_lat.append(temp_lat)
+
+		try:
+			f=f[variables]
+		except:
+			pass
+
+		temp_df = f.isel(lat = xr.DataArray(dist_lat, dims="points"), \
+				lon = xr.DataArray(dist_lon, dims="points")).persist().to_dataframe()
+
+		temp_df = temp_df.reset_index()
+
+		for p in np.arange(len(loc_id)):
+			temp_df.loc[temp_df.points==p,"loc_id"] = loc_id[p]
+
+		temp_df = temp_df.drop("points",axis=1)
+		df = pd.concat([df, temp_df])
+		f.close()
+		gc.collect()
+
+	df.sort_values(["loc_id","time"]).to_pickle("/g/data/eg3/ab4502/ExtremeWind/points/"+fname+".pkl")
+
+def create_gust_threshold_barpac(start_year, end_year, driving_mdl, thresh=25):
+
+	#For each month of barpac data, identify intances of daily max gusts over "thresh" m/s. Sum over the entire period, keeping track of the number of days/years
+
+        from dask.diagnostics import ProgressBar
+        import gc
+        ProgressBar().register()
+
+        dates = []
+        for y in np.arange(start_year,end_year+1):
+                for m in [1,2,12]:
+                        if not ( ( (y==2005) & (m==12) ) | ( (y==1985) & (m==1) ) | ( (y==1985) & (m==2) ) | ( (y==2039) & (m==1) ) | ( (y==2039) & (m==2) ) | ( (y==2059) & (m==12) )):
+                              dates.append(dt.datetime(y,m,1,12,0,0))
+        last_date = dt.datetime(y+1,1,1,12,0,0)
+
+        lsm = xr.open_dataset("/g/data/du7/barpa/trials/BARPAC-M_km2p2/static/lnd_mask-BARPAC-M_km2p2.nc")
+
+        output = np.zeros(lsm.lnd_mask.shape)
+        days = 0
+        date_out = []
+
+        #Read netcdf data
+        for t in np.arange(len(dates)):
+                print(dates[t])
+                try:
+                    if dates[t].month == 2:
+                            query_dates = date_seq([dates[t], dates[t].replace(month=3)+dt.timedelta(days=-1)], "hours", 24)
+                    else:
+                            query_dates = date_seq([dates[t], dates[t+1]+dt.timedelta(days=-1)], "hours", 24)
+                except:
+                    query_dates = date_seq([dates[t], last_date+dt.timedelta(days=-1)], "hours", 24)
+                if driving_mdl == "erai":
+                        wg_files = np.sort(glob.glob("/g/data/du7/barpa/trials/BARPAC-M_km2p2/era/erai/r0/*/*/pp0/max_wndgust10m*.nc"))
+                elif driving_mdl == "ACCESS1-0":
+                        wg_files = np.sort(glob.glob("/g/data/du7/barpa/trials/BARPAC-M_km2p2/cmip5/ACCESS1-0/r1i1p1/*/*/pp0/max_wndgust10m*.nc"))
+                wg_files = wg_files[file_dates(wg_files, query_dates)]
+                f = drop_duplicates(xr.open_mfdataset(wg_files, concat_dim="time", combine="nested")).sel({"time":query_dates})
+
+                output = (f["max_wndgust10m"] >= thresh).sum("time").values + output
+                days = days + f.time.shape[0]
+                date_out.append(dates[t])
+
+        out_ds = xr.Dataset(data_vars={"wg10":( ("lat","lon"), output, {"thresh":thresh})}, coords={"lon":f.longitude.values, "lat":f.latitude.values},\
+		attrs={"days":days, "start_year":start_year, "end_year":end_year, "dates":[date_out[i].strftime("%Y%m%d") for i in np.arange(len(date_out))]})
+        out_ds.to_netcdf("/g/data/eg3/ab4502/ESCI/barpac_m_"+driving_mdl+"_wind_gust_"+str(thresh)+"_"+str(start_year)+"_"+str(end_year)+".nc")
+
+def to_points_wind_gust_barpac_erai(loc_id, points, fname, start_year, end_year):
+
+	#Load daily maximum wind gust data from du7, and extract point values
+	#For BARPAC, this is summer only
+        from dask.diagnostics import ProgressBar
+        import gc
+        ProgressBar().register()
+
+        dates = []
+        for y in np.arange(start_year,end_year+1):
+                for m in [1,2,12]:
+                        if not ( ( (y==2015) & (m==12) ) | ( (y==1990) & (m==1) ) | ( (y==1990) & (m==2) )):
+                              dates.append(dt.datetime(y,m,1,12,0,0))
+        last_date = dt.datetime(y+1,1,1,12,0,0)
+
+        df = pd.DataFrame()
+
+        lsm = xr.open_dataset("/g/data/du7/barpa/trials/BARPAC-M_km2p2/static/lnd_mask-BARPAC-M_km2p2.nc")
+
+        #Read netcdf data
+        for t in np.arange(len(dates)):
+                print(dates[t])
+                try:
+                    if dates[t].month == 2:
+                            query_dates = date_seq([dates[t], dates[t].replace(month=3)+dt.timedelta(days=-1)], "hours", 24)
+                    else:
+                            query_dates = date_seq([dates[t], dates[t+1]+dt.timedelta(days=-1)], "hours", 24)
+                except:
+                    query_dates = date_seq([dates[t], last_date+dt.timedelta(days=-1)], "hours", 24)
+                wg_files = np.sort(glob.glob("/g/data/du7/barpa/trials/BARPAC-M_km2p2/era/erai/r0/*/*/pp0/max_wndgust10m*.nc"))
+                wg_files = wg_files[file_dates(wg_files, query_dates)]
+                f = drop_duplicates(xr.open_mfdataset(wg_files, concat_dim="time", combine="nested")).sel({"time":query_dates})
+
+                #Setup lsm
+                lat = f.coords.get("latitude").values
+                lon = f.coords.get("longitude").values
+                x,y = np.meshgrid(lon,lat)
+                x[lsm.lnd_mask==0] = np.nan
+                y[lsm.lnd_mask==0] = np.nan
+
+                dist_lon = []
+                dist_lat = []
+                for i in np.arange(len(loc_id)):
+
+                        dist = np.sqrt(np.square(x-points[i][0]) + \
+                                np.square(y-points[i][1]))
+                        temp_lat,temp_lon = np.unravel_index(np.nanargmin(dist),dist.shape)
+                        dist_lon.append(temp_lon)
+                        dist_lat.append(temp_lat)
+
+                temp_df = f["max_wndgust10m"].isel(latitude = xr.DataArray(dist_lat, dims="points"), \
+                                longitude = xr.DataArray(dist_lon, dims="points")).persist().to_dataframe()
+                temp_df = temp_df.reset_index()
+                temp_df["time"] = pd.DatetimeIndex(temp_df.time) + dt.timedelta(hours=-12) 
+    
+                for p in np.arange(len(loc_id)):
+                        temp_df.loc[temp_df.points==p,"loc_id"] = loc_id[p]
+
+                temp_df = temp_df.drop(["points",\
+                        "forecast_period", "forecast_reference_time", "height"],axis=1)
+
+                df = pd.concat([df, temp_df])
+                f.close()
+                gc.collect()
+
+        df.sort_values(["loc_id","time"]).to_pickle("/g/data/eg3/ab4502/ExtremeWind/points/"+fname+".pkl")
+
+def to_points_wind_gust_barpac_access(loc_id, points, fname, start_year, end_year):
+
+	#Load daily maximum wind gust data from du7, and extract point values
+	#For BARPAC, this is summer only
+        from dask.diagnostics import ProgressBar
+        import gc
+        ProgressBar().register()
+
+        dates = []
+        for y in np.arange(start_year,end_year+1):
+                for m in [1,2,12]:
+                        if not ( ( (y==2005) & (m==12) ) | ( (y==1985) & (m==1) ) | ( (y==1985) & (m==2) ) | ( (y==2039) & (m==1) ) | ( (y==2039) & (m==2) ) | ( (y==2058) & (m==12) )):
+                              dates.append(dt.datetime(y,m,1,12,0,0))
+        last_date = dt.datetime(y+1,1,1,12,0,0)
+
+        df = pd.DataFrame()
+
+        lsm = xr.open_dataset("/g/data/du7/barpa/trials/BARPAC-M_km2p2/static/lnd_mask-BARPAC-M_km2p2.nc")
+
+        #Read netcdf data
+        for t in np.arange(len(dates)):
+                print(dates[t])
+                try:
+                    if dates[t].month == 2:
+                            query_dates = date_seq([dates[t], dates[t].replace(month=3)+dt.timedelta(days=-1)], "hours", 24)
+                    else:
+                            query_dates = date_seq([dates[t], dates[t+1]+dt.timedelta(days=-1)], "hours", 24)
+                except:
+                    query_dates = date_seq([dates[t], last_date+dt.timedelta(days=-1)], "hours", 24)
+                wg_files = np.sort(glob.glob("/g/data/du7/barpa/trials/BARPAC-M_km2p2/cmip5/ACCESS1-0/r1i1p1/*/*/pp0/max_wndgust10m*.nc"))
+                wg_files = wg_files[file_dates(wg_files, query_dates)]
+                f = drop_duplicates(xr.open_mfdataset(wg_files, concat_dim="time", combine="nested")).sel({"time":query_dates})
+
+                #Setup lsm
+                lat = f.coords.get("latitude").values
+                lon = f.coords.get("longitude").values
+                x,y = np.meshgrid(lon,lat)
+                x[lsm.lnd_mask==0] = np.nan
+                y[lsm.lnd_mask==0] = np.nan
+
+                dist_lon = []
+                dist_lat = []
+                for i in np.arange(len(loc_id)):
+
+                        dist = np.sqrt(np.square(x-points[i][0]) + \
+                                np.square(y-points[i][1]))
+                        temp_lat,temp_lon = np.unravel_index(np.nanargmin(dist),dist.shape)
+                        dist_lon.append(temp_lon)
+                        dist_lat.append(temp_lat)
+
+                temp_df = f["max_wndgust10m"].isel(latitude = xr.DataArray(dist_lat, dims="points"), \
+                                longitude = xr.DataArray(dist_lon, dims="points")).persist().to_dataframe()
+                temp_df = temp_df.reset_index()
+                temp_df["time"] = pd.DatetimeIndex(temp_df.time) + dt.timedelta(hours=-12) 
+    
+                for p in np.arange(len(loc_id)):
+                        temp_df.loc[temp_df.points==p,"loc_id"] = loc_id[p]
+
+                temp_df = temp_df.drop(["points",\
+                        "forecast_period", "forecast_reference_time", "height"],axis=1)
+
+                df = pd.concat([df, temp_df])
+                f.close()
+                gc.collect()
+
+        df.sort_values(["loc_id","time"]).to_pickle("/g/data/eg3/ab4502/ExtremeWind/points/"+fname+".pkl")
+
+def fix_wg_spikes(da_vals):
+
+	'''
+	Take a lat, lon, time numpy array of daily maximum max_wndgust10m, and identify/smooth wind gust spikes
+	Identify spikes by considering adjacent points. Spikes are where there is at least one adjacent point with 
+	    a gust less than 50% of the potential spike. Potential spikes are gusts above 25 m/s.
+	Replace spikes using the mean of adjacent points.
+	'''
+	
+	ind = np.where(da_vals >= 25)
+	for i in tqdm(np.arange(len(ind[0]))):
+		pot_spike = da_vals[ind[0][i], ind[1][i], ind[2][i]]
+		adj_gusts = []
+		for ii in [-1, 1]:
+			for jj in [-1, 1]:
+				try:
+					adj_gusts.append( da_vals[ind[0][i], ind[1][i]+ii, ind[2][i]+jj])
+				except:
+					pass
+		if (np.array(adj_gusts) < (0.5*pot_spike)).any():
+			pot_spike = np.median(adj_gusts)
+		da_vals[ind[0][i], ind[1][i], ind[2][i]] = pot_spike
+	return da_vals
+
+def to_points_wind_gust_access(loc_id, points, fname, start_year, end_year):
+
+	#Load daily maximum wind gust data from du7, and extract point values
+        from dask.diagnostics import ProgressBar
+        import gc
+        ProgressBar().register()
+
+        dates = []
+        for y in np.arange(start_year,end_year+1):
+                for m in [1,2,12]:
+                        dates.append(dt.datetime(y,m,1,12,0,0))
+        last_date = dt.datetime(y+1,1,1,12,0,0)
+
+        df = pd.DataFrame()
+
+        lsm = xr.open_dataset("/g/data/du7/barpa/trials/BARPA-EASTAUS_12km/static/lnd_mask-BARPA-EASTAUS_12km.nc")
+
+        #Read netcdf data
+        for t in np.arange(len(dates)):
+                print(dates[t])
+                try:
+                    query_dates = date_seq([dates[t], dates[t+1]+dt.timedelta(days=-1)], "hours", 24)
+                except:
+                    query_dates = date_seq([dates[t], last_date+dt.timedelta(days=-1)], "hours", 24)
+                wg_files = np.sort(glob.glob("/g/data/du7/barpa/trials/BARPA-EASTAUS_12km/cmip5/ACCESS1-0/r1i1p1/*/*/pp0/max_wndgust10m*.nc"))
+                wg_files = wg_files[file_dates(wg_files, query_dates)]
+                f = drop_duplicates(xr.open_mfdataset(wg_files, concat_dim="time", combine="nested", drop_variables=["realization"])).sel({"time":query_dates})
+
+                #Setup lsm
+                lat = f.coords.get("latitude").values
+                lon = f.coords.get("longitude").values
+                x,y = np.meshgrid(lon,lat)
+                x[lsm.lnd_mask==0] = np.nan
+                y[lsm.lnd_mask==0] = np.nan
+
+                dist_lon = []
+                dist_lat = []
+                for i in np.arange(len(loc_id)):
+
+                        dist = np.sqrt(np.square(x-points[i][0]) + \
+                                np.square(y-points[i][1]))
+                        temp_lat,temp_lon = np.unravel_index(np.nanargmin(dist),dist.shape)
+                        dist_lon.append(temp_lon)
+                        dist_lat.append(temp_lat)
+
+		###Try to fix wind gust spikes
+                da = fix_wg_spikes(f["max_wndgust10m"].values)
+                f = xr.Dataset(data_vars = {"max_wndgust10m": (("time","latitude","longitude"), da)}, coords={"time":f.time, "latitude":f.latitude.values, "longitude":f.longitude.values})
+		###
+
+                temp_df = f["max_wndgust10m"].isel(latitude = xr.DataArray(dist_lat, dims="points"), \
+                                longitude = xr.DataArray(dist_lon, dims="points")).persist().to_dataframe()
+                temp_df = temp_df.reset_index()
+                temp_df["time"] = pd.DatetimeIndex(temp_df.time) + dt.timedelta(hours=-12) 
+    
+                for p in np.arange(len(loc_id)):
+                        temp_df.loc[temp_df.points==p,"loc_id"] = loc_id[p]
+
+                temp_df = temp_df.drop(["points",\
+                        "forecast_period", "forecast_reference_time", "height"],axis=1)
+
+                df = pd.concat([df, temp_df])
+                f.close()
+                gc.collect()
+
+        df.sort_values(["loc_id","time"]).to_pickle("/g/data/eg3/ab4502/ExtremeWind/points/"+fname+".pkl")
+
 def to_points_wind_gust(loc_id, points, fname, start_year, end_year):
 
 	#Load daily maximum wind gust data from du7, and extract point values
@@ -298,9 +633,38 @@ def to_points_wind_gust(loc_id, points, fname, start_year, end_year):
 
 if __name__ == "__main__":
 
+	if len(sys.argv) > 1:
+		start_year = int(sys.argv[1])
+		end_year = int(sys.argv[2])
+	if len(sys.argv) > 3:
+		variable = sys.argv[3]
+
 	loc_id, points = get_aus_stn_info()
 	#REMOVE THESE LOCS AS THEY AREN'T IN THE EASTAUS DOMAIN
-	removed = ['Broome', 'Port Hedland', 'Carnarvon', 'Meekatharra', 'Perth', 'Esperance', 'Kalgoorlie', 'Halls Creek']
+	#removed = ['Broome', 'Port Hedland', 'Carnarvon', 'Meekatharra', 'Perth', 'Esperance', 'Kalgoorlie', 'Halls Creek']
+	#Remove locs that aren't in BARPAC-M domain
+	removed = ['Halls Creek', 'Broome', 'Port Hedland', 'Carnarvon',\
+	    'Meekatharra', 'Perth', 'Esperance', 'Kalgoorlie', 'Giles',\
+	    'Darwin', 'Gove', 'Tennant Creek', 'Alice Springs', 'Ceduna',\
+	    'Weipa', 'Mount Isa', 'Cairns', 'Townsville', 'Mackay',\
+	    'Rockhampton', 'Amberley', 'Oakey', 'Charleville']
 	points = np.array(points)[np.in1d(loc_id, removed, invert=True)]
 	loc_id = loc_id[np.in1d(loc_id, removed, invert=True)]
-	to_points_wind_gust(loc_id, points, "barpa_erai_gusts", 1990, 2015)
+	#to_points_wind_gust_barpac_access(loc_id, points, "barpac_m_access_gusts_1985_2005", 1985, 2005)
+	#to_points_wind_gust_barpac_access(loc_id, points, "barpac_m_access_gusts_2039_2058", 2039, 2058)
+	to_points_wind_gust_barpac_erai(loc_id, points, "barpac_m_erai_gusts_1990_2015", 1990, 2015)
+
+	#to_points_wind_gust(loc_id, points, "barpa_erai_gusts", 1990, 2015)
+	#points = points[np.in1d(loc_id, ["Darwin","Adelaide","Woomera","Sydney"])]
+	#loc_id = loc_id[np.in1d(loc_id, ["Darwin","Adelaide","Woomera","Sydney"])]
+
+	#to_points_loop_erai(loc_id,points,"barpa_erai_"+str(start_year)+"_"+str(end_year),\
+	#		start_year,end_year,variables=["mucape*s06","ml_cape","wg10"])
+	#to_points_wind_gust_access(loc_id, points, "barpa_access_1985_2005", 1985, 2005)
+
+	#driving_mdl = "ACCESS1-0"
+	#create_gust_threshold_barpac(1985, 2005, driving_mdl, thresh=25)
+	#create_gust_threshold_barpac(1985, 2005, driving_mdl, thresh=28.5)
+
+	#create_gust_threshold_barpac(2039, 2059, driving_mdl, thresh=25)
+	#create_gust_threshold_barpac(2039, 2059, driving_mdl, thresh=28.5)

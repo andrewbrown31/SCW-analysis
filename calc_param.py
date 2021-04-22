@@ -1466,6 +1466,14 @@ def nc_attributes(param):
 		units = "J/kg"
 		long_name = "mixed_layer_cin"
 		least_significant_digit = 1
+	elif param=="cape_gb_mu1":
+		units = "J/kg"
+		long_name = "most_unstable_cape_mu1"
+		least_significant_digit = 1
+	elif param=="cape_gb_mu4":
+		units = "J/kg"
+		long_name = "most_unstable_cape_mu4"
+		least_significant_digit = 1
 	elif param=="mu_cape":
 		units = "J/kg"
 		long_name = "most_unstable_cape"
@@ -1481,6 +1489,10 @@ def nc_attributes(param):
 	elif param=="s010":
 		units = "m/s"
 		long_name = "bulk_wind_shear_0-10km"
+		least_significant_digit = 2
+	elif param=="s0500":
+		units = "m/s"
+		long_name = "bulk_wind_shear_sfc_500hPa"
 		least_significant_digit = 2
 	elif param=="s06":
 		units = "m/s"
@@ -1594,9 +1606,9 @@ def nc_attributes(param):
 		units = "m"
 		long_name = "most_unstable_lifting_condensation_level"
 		least_significant_digit = 1
-	elif param == "cape*s06":
+	elif param == "mod_cape*s06":
 		units = ""
-		long_name = "erai_cape_times_s06167"
+		long_name = "model_cape_times_s06167"
 		least_significant_digit = 1
 	elif param == "cape*s06_2":
 		units = ""
@@ -1618,9 +1630,9 @@ def nc_attributes(param):
 		units = ""
 		long_name = "derecho_composite_parameter"
 		least_significant_digit = 8
-	elif param == "cape":
+	elif param == "mod_cape":
 		units = "J/kg"
-		long_name = "most_unstable_cape"
+		long_name = "model_cape"
 		least_significant_digit = 1
 	elif param == "conv10":
 		units = "s^-1 * 1e5"
@@ -1633,6 +1645,18 @@ def nc_attributes(param):
 	elif param == "conv800-600":
 		units = "s^-1"
 		long_name = "mean_convergence_1000-850hPa"
+		least_significant_digit = 5
+	elif param == "conv925":
+		units = "s^-1 * 1e-5"
+		long_name = "convergence_925hPa"
+		least_significant_digit = 5
+	elif param == "conv850":
+		units = "s^-1 * 1e-5"
+		long_name = "convergence_850hPa"
+		least_significant_digit = 5
+	elif param == "conv700":
+		units = "s^-1 * 1e-5"
+		long_name = "convergence_700hPa"
 		least_significant_digit = 5
 	elif param == "td950":
 		units = "decC"
@@ -1682,9 +1706,13 @@ def nc_attributes(param):
 		units = "m"
 		long_name = "sfc_based_parcel_lcl"
 		least_significant_digit = 1
+	elif param == "tp":
+		units = "mm"
+		long_name = "total_precipitation_since_last_time_step"
+		least_significant_digit = 8
 	elif param == "cp":
-		units = "mm/hr"
-		long_name = "convective_precipitation"
+		units = "mm"
+		long_name = "convective_precipitation_since_last_time_step"
 		least_significant_digit = 8
 	elif param == "dcp2":
 		units = ""
@@ -1818,6 +1846,10 @@ def nc_attributes(param):
 		units = "deg/km"
 		long_name = "lapse_rate_0_3km"
 		least_significant_digit = 3
+	elif param == "lr700_500":
+		units = "deg/km"
+		long_name = "lapse_rate_700_500hPa"
+		least_significant_digit = 3
 	elif param == "lr24":
 		units = "deg/km"
 		long_name = "lapse_rate_2_4km"
@@ -1837,6 +1869,10 @@ def nc_attributes(param):
 	elif param == "lr_freezing":
 		units = "deg/km"
 		long_name = "lapse_rate_sfc_to_freezing"
+		least_significant_digit = 3
+	elif param == "muq":
+		units = "g/kg"
+		long_name = "water_vapour_mean_mixing_ratio_most_unstable_parcel"
 		least_significant_digit = 3
 	elif param == "qmean01":
 		units = "g/kg"
@@ -1901,6 +1937,34 @@ def nc_attributes(param):
 	elif param == "rhminsubcloud":
 		units = "%"
 		long_name = "minimum_rh_sfc_mllcl"
+		least_significant_digit = 3
+	elif param == "rho925":
+		units = "kg/m^-3"
+		long_name = "density_at_925hPa"
+		least_significant_digit = 3
+	elif param == "rho850":
+		units = "kg/m^-3"
+		long_name = "density_at_825hPa"
+		least_significant_digit = 3
+	elif param == "rho700":
+		units = "kg/m^-3"
+		long_name = "density_at_700Pa"
+		least_significant_digit = 3
+	elif param == "ta925":
+		units = "degC"
+		long_name = "temperature_at_925hPa"
+		least_significant_digit = 3
+	elif param == "ta850":
+		units = "degC"
+		long_name = "temperature_at_850hPa"
+		least_significant_digit = 3
+	elif param == "ta700":
+		units = "degC"
+		long_name = "temperature_at_700hPa"
+		least_significant_digit = 3
+	elif param == "t500":
+		units = "degC"
+		long_name = "temperature_at_500hPa"
 		least_significant_digit = 3
 	elif param == "mhgt":
 		units = "m"
@@ -2058,6 +2122,18 @@ def nc_attributes(param):
 		units = "Pa/s"
 		long_name = "mean_vertical_velocity_0-6km"
 		least_significant_digit = 8
+	elif param == "w925":
+		units = "m/s"
+		long_name = "vertical_velocity_925hPa"
+		least_significant_digit = 8
+	elif param == "w850":
+		units = "m/s"
+		long_name = "vertical_velocity_925hPa"
+		least_significant_digit = 8
+	elif param == "w700":
+		units = "m/s"
+		long_name = "vertical_velocity_925hPa"
+		least_significant_digit = 8
 	elif param == "dmi":
 		units = ""
 		long_name = "dry_microburst_index_goes"
@@ -2162,6 +2238,22 @@ def nc_attributes(param):
 		units = "s-1 * 1e5"
 		long_name = "horizontal_velocity_gradient_tensor_magnitude_10m"
 		least_significant_digit = 8
+	elif param == "ta850":
+		units = "degC"
+		long_name = "air_temp_850"
+		least_significant_digit = 2
+	elif param == "ta500":
+		units = "degC"
+		long_name = "air_temp_500"
+		least_significant_digit = 2
+	elif param == "dp850":
+		units = "degC"
+		long_name = "dewpoint_850"
+		least_significant_digit = 2
+	elif param == "bdsd":
+		units = ""
+		long_name = "brown_dowdy_stat_diag"
+		least_significant_digit = 2
 	else:
 		units = ""
 		long_name = ""

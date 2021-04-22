@@ -212,7 +212,8 @@ def get_mean_var_hgt(var3d, hgt, hgt_bot, hgt_top, terrain, mass_weighted=False,
 
 	if mass_weighted:
 		try:
-			cond = ( (hgt-terrain) < hgt_bot) | ( (hgt-terrain) > hgt_top) | (np.isnan(hgt)) | (np.isnan(hgt_bot)) | (np.isnan(hgt_top))
+			cond = ( (hgt-terrain) < hgt_bot) | ( (hgt-terrain) > hgt_top) | (np.isnan(hgt)) | (np.isnan(hgt_bot)) | (np.isnan(hgt_top)) \
+				| (np.isnan(var3d))
 			result = trapz_int3d( var3d, p3d, ~cond)
 		except:
 			raise ValueError("FUNCTION get_mean_var_hgt() IS FAILING TO TAKE A PRESSURE WEIGHTED"+\
@@ -340,9 +341,9 @@ def get_srh(u,v,hgt,hgt_bot,hgt_top,terrain):
 		get_storm_motion(np.copy(u), np.copy(v), np.copy(hgt), terrain)
 
 	hgt = hgt - terrain
-	u_ma = np.ma.masked_where((hgt < hgt_bot) | (hgt > hgt_top) | \
+	u_ma = np.ma.masked_where((hgt < hgt_bot) | (hgt > hgt_top) | (np.isnan(u)) | \
 			(np.isnan(hgt_bot)) | (np.isnan(hgt_top)) | (np.isnan(hgt)), u)
-	v_ma = np.ma.masked_where((hgt < hgt_bot) | (hgt > hgt_top) | \
+	v_ma = np.ma.masked_where((hgt < hgt_bot) | (hgt > hgt_top) | (np.isnan(v)) | \
 			(np.isnan(hgt_bot)) | (np.isnan(hgt_top)) | (np.isnan(hgt)) , v)
 	sru_left = u_ma - u_storm_left
 	srv_left = v_ma - v_storm_left

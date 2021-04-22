@@ -10,15 +10,15 @@
 
 source activate wrfpython3.6 
 
-python working/ExtremeWind/cmip/cmip_scenario.py -p logit_aws -e rcp85 --threshold 0.72 -m ACCESS1-3 --force_compute True --scenario_y1 2081 --scenario_y2 2100
-python working/ExtremeWind/cmip/cmip_scenario.py -p logit_aws -e rcp85 --threshold 0.72 -m ACCESS1-0 --force_compute True --scenario_y1 2081 --scenario_y2 2100
-python working/ExtremeWind/cmip/cmip_scenario.py -p logit_aws -e rcp85 --threshold 0.72 -m BNU-ESM --force_compute True --scenario_y1 2081 --scenario_y2 2100
-python working/ExtremeWind/cmip/cmip_scenario.py -p logit_aws -e rcp85 --threshold 0.72 -m CNRM-CM5 --force_compute True --scenario_y1 2081 --scenario_y2 2100
-python working/ExtremeWind/cmip/cmip_scenario.py -p logit_aws -e rcp85 --threshold 0.72 -m GFDL-CM3 --force_compute True --scenario_y1 2081 --scenario_y2 2100
-python working/ExtremeWind/cmip/cmip_scenario.py -p logit_aws -e rcp85 --threshold 0.72 -m GFDL-ESM2G --force_compute True --scenario_y1 2081 --scenario_y2 2100
-python working/ExtremeWind/cmip/cmip_scenario.py -p logit_aws -e rcp85 --threshold 0.72 -m GFDL-ESM2M --force_compute True --scenario_y1 2081 --scenario_y2 2100
-python working/ExtremeWind/cmip/cmip_scenario.py -p logit_aws -e rcp85 --threshold 0.72 -m IPSL-CM5A-LR --force_compute True --scenario_y1 2081 --scenario_y2 2100
-python working/ExtremeWind/cmip/cmip_scenario.py -p logit_aws -e rcp85 --threshold 0.72 -m IPSL-CM5A-MR --force_compute True --scenario_y1 2081 --scenario_y2 2100
-python working/ExtremeWind/cmip/cmip_scenario.py -p logit_aws -e rcp85 --threshold 0.72 -m MIROC5 --force_compute True --scenario_y1 2081 --scenario_y2 2100
-python working/ExtremeWind/cmip/cmip_scenario.py -p logit_aws -e rcp85 --threshold 0.72 -m MRI-CGCM3 --force_compute True --scenario_y1 2081 --scenario_y2 2100
-python working/ExtremeWind/cmip/cmip_scenario.py -p logit_aws -e rcp85 --threshold 0.72 -m bcc-csm1-1 --force_compute True --scenario_y1 2081 --scenario_y2 2100
+python working/ExtremeWind/cmip/cmip_scenario.py -p logit_aws -e rcp85 --threshold 0.83 -m ACCESS1-3 --force_compute True --scenario_y1 2081 --scenario_y2 2100
+python working/ExtremeWind/cmip/cmip_scenario.py -p logit_aws -e rcp85 --threshold 0.83 -m ACCESS1-0 --force_compute True --scenario_y1 2081 --scenario_y2 2100
+python working/ExtremeWind/cmip/cmip_scenario.py -p logit_aws -e rcp85 --threshold 0.83 -m BNU-ESM --force_compute True --scenario_y1 2081 --scenario_y2 2100
+python working/ExtremeWind/cmip/cmip_scenario.py -p logit_aws -e rcp85 --threshold 0.83 -m CNRM-CM5 --force_compute True --scenario_y1 2081 --scenario_y2 2100
+python working/ExtremeWind/cmip/cmip_scenario.py -p logit_aws -e rcp85 --threshold 0.83 -m GFDL-CM3 --force_compute True --scenario_y1 2081 --scenario_y2 2100
+python working/ExtremeWind/cmip/cmip_scenario.py -p logit_aws -e rcp85 --threshold 0.83 -m GFDL-ESM2G --force_compute True --scenario_y1 2081 --scenario_y2 2100
+python working/ExtremeWind/cmip/cmip_scenario.py -p logit_aws -e rcp85 --threshold 0.83 -m GFDL-ESM2M --force_compute True --scenario_y1 2081 --scenario_y2 2100
+python working/ExtremeWind/cmip/cmip_scenario.py -p logit_aws -e rcp85 --threshold 0.83 -m IPSL-CM5A-LR --force_compute True --scenario_y1 2081 --scenario_y2 2100
+python working/ExtremeWind/cmip/cmip_scenario.py -p logit_aws -e rcp85 --threshold 0.83 -m IPSL-CM5A-MR --force_compute True --scenario_y1 2081 --scenario_y2 2100
+python working/ExtremeWind/cmip/cmip_scenario.py -p logit_aws -e rcp85 --threshold 0.83 -m MIROC5 --force_compute True --scenario_y1 2081 --scenario_y2 2100
+python working/ExtremeWind/cmip/cmip_scenario.py -p logit_aws -e rcp85 --threshold 0.83 -m MRI-CGCM3 --force_compute True --scenario_y1 2081 --scenario_y2 2100
+python working/ExtremeWind/cmip/cmip_scenario.py -p logit_aws -e rcp85 --threshold 0.83 -m bcc-csm1-1 --force_compute True --scenario_y1 2081 --scenario_y2 2100

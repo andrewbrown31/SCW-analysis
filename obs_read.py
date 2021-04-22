@@ -215,12 +215,12 @@ def read_upperair_obs(start_date,end_date,fout,code="wrfpython"):
 						group.ta.values[np.newaxis][np.newaxis].T, \
 						group.p.values[np.newaxis][np.newaxis].T, \
 						np.array(ml_inds)[np.newaxis][np.newaxis].T ) )\
-						.data.astype(np.float32)
+						.astype(np.float32)
 					ml_q_avg = np.squeeze( trapz_int3d( \
 						group.q.values[np.newaxis][np.newaxis].T, \
 						group.p.values[np.newaxis][np.newaxis].T, \
 						np.array(ml_inds)[np.newaxis][np.newaxis].T ) )\
-						.data.astype(np.float32)
+						.astype(np.float32)
 					ml_hgt_avg = np.ma.masked_where(~ml_inds, group.z).mean()
 					ml_p3d_avg = np.ma.masked_where(~ml_inds, group.p).mean()
 					#Insert the mean values into the bottom of the 3d arrays
@@ -305,12 +305,13 @@ def read_upperair_obs(start_date,end_date,fout,code="wrfpython"):
 						group.ta.values[np.newaxis][np.newaxis].T, \
 						group.q.values[np.newaxis][np.newaxis].T, \
 						group.z.values[np.newaxis][np.newaxis].T, \
-						group.p.values, group.p.iloc[0], sfc_included=True))
+						group.p.iloc[0], p_lvl=True, p=group.p.values, sfc_included=True))
 					thetae = mpcalc.equivalent_potential_temperature(\
 						group.p.values * units.units.hectopascal, \
 						group.ta.values * units.units.degC, \
 						group.dp.values * units.units.degC)
-					thetae[abs(group.p - group.p.iloc[0]) > 400] = np.nan
+					#thetae[abs(group.p - group.p.iloc[0]) > 400] = np.nan
+					thetae[(abs(group.p - group.p.iloc[0]) > 400) | (abs(group.p - group.p.iloc[0]) < 50)] = np.nan
 					try:
 						dcape = dcape[np.nanargmin(thetae)]
 					except:
@@ -995,16 +996,13 @@ def load_wind_sa():
 			for i in np.arange(0,df.shape[0])]
 	return df
 
-def read_clim_ind(ind):
+def read_clim_ind(ind, seasons=[[3,4,5],[6,7,8],[9,10,11],[12,1,2]], names = ["MAM","JJA","SON","DJF"],years=np.arange(1979,2019)):
 
 	#Create annual time series' for each season
 
-	seasons = [[3,4,5],[6,7,8],[9,10,11],[12,1,2]]
-	names = ["MAM","JJA","SON","DJF"]
-	years = np.arange(1979,2019)
 	if ind == "nino34":
 		#NINO3.4
-		df = pd.read_table("/g/data/eg3/ab4502/ExtremeWind/clim_ind/nino34.txt",names=np.arange(0,13,1),\
+		df = pd.read_table("/g/data/eg3/ab4502/ExtremeWind/clim_ind/nina34.anom.data",names=np.arange(0,13,1),\
 			index_col=0,sep="  ",skiprows=[0,1,2],skipfooter=3,engine="python")
 		df.loc[2019,9] = 26.68
 		df.loc[:,9] = pd.to_numeric(df[9])
@@ -1022,9 +1020,8 @@ def read_clim_ind(ind):
 
 	#DMI
 	elif ind == "dmi":
-		years = np.arange(1979,2018)
 		df = pd.read_table("/g/data/eg3/ab4502/ExtremeWind/clim_ind/dmi.txt",names=np.arange(0,13,1),\
-			index_col=0,sep="  ",skiprows=[0,1,2],skipfooter=6,engine="python")
+			index_col=0,sep="    ",skiprows=[0,1,2],skipfooter=6,engine="python")
 		time_series = pd.DataFrame(columns=np.append(names,"ANN"),index=years)
 		for y in years:
 			for s in np.arange(0,len(seasons)):
@@ -1039,7 +1036,6 @@ def read_clim_ind(ind):
 
 	#SAM
 	elif ind == "sam":
-		years = np.arange(1979,2019)
 		df = pd.read_table("/g/data/eg3/ab4502/ExtremeWind/clim_ind/sam.txt",names=np.arange(0,13,1),\
 			index_col=0,sep="  | ",engine="python")
 		time_series = pd.DataFrame(columns=np.append(names,"ANN"),index=years)
@@ -1267,12 +1263,12 @@ if __name__ == "__main__":
 	#df.to_csv("/home/548/ab4502/working/ExtremeWind/data_obs_"+\
 	#	"Nov2012"+".csv",float_format="%.3f")
 	
-	read_convective_wind_gusts()
+	#read_convective_wind_gusts()
 
 	#df = read_lightning(False)
 	#read_aws_daily_aus()
-	#df = read_upperair_obs(dt.datetime(2005,1,1),dt.datetime(2018,12,31),\
-	 #   "UA_wrfpython", "wrfpython")
+	df = read_upperair_obs(dt.datetime(2005,1,1),dt.datetime(2018,12,31),\
+	    "UA_wrfpython", "wrfpython")
 	#df = read_upperair_obs(dt.datetime(2005,1,1),dt.datetime(2018,12,31), \
 	 #   "UA_sharppy", "sharppy")
 

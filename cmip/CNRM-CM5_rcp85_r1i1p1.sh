@@ -2,7 +2,7 @@
 
 #PBS -P eg3 
 #PBS -q hugemem
-#PBS -l walltime=36:00:00,mem=512GB 
+#PBS -l walltime=48:00:00,mem=1024GB 
 #PBS -l ncpus=1
 #PBS -o /home/548/ab4502/working/ExtremeWind/jobs/messages/wrf_python_CNRM-CM5_rcp85.o 
 #PBS -e /home/548/ab4502/working/ExtremeWind/jobs/messages/wrf_python_CNRM-CM5_rcp85.e 
@@ -11,13 +11,13 @@
 #Set up conda/shell environments 
 source activate wrfpython3.6 
 
-d=2026-01-01
-while [ "$d" != 2106-01-01 ]; do
+d=2081-01-01
+while [ "$d" != 2101-01-01 ]; do
 
 	start_time=$(date -d "$d" +%Y)"010100"
 	end_time=$(date -d "$d + 9 year"  +%Y)"123118"
 
-	python /home/548/ab4502/working/ExtremeWind/wrf_non_parallel.py -m CNRM-CM5 -r aus -t1 $start_time -t2 $end_time --issave True --outname CNRM-CM5_rcp85_r1i1p1 -e rcp85 --ens r1i1p1 --group CNRM-CERFACS --al33 True
+	python /home/548/ab4502/working/ExtremeWind/wrf_non_parallel_reduced.py -m CNRM-CM5 -r global -t1 $start_time -t2 $end_time --issave True --outname CNRM-CM5_rcp85_r1i1p1 -e rcp85 --ens r1i1p1 --group CNRM-CERFACS --al33 True
 
 	d=$(date -I -d "$d + 10 year")
 

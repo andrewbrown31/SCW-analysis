@@ -10,5 +10,5 @@
 
 source activate wrfpython3.6 
 
-python working/ExtremeWind/cmip/cmip_scenario.py -p srhe_left -e rcp85 --era5_y1 1979 --era5_y2 2005 --hist_y1 1979 --hist_y2 2005 --scenario_y1 2081 --scenario_y2 2100 --force_compute True
+python working/ExtremeWind/cmip/cmip_scenario.py -p srhe_left -e rcp85 --era5_y1 1979 --era5_y2 2005 --hist_y1 1979 --hist_y2 2005 --scenario_y1 2081 --scenario_y2 2100 --force_compute False
 

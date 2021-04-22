@@ -2,7 +2,7 @@
 
 #PBS -P eg3 
 #PBS -q hugemem
-#PBS -l walltime=24:00:00,mem=512GB 
+#PBS -l walltime=12:00:00,mem=512GB 
 #PBS -l ncpus=1
 #PBS -o /home/548/ab4502/working/ExtremeWind/jobs/messages/lr36_scenario_cmip5_rcp85_2081_2100.o 
 #PBS -e /home/548/ab4502/working/ExtremeWind/jobs/messages/lr36_scenario_cmip5_rcp85_2081_2100.e 

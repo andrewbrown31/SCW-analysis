@@ -1,3 +1,5 @@
+from scipy.stats import ttest_ind
+from tqdm import tqdm
 import xarray
 import matplotlib
 #matplotlib.use("Agg")
@@ -761,10 +763,10 @@ def plot_clim(f,m,lat,lon,mean,var,model,domain,year_range,season,levels=False,t
 	#	terrain_lon,terrain_lat = get_barra_ad_lat_lon()
 	#	terrain_lon,terrain_lat = np.meshgrid(terrain_lon,terrain_lat)
 	#if model == "barra_r_fc":
-	terrain = nc.Dataset("/g/data/ma05/BARRA_R/v1/static/topog-an-slv-PT0H-BARRA_R-v1.nc").\
-			variables["topog"][:]
-	terrain_lon,terrain_lat = get_barra_r_lat_lon()
-	terrain_lon,terrain_lat = np.meshgrid(terrain_lon,terrain_lat)
+	#terrain = nc.Dataset("/g/data/ma05/BARRA_R/v1/static/topog-an-slv-PT0H-BARRA_R-v1.nc").\
+	#		variables["topog"][:]
+	#terrain_lon,terrain_lat = get_barra_r_lat_lon()
+	#terrain_lon,terrain_lat = np.meshgrid(terrain_lon,terrain_lat)
 	#elif model == "erai":
 		#terrain = np.squeeze(nc.Dataset("/short/eg3/ab4502/erai_sfc_geopt.nc").\
 		#		variables["z"][:] / 9.8)
@@ -780,7 +782,7 @@ def plot_clim(f,m,lat,lon,mean,var,model,domain,year_range,season,levels=False,t
 		#	"_"+str(season[0])+"_"+str(season[-1])+"_"+str(threshold)+"_"+str(year_range[0])+"_"+\
 		#	str(year_range[-1])+".png",bbox_inches="tight")
 	else:
-		plt.savefig("/short/eg3/ab4502/figs/ExtremeWind/clim/"+model+"_"+var+\
+		plt.savefig("/g/data/eg3/ab4502/figs/ExtremeWind/clim/"+model+"_"+var+\
 			"_"+domain+"_"+str(season[0])+"_"+str(season[-1])+"_"+str(threshold)+"_"+\
 			str(year_range[0])+"_"+str(year_range[-1])+".png",bbox_inches="tight")
 		
@@ -837,7 +839,7 @@ def read_aus_conv_wind_clim(fname, daily = True):
 	#This will read the output from create_threshold_variable() in event_analysis.py, which are 3d netcdf
 	# files containing the number of days exceeding a parameter threshold.
 
-	path = "/g/data/eg3/ab4502/ExtremeWind/aus/"
+	path = "/g/data/eg3/ab4502/ExtremeWind/aus/threshold_data/"
 	f = xr.open_dataset(path+fname)
 	
 	return f[list(f.variables.keys())[-1]]
@@ -846,61 +848,68 @@ def plot_aus_conv_wind_trends():
 
 	#Plotting function/driver for the above function
 
-	fnames = ["era5_logit_is_conv_aws_daily.nc","era5_logit_is_sta_daily.nc",\
-			"era5_dcp_0.03_daily.nc","era5_t_totals_48.16_daily.nc"]
-	vmax = [[-50,50],[-50,50],[-50,50],[-50,50]]
-	titles = ["Logistic eq.\n (measured)","Logistic eq. \n(STA)","DCP","T-totals"]
+	fnames = ["era5_logit_is_conv_aws_daily.nc"]
+	#		"era5_dcp_0.03_daily.nc","era5_t_totals_48.16_daily.nc"]
+	vmax = [[-8,8],[-50,50],[-50,50]]
+	titles = ["Logistic eq.\n (measured)","DCP","T-totals"]
 	
 	datasets = [read_aus_conv_wind_clim(fnames[i], daily = True) for i in np.arange(len(fnames))]
 	n_boot = 1000
 	a=ord("a"); alph=[chr(i) for i in range(a,a+26)]; alph = [alph[i]+")" for i in np.arange(len(alph))]
-	#m = Basemap(llcrnrlon=110, llcrnrlat=-45, urcrnrlon=160, urcrnrlat=-10,projection="cyl")
-	m = Basemap(llcrnrlon=132, llcrnrlat=-38, urcrnrlon=142, urcrnrlat=-26,projection="cyl",resolution="h")
-	plt.figure(figsize=[10,8])
+	m = Basemap(llcrnrlon=110, llcrnrlat=-45, urcrnrlon=160, urcrnrlat=-10,projection="cyl")
+	#m = Basemap(llcrnrlon=132, llcrnrlat=-38, urcrnrlon=142, urcrnrlat=-26,projection="cyl",resolution="h")
+	#plt.figure(figsize=[10,8])
+	plt.figure(figsize=[10,4])
 	cnt=1
 	for s in [[12,1,2],[3,4,5],[6,7,8],[9,10,11]]: 
 		print(s)
 		for i in np.arange(len(datasets)):
 			data = datasets[i]
-			data = data.sel(lon = ((data.lon>=132) & (data.lon<=142)),\
-				lat = ((data.lat>=-38) & (data.lat<=-26)))
-			plt.subplot(4,len(fnames),cnt)
+			#data = data.sel(lon = ((data.lon>=132) & (data.lon<=142)),\
+			#	lat = ((data.lat>=-38) & (data.lat<=-26)))
+			plt.subplot(len(fnames),4,cnt)
 			m.drawcoastlines()
 			temp = data[np.in1d(data["time.month"],s)]
-			temp_first = temp[temp["time.year"] < 1999]
-			temp_second = temp[temp["time.year"] >= 1999]
-			trend = ((temp_second.sum("time") - temp_first.sum("time")) / \
-				temp_first.sum("time")) * 100
+			temp_first = temp[temp["time.year"] <= 1992]
+			temp_second = temp[(temp["time.year"] >= 1992) & (temp["time.year"] <= 2005)] 
+			trend = (temp_second.sum("time") / (2006-1992)) - (temp_first.sum("time") / (1993-1979))
+				#temp_first.sum("time")) * 100
 			lat = temp.lat.data
 			lon = temp.lon.data
 			x,y = np.meshgrid(lon,lat)
 			lsm = get_era5_mask(lon,lat)
 			trend = trend.where(lsm>=0.5, np.nan)
-			c = trend.plot(cmap = plt.get_cmap("RdBu_r"), \
-				vmin=vmax[i][0], vmax=vmax[i][1], add_colorbar = False,\
-				add_labels=False)
+			c = m.contourf(x, y, trend,\
+				#levels=np.linspace(vmax[i][0], vmax[i][1], 11),\
+				#colors=plt.get_cmap("RdBu_r")(np.linspace(0,1,11)),\
+				extend="both",\
+				locator=matplotlib.ticker.MaxNLocator(symmetric=True, nbins=11),\
+				vmin=vmax[i][0], vmax=vmax[i][1],\
+				cmap=plt.get_cmap("RdBu_r"))
+			#c = trend.plot(cmap = plt.get_cmap("RdBu_r"), \
+			#	vmin=vmax[i][0], vmax=vmax[i][1], add_colorbar = False,\
+			#	add_labels=False)
 			sig = hypothesis_test(temp_first.to_masked_array(), temp_second.to_masked_array(), n_boot)
 			sig = np.where(lsm>=0.5, sig, 1)
 			m.contourf(x,y,np.where(sig<=0.05, 1, 0), levels=[.5,1.5], \
-				colors=["none", "grey"], hatches=["///////"], alpha=0)
-			matplotlib.rcParams['hatch.linewidth'] = 0.5
-			plt.annotate(alph[cnt-1], xy=(0.05, 0.05), xycoords='axes fraction')
-			if cnt <= len(fnames):
-				plt.title(titles[i])
+				colors=["none", "grey"], hatches=["////"], alpha=0)
+			plt.annotate(alph[cnt-1+4], xy=(0.05, 0.05), xycoords='axes fraction')
+			#if cnt <= len(fnames):
+				#plt.title(titles[i])
 			if i == 0:
 				if s == [12,1,2]:
-					plt.ylabel("DJF       ",rotation=0)
+					plt.title("DJF")
 				if s == [3,4,5]:
-					plt.ylabel("MAM       ",rotation=0)
+					plt.title("MAM")
 				if s == [6,7,8]:
-					plt.ylabel("JJA       ",rotation=0)
+					plt.title("JJA")
 				if s == [9,10,11]:
-					plt.ylabel("SON       ",rotation=0)
+					plt.title("SON")
 			if (s == [9,10,11]) & (i == (len(datasets)-1) ):
-				cax = plt.axes([0.2, 0.075, 0.6, 0.01])
+				cax = plt.axes([0.2, 0.25, 0.6, 0.05])
 				cb = plt.colorbar(c, cax=cax, orientation = "horizontal", \
 					extend="both")
-				cb.set_label("Trend (%)")
+				cb.set_label("Trend (days per season)")
 			cnt = cnt+1
 	plt.subplots_adjust(wspace=0.2)
 		
@@ -1014,75 +1023,142 @@ def plot_aus_syn_annmax_wind_trends():
 				cb.set_label("Trend (%)")
 			cnt = cnt+1
 	plt.subplots_adjust(wspace=0.2)
+
+def calculate_corr_p_values(fnames):
+
+	#For the purpose of plot_aus_conv_wind_corr(), calculate spearmans correlation and associated p-values
+	# using bootstrap resampling. Save the output to /g/data/
+
+	nino34 = read_clim_ind("nino34")
+	dmi = read_clim_ind("dmi")
+	sam = read_clim_ind("sam")
+	datasets = [read_aus_conv_wind_clim(fnames[i], daily = True) for i in np.arange(len(fnames))]
+	n_boot = 1
+	seasons = [[12,1,2],[3,4,5],[6,7,8],[9,10,11]]
+	s_names = ["DJF","MAM","JJA","SON"]
+	clim_inds = {"NINO3.4":nino34,"SAM":sam,"DMI":dmi}
+	for s in np.arange(len(seasons)): 
+		print(s_names[s])
+		i=0
+		for clim_ind in ["NINO3.4", "SAM", "DMI"]:
+			data = datasets[i]
+			temp = data[np.in1d(data["time.month"],seasons[s])]
+			lat = temp.lat.data
+			lon = temp.lon.data
+			x,y = np.meshgrid(lon,lat)
+			lsm = get_era5_mask(lon,lat)
+			lsm_reshaped = lsm.flatten()
+			if seasons[s] != [12,1,2]:
+				if clim_ind == "DMI":
+					temp_seasonal = temp.sel({"time":slice(dt.datetime(1979,1,1), \
+						dt.datetime(2018,2,1))}).\
+						coarsen(time=3, center=True).sum()
+				else:
+					temp_seasonal = temp.coarsen(time=3, center=True).sum()
+				temp_seasonal_reshaped = np.reshape(temp_seasonal.values, \
+						(temp_seasonal.time.shape[0],-1))
+				spr_out=[]
+				p_boot=[]
+				for j in tqdm(np.arange(temp_seasonal_reshaped.shape[1])):
+					if lsm_reshaped[j] >= 0.5:
+						temp_r, temp_p = pearson(temp_seasonal_reshaped[:,j],\
+						    clim_inds[clim_ind][s_names[s]])
+						if n_boot > 0:
+						    p_boot.append( (np.array([ abs( pearson(\
+							np.random.permutation((temp_seasonal_reshaped[:,j])),\
+							clim_inds[clim_ind][s_names[s]])[0] )\
+						    for n in np.arange(n_boot)]) >= abs(temp_r) ).sum() / n_boot )
+						else:
+						    p_boot.append(0)
+						spr_out.append( (temp_r, temp_p) )
+					else:
+						spr_out.append( (0, 1) )
+						p_boot.append(1)
+			else:
+				temp_seasonal = temp.sel({"time":slice(dt.datetime(1979,12,1), \
+					dt.datetime(2018,2,1))}).\
+					coarsen(time=3, center=True).sum()
+				temp_seasonal_reshaped = np.reshape(temp_seasonal.values, \
+						(temp_seasonal.time.shape[0],-1))
+				spr_out=[]
+				p_boot=[]
+				for j in tqdm(np.arange(temp_seasonal_reshaped.shape[1])):
+					if lsm_reshaped[j] >= 0.5:
+						temp_r, temp_p = pearson(temp_seasonal_reshaped[:,j],\
+						    clim_inds[clim_ind][s_names[s]].loc[1979:2017])
+						if n_boot > 0:
+						    p_boot.append( ( np.array([ abs(pearson(\
+							np.random.permutation((temp_seasonal_reshaped[:,j])),\
+							clim_inds[clim_ind][s_names[s]].loc[1979:2017])[0] )\
+						    for n in np.arange(n_boot)]) >= abs(temp_r) ).sum() / n_boot )
+						else:
+						    p_boot.append(0)
+						spr_out.append( (temp_r, temp_p) )
+					else:
+						spr_out.append( (0, 1) )
+						p_boot.append(1)
+			r = np.array([spr_out[j][0] for j in np.arange(len(spr_out))])
+			p = np.array(p_boot)
+			r = r.reshape((lat.shape[0], lon.shape[0]))	
+			p = p.reshape((lat.shape[0], lon.shape[0]))	
+
+			r = np.where(lsm>=0.5, r, np.nan)
+			p = np.where(lsm>=0.5, p, np.nan)
+
+			xr.Dataset(data_vars={"r":\
+				(("lat","lon"), r), "p":(("lat","lon"), p)},\
+				coords={"lat":lat, "lon":lon}).to_netcdf(\
+			    "/g/data/eg3/ab4502/ExtremeWind/aus/threshold_data/corr/"+\
+				clim_ind+"_"+s_names[s]+".nc")
 		
 def plot_aus_conv_wind_corr():
 
 	#Plotting function/driver for the above function
 
-	nino34 = read_clim_ind("nino34")
-	dmi = read_clim_ind("dmi")
-	sam = read_clim_ind("sam")
-	fnames = ["era5_logit_is_conv_aws_daily.nc","era5_logit_is_sta_daily.nc",\
-			"era5_dcp_0.03_daily.nc","era5_t_totals_48.16_daily.nc"]
-	datasets = [read_aus_conv_wind_clim(fnames[i], daily = True) for i in np.arange(len(fnames))]
+	fnames = [
+            #"era5_logit_6hr_is_conv_aws_daily.nc",\
+            "era5_mlcape*s06_6hr_25000.0_daily.nc",\
+			#"era5_dcp_0.03_daily.nc","era5_t_totals_48.16_daily.nc"
+            ]
+	calculate_corr_p_values(fnames)
 	vmax = [[-1,1],[-1,1],[-1,1],[-1,1]]
-	n_boot = 1000
-	titles = ["Logistic eq. (measured)","Logistic eq. (reported)","DCP","T-totals"]
+	titles = ["Logistic eq. (measured)","DCP","T-totals"]
 	seasons = [[12,1,2],[3,4,5],[6,7,8],[9,10,11]]
 	s_names = ["DJF","MAM","JJA","SON"]
 	a=ord("a"); alph=[chr(i) for i in range(a,a+26)]; alph = [alph[i]+")" for i in np.arange(len(alph))]
 	m = Basemap(llcrnrlon=110, llcrnrlat=-45, urcrnrlon=160, urcrnrlat=-10,projection="cyl")
-	clim_inds = {"NINO3.4":nino34,"SAM":sam,"DMI":dmi}
-	for clim_ind in ["DMI","NINO3.4","SAM"]:
-		print("PLOTTING "+clim_ind)
-		plt.figure(figsize=[10,8])
-		cnt=1
-		for s in np.arange(len(seasons)): 
+	#clim_inds = {"NINO3.4":nino34,"SAM":sam,"DMI":dmi}
+		#print("PLOTTING "+clim_ind)
+	plt.figure(figsize=[10,8])
+	cnt=1
+	for s in np.arange(len(seasons)): 
 			print(s_names[s])
-			for i in np.arange(len(datasets)):
-				data = datasets[i]
-				plt.subplot(4,len(fnames),cnt)
+			i=0
+			for clim_ind in ["NINO3.4", "SAM", "DMI"]:
+			#for i in np.arange(len(datasets)):
+				#data = datasets[i]
+				plt.subplot(4,3,cnt)
 				m.drawcoastlines()
-				temp = data[np.in1d(data["time.month"],seasons[s])]
-				lat = temp.lat.data
-				lon = temp.lon.data
-				if seasons[s] != [12,1,2]:
-					if clim_ind == "DMI":
-						temp_seasonal = temp.sel({"time":slice(dt.datetime(1979,1,1), \
-							dt.datetime(2018,2,1))}).\
-							coarsen(time=3, center=True).sum()
-					else:
-						temp_seasonal = temp.coarsen(time=3, center=True).sum()
-					temp_seasonal_reshaped = np.reshape(temp_seasonal.values, \
-							(temp_seasonal.time.shape[0],-1))
-					spr_out = [pearson(temp_seasonal_reshaped[:,j], \
-						clim_inds[clim_ind][s_names[s]]) \
-						for j in np.arange(temp_seasonal_reshaped.shape[1])]
-				else:
-					temp_seasonal = temp.sel({"time":slice(dt.datetime(1979,12,1), \
-						dt.datetime(2018,2,1))}).\
-						coarsen(time=3, center=True).sum()
-					temp_seasonal_reshaped = np.reshape(temp_seasonal.values, \
-							(temp_seasonal.time.shape[0],-1))
-					spr_out = [pearson(temp_seasonal_reshaped[:,j], \
-						clim_inds[clim_ind][s_names[s]].loc[1979:2017]) \
-						for j in np.arange(temp_seasonal_reshaped.shape[1])]
-				r = np.array([spr_out[j][0] for j in np.arange(len(spr_out))])
-				p = np.array([spr_out[j][1] for j in np.arange(len(spr_out))])
-				r = r.reshape((lat.shape[0], lon.shape[0]))	
-				p = p.reshape((lat.shape[0], lon.shape[0]))	
+				#temp = data[np.in1d(data["time.month"],seasons[s])]
+				corr_file = xr.open_dataset("/g/data/eg3/ab4502/ExtremeWind/aus/threshold_data/corr/"+\
+                                        clim_ind+"_"+s_names[s]+".nc")
+				p = corr_file["p"].values
+				r = corr_file["r"].values
+				lat = corr_file.lat.data
+				lon = corr_file.lon.data
 
 				x,y = np.meshgrid(lon,lat)
 				lsm = get_era5_mask(lon,lat)
-				r = np.where(lsm>=0.5, r, np.nan)
-				p = np.where(lsm>=0.5, p, np.nan)
-				c = m.pcolor(x, y, r, cmap = plt.get_cmap("RdBu_r"), \
-					vmin=vmax[i][0], vmax=vmax[i][1])
+				lsm_reshaped = lsm.flatten()
+    
+				c = m.contourf(x, y, r, levels=np.linspace(vmax[i][0], vmax[i][1], 11),\
+					colors=plt.get_cmap("PiYG")(np.linspace(0,1,11)))
+					#cmap = plt.get_cmap("RdBu_r"), \
+					#vmin=vmax[i][0], vmax=vmax[i][1])
 				m.contourf(x,y,np.where(p<=0.05, 1, 0), levels=[.5,1.5], \
-					colors=["none", "grey"], hatches=["///////"], alpha=0.05)
-				matplotlib.rcParams['hatch.linewidth'] = 0.5
+					colors=["none", "grey"], hatches=["////"], alpha=0.05)
 				plt.annotate(alph[cnt-1], xy=(0.05, 0.05), xycoords='axes fraction')
-				if i == 0:
+				if clim_ind == "NINO3.4":
 					if seasons[s] == [12,1,2]:
 						plt.ylabel("DJF       ",rotation=0)
 					if seasons[s] == [3,4,5]:
@@ -1092,15 +1168,14 @@ def plot_aus_conv_wind_corr():
 					if seasons[s] == [9,10,11]:
 						plt.ylabel("SON       ",rotation=0)
 				if s == 0:
-					plt.title(titles[i])
-				if (s == 3) & (i == (len(datasets)-1) ):
-					cax = plt.axes([0.2, 0.075, 0.6, 0.01])
-					cb = plt.colorbar(c, cax=cax, orientation = "horizontal")
-					cb.set_label("Pearson's r")
+					plt.title(clim_ind)
 				cnt = cnt+1
-		plt.subplots_adjust(wspace=0.2)
-		plt.savefig("/g/data/eg3/ab4502/figs/ExtremeWind/corr/"+clim_ind+"_era5.tiff",\
-			bbox_inches="tight")
+	cax = plt.axes([0.2, 0.075, 0.6, 0.025])
+	cb = plt.colorbar(c, cax=cax, orientation = "horizontal")
+	cb.set_label("Pearson's r")
+	plt.subplots_adjust(wspace=0.2)
+	#plt.savefig("/g/data/eg3/ab4502/figs/ExtremeWind/corr/"+clim_ind+"_era5.tiff",\
+			#bbox_inches="tight")
 		
 def plot_aus_mjo_corr():
 
@@ -1161,7 +1236,6 @@ def plot_aus_mjo_corr():
 			#p_up = np.sum(trend.values >= stat,axis=0) / n_boot
 			#p_low = np.sum(trend.values <= stat,axis=0) / n_boot
 			#sig = (2*np.min(np.stack((p_low,p_up)),axis=0))
-			from scipy.stats import ttest_ind
 			temp, sig = ttest_ind(active_da,inactive_da,equal_var=False,axis=0)
 
 			sig = np.where(lsm>=0.5, sig, 1)
@@ -1328,14 +1402,13 @@ def plot_aus_mean_clim():
 	#Plot the difference in the mean of a variable at each ERA5 grid point, from the first half to 
 	# the second half of the study period
 
-	matplotlib.rcParams['hatch.linewidth'] = 0.5
-	fnames = ["era5_lr36_mean.nc","era5_lr_freezing_mean.nc","era5_mhgt_mean.nc",\
-		    "era5_ml_cape_mean.nc","era5_ml_el_mean.nc","era5_qmean01_mean.nc",\
-			"era5_qmeansubcloud_mean.nc","era5_s06_mean.nc","era5_srhe_left_mean.nc",\
+	fnames = ["era5_lr36_mean.nc","era5_mhgt_mean.nc",\
+		    "era5_ml_el_mean.nc","era5_qmean01_mean.nc",\
+			"era5_srhe_left_mean.nc",\
 			    "era5_Umean06_mean.nc",]
 	vmax = [None, None]
-	titles = ["LR36", "LR-Freezing", "MHGT", "MLCAPE", "MLEL", "Qmean01", "Qmean-Subcloud",\
-		"S06", "SRHE", "Umean06"]
+	titles = ["LR36", "MHGT", "MLEL", "Qmean01",\
+		"SRHE", "Umean06"]
 	
 	datasets = [read_aus_conv_wind_clim(fnames[i], daily = True) for i in np.arange(len(fnames))]
 	n_boot = 1000
@@ -1346,7 +1419,7 @@ def plot_aus_mean_clim():
 	for i in np.arange(len(fnames)):
 		print(fnames[i])
 		temp = datasets[i]
-		plt.subplot(5,2,cnt)
+		plt.subplot(3,3,cnt)
 		m.drawcoastlines()
 		temp_first = temp[temp["time.year"] < 1999]
 		temp_second = temp[temp["time.year"] >= 1999]
@@ -1356,8 +1429,8 @@ def plot_aus_mean_clim():
 			trend = ((np.nanmean(temp_second, axis=0) - np.nanmean(temp_first,axis=0)) /\
 				np.nanmean(temp_first, axis=0)) * 100
 		else:
-			trend = ((temp_second.mean("time") - temp_first.mean("time")) / \
-				temp_first.mean("time")) * 100
+			trend = ((temp_second.mean("time") - temp_first.mean("time")))
+				#/ temp_first.mean("time")) * 100
 			temp_first = temp_first.to_masked_array()
 			temp_second = temp_second.to_masked_array()
 		lat = temp.lat.data
@@ -1369,11 +1442,12 @@ def plot_aus_mean_clim():
 			vmin=vmax[0], vmax=vmax[1],\
 			locator=matplotlib.ticker.MaxNLocator(symmetric=True))
 		plt.colorbar()
+		#temp, sig = ttest_ind(temp_first,temp_second,equal_var=False,axis=0)
 		sig = hypothesis_test(temp_first, \
 			temp_second, n_boot)
 		sig = np.where(lsm>=0.5, sig, 1)
 		m.contourf(x,y,np.where(sig<=0.05, 1, 0), levels=[.5,1.5], \
-			colors=["none", "grey"], hatches=["///////"], alpha=0)
+			colors=["none", "grey"], hatches=["////"], alpha=0)
 		plt.annotate(alph[cnt-1], xy=(0.05, 0.05), xycoords='axes fraction')
 		plt.title(titles[i])
 		#if (i == (len(datasets)-1) ):
@@ -1389,26 +1463,27 @@ def plot_aus_conv_wind_clim():
 
 	#Plotting function/driver for the above function
 
-	#fnames = ["barra_logit_is_conv_aws_daily.nc","barra_logit_is_sta_daily.nc",\
-	#	"barra_dcp_0.03_daily.nc","barra_t_totals_49.2_daily.nc"]
-	fnames = ["era5_logit_is_conv_aws_daily.nc", "era5_logit_is_sta_daily.nc",\
-		"era5_dcp_0.03_daily.nc", "era5_t_totals_48.16_daily.nc"]
+	fnames = ["era5_logit_6hr_is_conv_aws_daily.nc", "era5_dcp_6hr_0.04_daily.nc", "era5_mucape*s06_6hr_33864.0_daily.nc", "era5_scp_fixed_6hr_0.04_daily.nc" ]
 	models = ["era5","era5","era5","era5"]
 	datasets = [read_aus_conv_wind_clim(fnames[i], daily = True) for i in np.arange(len(fnames))]
-	vmax = [0.5,0.5,0.5, 0.5]
-	titles = ["Logistic eq. (measured)", "Logistic eq. (reported)", "DCP", "T-totals"]
+	vmax = [50,50,50,50]
+	titles = ["Statistical model", "DCP", "CS6", "SCP"]
 	a=ord("a"); alph=[chr(i) for i in range(a,a+26)]; alph = [alph[i]+")" for i in np.arange(len(alph))]
 	m = Basemap(llcrnrlon=110, llcrnrlat=-45, urcrnrlon=160, urcrnrlat=-10,projection="cyl")
+	#plt.figure(figsize=[10,5])
 	plt.figure(figsize=[10,8])
-	cnt=1
+	#pos = [1,5,2,6,3,7,4,8]
+	pos = np.arange(1,20)
+	#alph = ["a)","e)","b)","f)","c)","g)","d)","h)"]
+	cnt=0
 	for s in [[12,1,2],[3,4,5],[6,7,8],[9,10,11]]: 
 		print(s)
 		for i in np.arange(len(datasets)):
 			data = datasets[i]
-			plt.subplot(4,len(fnames),cnt)
+			plt.subplot(len(fnames),4,pos[cnt])
 			m.drawcoastlines()
 			temp = data[np.in1d(data["time.month"],s)]
-			temp = temp.sum("time") / (data.steps[np.in1d(data["time.month"],s)].sum() / 24)
+			temp = temp.sum("time") / (2019-1979)
 			lat = temp.lat.data
 			lon = temp.lon.data
 			x,y = np.meshgrid(lon,lat)
@@ -1418,80 +1493,38 @@ def plot_aus_conv_wind_clim():
 			elif models[i] == "era5":
 				lsm = get_era5_mask(lon,lat)
 				temp = temp.where(lsm>=0.5, np.nan)
-			c = temp.plot(cmap = plt.get_cmap("Reds"), \
-				vmax=vmax[i], vmin=0, add_colorbar = False,\
-				add_labels=False, extend="max")
-			plt.annotate(alph[cnt-1], xy=(0.05, 0.05), xycoords='axes fraction')
-			if cnt <= len(fnames):
-				plt.title(titles[i])
+			c = m.contourf(x, y, temp, levels = np.linspace(0,vmax[i],11),\
+				colors=plt.get_cmap("Reds")(np.linspace(0,1,11)), extend="max")
+			plt.annotate(alph[cnt], xy=(0.05, 0.05), xycoords='axes fraction')
 			if i == 0:
 				if s == [12,1,2]:
-					plt.ylabel("DJF       ",rotation=0)
+					plt.ylabel("DJF")
 				if s == [3,4,5]:
-					plt.ylabel("MAM       ",rotation=0)
+					plt.ylabel("MAM")
 				if s == [6,7,8]:
-					plt.ylabel("JJA       ",rotation=0)
+					plt.ylabel("JJA")
 				if s == [9,10,11]:
-					plt.ylabel("SON       ",rotation=0)
+					plt.ylabel("SON")
 			if (s == [9,10,11]) & (i == (len(datasets)-1) ):
-				cax = plt.axes([0.2, 0.075, 0.6, 0.01])
+				cax = plt.axes([0.2, 0.25, 0.6, 0.02])
 				cb = plt.colorbar(c, cax=cax, orientation = "horizontal", extend="max")
-				cb.set_label("Daily frequency")
+				cb.set_label("Seasonal frequency")
+			#if cnt == 0:
+				#plt.ylabel("SCW environments")
+			#if cnt == 1:
+				#plt.ylabel("CS6")
+			if (s == [12,1,2]):
+				plt.title(titles[i])
 			cnt = cnt+1
-	plt.subplots_adjust(wspace=0.2)
+	plt.subplots_adjust(wspace=0.2, hspace=0.1, bottom=0.3)
 		
 
 if __name__ == "__main__":
 
-	#daily_max_clim("sa_small","erai",[1979,2017],\
-		#var_list=["scp"],\
-		#threshold=[0.018],\
-		#levels=[np.arange(0,55,5)],\
-		#trend_levels = [np.arange(-50,60,10)],\
-		#plot_trends=True, trend_on_cond_days="mf",n_boot = 1000, plot_corr = False)
-
-	#FIGURE 7:
-	#daily_max_clim("sa_small","erai_fc",[1979,2017],threshold=[21.5],var_list=["wg10"],\
-	#		levels=[np.arange(0,2.2,.2)],plot_trends=True,plot_corr=True,\
-	#		trend_levels=np.arange(-175,175,25),seasons = [np.arange(1,13,1),[11,12,1],[2,3,4],\
-	#		[5,6,7],[8,9,10]])
-	#99.6 percentile BARRA-R wind gust: 25.25. ERA-Interim: 21.5
-
-	#FIGURE 20:
-	#daily_max_clim("sa_small","erai",[1979,2017],threshold=[9443,0.05,False,False,False,120],\
-	#		var_list=["cape*s06","dcp","cond","mf","sf","ml_cape"],\
-	#		levels=[np.arange(0,55,5),np.arange(0,55,5),\
-	#			np.arange(0,55,5),np.arange(0,55,5),np.arange(0,22.5,2.5),\
-	#			np.arange(0,55,5)],\
-	#		trend_levels = [np.arange(-50,60,10),np.arange(-50,60,10),\
-	#			np.arange(-50,60,10),\
-	#			np.arange(-50,60,10),np.arange(-50,60,10),np.arange(-50,60,10)],\
-	#		plot_trends=True,plot_corr=True,n_boot = 1000)
-	#daily_max_clim("sa_small","erai",[2003,2016],threshold=[9443,0.05,False,False,False],\
-	#		var_list=["cape*s06","dcp","cond","mf","sf"],\
-	#		levels=[np.arange(0,55,5),np.arange(0,55,5),\
-	#			np.arange(0,55,5),np.arange(0,55,5),np.arange(0,22.5,2.5)])
-	#daily_max_clim("sa_small","barra",[2003,2016],threshold=[9443,0.05,False,False,False],\
-	#		var_list=["cape*s06","dcp","cond","mf","sf"],\
-	#		levels=[np.arange(0,55,5),np.arange(0,55,5),\
-	#			np.arange(0,55,5),np.arange(0,55,5),np.arange(0,22.5,2.5)])
-
-	#Figure 4
-	#daily_max_clim("sa_small","erai_fc",[1979,2017],threshold=[21.5],var_list=["wg10"],plot_trends=True,\
-	#	trend_levels = [np.arange(-150,175,25)],plot_corr = True,n_boot=100,\
-	#	levels=[np.linspace(0,2,11)],seasons=[[11,12,1],[2,3,4],[5,6,7],[8,9,10]],log_cscale=True)
-	#daily_max_clim("sa_small","erai_fc",[2003,2016],threshold=[21.5],var_list=["wg10"],\
-	#	levels=[np.linspace(0,2,11)],seasons=[[11,12,1],[2,3,4],[5,6,7],[8,9,10]],log_cscale=True)
-	#daily_max_clim("sa_small","barra_r_fc",[2003,2016],threshold=[23.75],var_list=["max_wg10"],\
-	#	levels=[np.linspace(0,2,11)],seasons=[[11,12,1],[2,3,4],[5,6,7],[8,9,10]],log_cscale=True)
-
-	#Ingredients
-	#daily_max_clim("aus","erai",[1979,2017],var_list=["dcp2"],\
-			#plot_trends=True,\
-			#threshold = [0.0038],\
-			#n_boot=1000,\
-			#seasons=[np.arange(1,13,1)])
-
+	plot_aus_conv_wind_corr()
 	#plot_aus_conv_wind_trends()
-	#plot_aus_conv_wind_corr()
-	plot_aus_daily_mjo_by_phase()
+	#calculate_corr_p_values()
+	#plot_aus_conv_wind_clim()
+	#plot_aus_daily_mjo_by_phase()
+	#plot_aus_mean_clim()
+	plt.savefig("out2.png",bbox_inches="tight")

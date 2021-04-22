@@ -2,7 +2,7 @@
 
 #PBS -P eg3 
 #PBS -q hugemem
-#PBS -l walltime=36:00:00,mem=512GB 
+#PBS -l walltime=48:00:00,mem=512GB 
 #PBS -l ncpus=1
 #PBS -o /home/548/ab4502/working/ExtremeWind/jobs/messages/wrf_python_bcc-csm1-1_historical.o 
 #PBS -e /home/548/ab4502/working/ExtremeWind/jobs/messages/wrf_python_bcc-csm1-1_historical.e 
@@ -12,12 +12,12 @@
 source activate wrfpython3.6 
 
 d=1960-01-01
-while [ "$d" != 2020-01-01 ]; do
+while [ "$d" != 2010-01-01 ]; do
 
 	start_time=$(date -d "$d" +%Y)"010100"
 	end_time=$(date -d "$d + 9 year"  +%Y)"123118"
 
-	python /home/548/ab4502/working/ExtremeWind/wrf_non_parallel.py -m bcc-csm1-1 -r aus -t1 $start_time -t2 $end_time --issave True --outname bcc-csm1-1_historical_r1i1p1 -e historical --ens r1i1p1
+	python /home/548/ab4502/working/ExtremeWind/wrf_non_parallel_reduced.py -m bcc-csm1-1 -r global -t1 $start_time -t2 $end_time --issave True --outname bcc-csm1-1_historical_r1i1p1 -e historical --ens r1i1p1
 
 	d=$(date -I -d "$d + 10 year")
 

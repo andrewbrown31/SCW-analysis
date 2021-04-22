@@ -10,7 +10,7 @@
 
 source activate wrfpython3.6
 
-python /home/548/ab4502/working/ExtremeWind/event_analysis.py ml_cape 0 barra_fc 
-python /home/548/ab4502/working/ExtremeWind/event_analysis.py ml_el 0 barra_fc 
-python /home/548/ab4502/working/ExtremeWind/event_analysis.py s06 0 barra_fc 
-python /home/548/ab4502/working/ExtremeWind/event_analysis.py Umean06 0 barra_fc 
+python /home/548/ab4502/working/ExtremeWind/event_analysis.py mucape*s06 36025 barra
+#python /home/548/ab4502/working/ExtremeWind/event_analysis.py ml_el 0 barra_fc 
+#python /home/548/ab4502/working/ExtremeWind/event_analysis.py s06 0 barra_fc 
+#python /home/548/ab4502/working/ExtremeWind/event_analysis.py Umean06 0 barra_fc 

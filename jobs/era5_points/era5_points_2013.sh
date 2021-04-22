@@ -1,8 +1,8 @@
 #!/bin/bash
 
 #PBS -P eg3 
-#PBS -q express
-#PBS -l walltime=04:00:00,mem=16GB 
+#PBS -q normal
+#PBS -l walltime=06:00:00,mem=32GB 
 #PBS -l ncpus=1
 #PBS -o /home/548/ab4502/working/ExtremeWind/jobs/messages/era5_points_2013.o 
 #PBS -e /home/548/ab4502/working/ExtremeWind/jobs/messages/era5_points_2013.e 

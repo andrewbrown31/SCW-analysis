@@ -2,7 +2,7 @@
 
 #PBS -P eg3 
 #PBS -q hugemem
-#PBS -l walltime=48:00:00,mem=512GB 
+#PBS -l walltime=48:00:00,mem=1052GB 
 #PBS -l ncpus=1
 #PBS -o /home/548/ab4502/working/ExtremeWind/jobs/messages/wrf_python_IPSL-CM5A-LR_rcp85.o 
 #PBS -e /home/548/ab4502/working/ExtremeWind/jobs/messages/wrf_python_IPSL-CM5A-LR_rcp85.e 
@@ -11,13 +11,13 @@
 #Set up conda/shell environments 
 source activate wrfpython3.6 
 
-d=2026-01-01
-while [ "$d" != 2100-01-01 ]; do
+d=2081-01-01
+while [ "$d" != 2101-01-01 ]; do
 
 	start_time=$(date -d "$d" +%Y)"010100"
 	end_time=$(date -d "$d + 9 year"  +%Y)"123118"
 
-	python /home/548/ab4502/working/ExtremeWind/wrf_non_parallel.py -m IPSL-CM5A-LR -r aus -t1 $start_time -t2 $end_time --issave True --outname IPSL-CM5A-LR_rcp85_r1i1p1 -e rcp85 --ens r1i1p1
+	python /home/548/ab4502/working/ExtremeWind/wrf_non_parallel_reduced.py -m IPSL-CM5A-LR -r global -t1 $start_time -t2 $end_time --issave True --outname IPSL-CM5A-LR_rcp85_r1i1p1 -e rcp85 --ens r1i1p1
 
 	d=$(date -I -d "$d + 10 year")
 

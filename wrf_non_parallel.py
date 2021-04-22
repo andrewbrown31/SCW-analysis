@@ -20,13 +20,14 @@ import wrf
 from calc_param import save_netcdf, get_dp
 import xarray as xr
 from erai_read import read_erai
-from era5_read import read_era5
+from era5_read import read_era5, read_era5_rt52, read_era5_cds
 from erai_read import get_mask as  get_erai_mask
 from barra_read import read_barra, read_barra_fc
 from barra_ad_read import read_barra_ad
 from barra_read import get_mask as  get_barra_mask
 from barpa_read import read_barpa
 from read_cmip import read_cmip
+from merra2_read import read_merra2
 from wrf_parallel import *
 
 #-------------------------------------------------------------------------------------------------
@@ -63,7 +64,11 @@ def main():
 	parser.add_argument("--outname",help="Name of saved output. In the form *outname*_*t1*_*t2*.nc. Default behaviour is the model name",default=None)
 	parser.add_argument("--is_dcape",help="Should DCAPE be calculated? (1 or 0. Default is 1)",default=1)
 	parser.add_argument("--al33",help="Should data be gathered from al33? Default is False, and data is gathered from r87. If True, then group is required",default="False")
+	parser.add_argument("--era5_proj",help="From which project should ERA5 data be loaded from? Either rt52, eg3 (depreciated) or cds",default="rt52")
 	parser.add_argument("--params",help="Should the full set of convective parameters be calculated (full), a reduced set (reduced) or a minimum (min)",default="full")
+	parser.add_argument("--delta_t",help="Time step spacing for ERA5 data, in hours. Default is one the minimum spacing (1 hour)",default="1")
+	parser.add_argument("--cds_pres_fname",help="File path for ERA5 data downloaded locally from CDS - Pressure data in dir /g/data/eg3/ab4502/era5_download/", default="")
+	parser.add_argument("--cds_sfc_fname",help="File path for ERA5 data downloaded locally from CDS - Surface data in dir /g/data/eg3/ab4502/era5_download/", default="")
 	args = parser.parse_args()
 
 	#Parse arguments from cmd line and set up inputs (date region model)
@@ -74,6 +79,7 @@ def main():
 	t2 = args.t2
 	issave = args.issave
 	al33 = args.al33
+	era5_proj = args.era5_proj
 	if args.outname==None:
 		out_name = model
 	else:
@@ -86,12 +92,17 @@ def main():
 	project = args.project
 	ver6hr = args.ver6hr
 	ver3hr = args.ver3hr
+	cds_sfc_path = "/g/data/eg3/ab4502/era5_download/"+args.cds_sfc_fname
+	cds_pres_path = "/g/data/eg3/ab4502/era5_download/"+args.cds_pres_fname
+	delta_t = int(args.delta_t)
 	if region == "sa_small":
 		start_lat = -38; end_lat = -26; start_lon = 132; end_lon = 142
 	elif region == "aus":
 		start_lat = -44.525; end_lat = -9.975; start_lon = 111.975; end_lon = 156.275
 	elif region == "global":
 		start_lat = -70; end_lat = 70; start_lon = -180; end_lon = 179.75
+	elif region == "vic":
+		start_lon = 141; start_lat = -40; end_lon = 149; end_lat = -35
 	else:
 		raise ValueError("INVALID REGION\n")
 	domain = [start_lat,end_lat,start_lon,end_lon]
@@ -121,9 +132,20 @@ def main():
 		cp = cp.astype("float32", order="C")
 		mod_cape = mod_cape.astype("float32", order="C")
 	elif model == "era5":
-		ta,temp1,hur,hgt,terrain,p,ps,ua,va,uas,vas,tas,ta2d,\
-			cp,wg10,mod_cape,lon,lat,date_list = \
-			read_era5(domain,time)
+		if era5_proj == "rt52":
+			ta,temp1,hur,hgt,terrain,p,ps,ua,va,uas,vas,tas,ta2d,\
+				cp,tp,wg10,mod_cape,lon,lat,date_list = \
+				read_era5_rt52(domain,time,delta_t=delta_t)
+		elif era5_proj == "eg3":
+			ta,temp1,hur,hgt,terrain,p,ps,ua,va,uas,vas,tas,ta2d,\
+				cp,wg10,mod_cape,lon,lat,date_list = \
+				read_era5(domain,time)
+		elif era5_proj == "cds":
+			ta,temp1,hur,hgt,terrain,p,ps,ua,va,uas,vas,tas,ta2d,\
+				cp,tp,wg10,mod_cape,lon,lat,date_list = \
+				read_era5_cds(cds_pres_path,cds_sfc_path,domain,time,delta_t=delta_t)
+		else:
+			raise ValueError("INVALID ERA5_PROJ")
 		cp = cp.astype("float32", order="C")
 		mod_cape = mod_cape.astype("float32", order="C")
 		wap = np.zeros(hgt.shape)
@@ -141,6 +163,11 @@ def main():
 	elif model == "barra_ad":
 		wg10,temp2,ta,temp1,hur,hgt,terrain,p,ps,wap,ua,va,uas,vas,tas,ta2d,lon,lat,date_list = \
 			read_barra_ad(domain, time, False)
+	elif model == "merra2":
+		ta,temp1,hur,hgt,terrain,p,ps,ua,va,uas,vas,tas,ta2d,lon,lat,date_list = \
+			read_merra2(domain,time,delta_t=delta_t)
+		wap = np.zeros(hgt.shape)
+		wg10 = np.zeros(ps.shape)
 	elif model in ["ACCESS1-0","ACCESS1-3","GFDL-CM3","GFDL-ESM2M","CNRM-CM5","MIROC5",\
 		    "MRI-CGCM3","IPSL-CM5A-LR","IPSL-CM5A-MR","GFDL-ESM2G","bcc-csm1-1","MIROC-ESM",\
 		    "BNU-ESM"]:
@@ -212,15 +239,15 @@ def main():
 			"dmgwind", "dmgwind_fixed", "hmi", "wmsi_ml",\
 			"dmi", "mwpi_ml", "convgust_wet", "convgust_dry", "windex",\
 			"gustex", "eff_sherb", "sherb", "mmp", \
-			"wndg","mburst","sweat","k_index","wmpi",\
+			"wndg","mburst","sweat","k_index","wmpi","bdsd",\
 			\
 			"F10", "Fn10", "Fs10", "icon10", "vgt10", "conv10", "vo10",\
 				])
 	elif params == "reduced":
 		param = np.array(["ml_cape", "mu_cape", "sb_cape", "ml_cin", "sb_cin", "mu_cin",\
 			"ml_lcl", "mu_lcl", "sb_lcl", "eff_cape", "eff_cin", "eff_lcl",\
-			"lr36", "lr13","lr700_500",\
-			"qmean01","rhmin01","rhmin03","dpd700",  "muq",\
+			"lr36", "lr13","lr700_500","lr_subcloud",\
+			"qmean01","q_melting","rhmin01","rhmin03","rhmin13","dpd700",  "muq",\
 			"mhgt", "ta500", "mu_el", "ml_el", "sb_el", "eff_el", \
 			"pwat", "t_totals", \
 			"dcape", \
@@ -237,7 +264,7 @@ def main():
 			"dmgwind", "dmgwind_fixed", \
 			"convgust_wet", "convgust_dry", "windex",\
 			"gustex", "mmp", \
-			"wndg","sweat","k_index"\
+			"wndg","sweat","k_index","bdsd"\
 
 				])
 	elif params == "min":
@@ -249,8 +276,6 @@ def main():
 			"maxtevv", "mosh", "moshe"]])
 	else:
 		param = np.concatenate([param, ["mod_cape","cp","mod_cape*s06"]])
-
-	print(param)
 
 	#Set output array
 	output_data = np.zeros((ps.shape[0], ps.shape[1], ps.shape[2], len(param)))
@@ -660,6 +685,8 @@ def main():
 		convgust_wet = np.sqrt( (Umean800_600**2) + (np.sqrt(2*dcape))**2 )
 		convgust_dry = np.sqrt( (Umean800_600**2) + (np.sqrt(dcape))**2 )
 		dcp = (dcape / 980.) * (mu_cape / 2000.) * ( (s06*1.944) / 20.) * ((Umean06*1.944) / 16.)
+		z = (ebwd * 6.1e-2) + (Umean800_600 * 1.5e-1) + (lr13 * 9.4e-1) + (rhmin13 * 3.9e-2) + (srhe_left.data * 1.7e-2) + (q_melting * 3.8e-1) + (eff_lcl * 4.7e-4) - 1.3e+1
+		bdsd = 1. / ( 1. + np.exp( -z ) )
 	
 		#Fill output
 		if (params == "min") | (params == "full") | (params == "reduced"):
@@ -731,6 +758,7 @@ def main():
 			output = fill_output(output, t, param, ps, "scld", scld)
 			output = fill_output(output, t, param, ps, "Umean03", Umean03)
 			output = fill_output(output, t, param, ps, "U1", U1)
+			output = fill_output(output, t, param, ps, "bdsd", bdsd)
 	    
 		if params == "full":
 			output = fill_output(output, t, param, ps, "lr_freezing", lr_freezing)

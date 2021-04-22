@@ -498,7 +498,7 @@ if __name__ == "__main__":
 		p4km = interp.pres(prof, interp.to_msl(prof, 4000.))
 		p6km = interp.pres(prof, interp.to_msl(prof, 6000.))
 		p10km = interp.pres(prof, interp.to_msl(prof, 10000.))
-		melting_hgt = ml_pcl.hght0c
+		melting_hgt = interp.to_agl(prof, ml_pcl.hght0c)
 		pmelting_hgt = interp.pres(prof, interp.to_msl(prof, melting_hgt))
 		pmllcl = interp.pres(prof, interp.to_msl(prof, ml_pcl.lclhght))
 		pwb0 = params.temp_lvl(prof, 0, wetbulb=True)
@@ -846,8 +846,8 @@ if __name__ == "__main__":
 			#Wind Composite parameters
 			output[i,np.where(param=="dmgwind")[0][0]] = \
 				(dcape/800.)* (utils.KTS2MS(Uwindinf) / 8.)
-			output[i,np.where(param=="mburst")[0][0]] = \
-				params.mburst(prof, sb_pcl, lr03, dcape, v_totals, pwat)
+			#output[i,np.where(param=="mburst")[0][0]] = \
+			#	params.mburst(prof, sb_pcl, lr03, dcape, v_totals, pwat)
 			output[i,np.where(param=="convgust")[0][0]] = \
 				utils.KTS2MS(Umean800_600) + 2 * np.sqrt(2 * dcape)
 			output[i,np.where(param=="ducs6")[0][0]] = \

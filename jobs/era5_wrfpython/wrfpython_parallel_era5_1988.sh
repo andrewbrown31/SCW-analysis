@@ -2,7 +2,7 @@
 
 #PBS -P eg3 
 #PBS -q normal
-#PBS -l walltime=36:00:00,mem=16GB 
+#PBS -l walltime=48:00:00,mem=32GB 
 #PBS -l ncpus=1
 #PBS -o /home/548/ab4502/working/ExtremeWind/jobs/messages/era5_wrf_python_1988.o 
 #PBS -e /home/548/ab4502/working/ExtremeWind/jobs/messages/era5_wrf_python_1988.e 
@@ -10,8 +10,6 @@
  
 #Set up conda/shell environments 
 source activate wrfpython3.6 
-#module load mpi4py/3.0.0-py3 
-#module unload python3/3.6.2 
 
 #Initialise date
 d=1988-01-01
@@ -21,7 +19,6 @@ while [ "$d" != 1989-01-01 ]; do
   start_time=$(date -d "$d" +%Y%m%d)"00"
   end_time=$(date -d "$d"  +%Y%m%d)"23"
   echo "INFO: RUNNING WRFPYTHON ON DATA FROM" $start_time "to" $end_time
-  #mpiexec python -m mpi4py /home/548/ab4502/working/ExtremeWind/wrf_parallel.py "era5" "aus" $start_time $end_time "True" "era5" 1
   python /home/548/ab4502/working/ExtremeWind/wrf_non_parallel.py -m era5 -r aus -t1 $start_time -t2 $end_time --issave True --outname era5
 
   #REMOVE OLD MONTHLY FILES (done every day, but will only work the first day each month for one of the potential "month_end_date"s)

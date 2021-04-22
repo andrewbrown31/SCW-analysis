@@ -1024,17 +1024,17 @@ def plot_aus_syn_annmax_wind_trends():
 			cnt = cnt+1
 	plt.subplots_adjust(wspace=0.2)
 
-def calculate_corr_p_values():
+def calculate_corr_p_values(fnames, n_boot=0):
 
 	#For the purpose of plot_aus_conv_wind_corr(), calculate spearmans correlation and associated p-values
 	# using bootstrap resampling. Save the output to /g/data/
 
-	nino34 = read_clim_ind("nino34")
-	dmi = read_clim_ind("dmi")
-	sam = read_clim_ind("sam")
-	fnames = ["era5_logit_is_conv_aws_daily.nc"]
+	#If n_boot = 0, then just use a TTest. Otherwise perform bootstrap *n_boot* times.
+
+	nino34 = read_clim_ind("nino34",years=np.arange(1979,2019))
+	dmi = read_clim_ind("dmi",years=np.arange(1979,2018))
+	sam = read_clim_ind("sam",years=np.arange(1979,2019))
 	datasets = [read_aus_conv_wind_clim(fnames[i], daily = True) for i in np.arange(len(fnames))]
-	n_boot = 1000
 	seasons = [[12,1,2],[3,4,5],[6,7,8],[9,10,11]]
 	s_names = ["DJF","MAM","JJA","SON"]
 	clim_inds = {"NINO3.4":nino34,"SAM":sam,"DMI":dmi}
@@ -1099,7 +1099,10 @@ def calculate_corr_p_values():
 						spr_out.append( (0, 1) )
 						p_boot.append(1)
 			r = np.array([spr_out[j][0] for j in np.arange(len(spr_out))])
-			p = np.array(p_boot)
+			if n_boot > 0:
+				p = np.array(p_boot)
+			else:
+				p = np.array([spr_out[j][1] for j in np.arange(len(spr_out))])
 			r = r.reshape((lat.shape[0], lon.shape[0]))	
 			p = p.reshape((lat.shape[0], lon.shape[0]))	
 
@@ -1116,8 +1119,12 @@ def plot_aus_conv_wind_corr():
 
 	#Plotting function/driver for the above function
 
-	fnames = ["era5_logit_6hr_is_conv_aws_daily.nc"]
-			#"era5_dcp_0.03_daily.nc","era5_t_totals_48.16_daily.nc"]
+	fnames = [
+            #"era5_logit_6hr_is_conv_aws_daily.nc",\
+            "era5_mlcape*s06_16000.0_daily.nc",\
+			#"era5_dcp_0.03_daily.nc","era5_t_totals_48.16_daily.nc"
+            ]
+	calculate_corr_p_values(fnames)
 	vmax = [[-1,1],[-1,1],[-1,1],[-1,1]]
 	titles = ["Logistic eq. (measured)","DCP","T-totals"]
 	seasons = [[12,1,2],[3,4,5],[6,7,8],[9,10,11]]
@@ -1171,8 +1178,8 @@ def plot_aus_conv_wind_corr():
 	cb = plt.colorbar(c, cax=cax, orientation = "horizontal")
 	cb.set_label("Pearson's r")
 	plt.subplots_adjust(wspace=0.2)
-		#plt.savefig("/g/data/eg3/ab4502/figs/ExtremeWind/corr/"+clim_ind+"_era5.tiff",\
-		#	bbox_inches="tight")
+	#plt.savefig("/g/data/eg3/ab4502/figs/ExtremeWind/corr/"+clim_ind+"_era5.tiff",\
+	#		bbox_inches="tight")
 		
 def plot_aus_mjo_corr():
 
@@ -1518,10 +1525,10 @@ def plot_aus_conv_wind_clim():
 
 if __name__ == "__main__":
 
-	#plot_aus_conv_wind_corr()
+	plot_aus_conv_wind_corr()
 	#plot_aus_conv_wind_trends()
 	#calculate_corr_p_values()
-	plot_aus_conv_wind_clim()
+	#plot_aus_conv_wind_clim()
 	#plot_aus_daily_mjo_by_phase()
 	#plot_aus_mean_clim()
 	plt.savefig("out.png",bbox_inches="tight")

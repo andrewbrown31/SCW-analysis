@@ -50,6 +50,7 @@ def read_erai(domain,times):
 	vas = np.empty((len(date_list),len(lat_ind),len(lon_ind)))
 	ps = np.empty((len(date_list),len(lat_ind),len(lon_ind)))
 	cp = np.zeros(ps.shape) * np.nan
+	tp = np.zeros(ps.shape) * np.nan
 	cape = np.zeros(ps.shape) * np.nan
 	wg10 = np.zeros(ps.shape) * np.nan
 
@@ -109,6 +110,8 @@ ps_6hrs_ERAI_historical_an-sfc_"+date+"*.nc")[0])
 	
 		if int(date) >= 197900:
 
+			tp_file = nc.Dataset(glob.glob("/g/data/ub4/erai/netcdf/3hr/atmos/oper_fc_sfc/v01/tp/"\
+	+"tp_3hrs_ERAI_historical_fc-sfc_"+date+"*.nc")[0])
 			cp_file = nc.Dataset(glob.glob("/g/data/ub4/erai/netcdf/3hr/atmos/oper_fc_sfc/v01/cp/"\
 	+"cp_3hrs_ERAI_historical_fc-sfc_"+date+"*.nc")[0])
 			cape_file = nc.Dataset(glob.glob("/g/data/ub4/erai/netcdf/3hr/atmos/oper_fc_sfc/v01/cape/"\
@@ -121,22 +124,24 @@ ps_6hrs_ERAI_historical_an-sfc_"+date+"*.nc")[0])
 			#an_times = nc.num2date(ps_file["time"][time_ind], ps_file["time"].units)
 			an_times = date_list
 			fc_cp = cp_file.variables["cp"][:,lat_ind,lon_ind]
+			fc_tp = tp_file.variables["tp"][:,lat_ind,lon_ind]
 			fc_cape = cape_file.variables["cape"][:,lat_ind,lon_ind]
 			fc_wg10 = wg10_file.variables["wg10"][:,lat_ind,lon_ind]
 			cnt = 0
 			for an_t in an_times:
 				try:
 					fc_ind = np.where(an_t == np.array(fc_times))[0][0]
-					cp[cnt] = ((fc_cp[fc_ind] - fc_cp[fc_ind - 1]) * 1000.) / 3.
+					cp[cnt] = ((fc_cp[fc_ind] - fc_cp[fc_ind - 1]) * 1000.)
+					tp[cnt] = ((fc_tp[fc_ind] - fc_tp[fc_ind - 1]) * 1000.)
 					cape[cnt] = (fc_cape[fc_ind])
 					wg10[cnt] = (fc_wg10[fc_ind])
 				except:
 					pass
 				cnt = cnt + 1
 
-			cp_file.close(); cape_file.close(); wg10_file.close()
+			cp_file.close(); cape_file.close(); wg10_file.close(); tp_file.close()
 
-	return [ta,dp,hur,hgt,terrain,p,ps,wap,ua,va,uas,vas,tas,ta2d,cp,wg10,cape,lon,lat,date_list]
+	return [ta,dp,hur,hgt,terrain,p,ps,wap,ua,va,uas,vas,tas,ta2d,cp,tp,wg10,cape,lon,lat,date_list]
 	
 def read_erai_fc(domain,times):
 	#Open ERA-Interim forecast netcdf files and extract variables needed for a range of times 
@@ -550,8 +555,8 @@ if __name__ == "__main__":
 		variable = sys.argv[3]
 
 	loc_id, points = get_aus_stn_info()
-	#points = np.array(points)[np.in1d(loc_id, ["Darwin","Adelaide","Woomera","Sydney"])]
-	#loc_id = ["Darwin","Adelaide","Woomera","Sydney"]
+	points = np.array(points)[np.in1d(loc_id, ["Darwin","Adelaide","Woomera","Sydney"])]
+	loc_id = loc_id[np.in1d(loc_id,["Darwin","Adelaide","Woomera","Sydney"])]
 
 	to_points_loop(loc_id,points,"erai_"+str(start_year)+"_"+str(end_year),\
-			start_year,end_year,variables=["ml_cape","wg10"])
+			start_year,end_year,variables=["mucape*s06","ml_cape","wg10"])

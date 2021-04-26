@@ -1,3 +1,4 @@
+import tqdm
 import metpy.units as units
 import metpy.calc as mpcalc
 import wrf
@@ -19,6 +20,91 @@ try:
 	import sharppy.sharptab.winds as winds
 except:
 	pass
+
+def get_eff_cape(cape, cin, sfc_p_3d, sfc_ta, sfc_hgt, sfc_q, ps, terrain):
+
+	#Define the effective layer cape condition for the 3d grid
+	cape_cond = (cape >= 100) & (cin <= 250) & (sfc_p_3d <= ps)
+	eff_cape_cond = np.zeros(cape_cond.shape, dtype=bool)
+	is_first = np.ones((cape_cond.shape[1], cape_cond.shape[2]), dtype=bool)
+	eff_cape_cond[0] = cape_cond[0] 
+	for i in np.arange(1,cape_cond.shape[0]):
+		eff_cape_cond[i] = cape_cond[i]
+		is_first[is_first & (~cape_cond[i] & cape_cond[i-1])]=False
+		eff_cape_cond[i, ~is_first] = False
+
+	#Extract pressure and height for effective levels
+	eff_p = np.where(eff_cape_cond,\
+		sfc_p_3d, np.nan)
+	eff_hgt = np.where(eff_cape_cond,\
+		sfc_hgt, np.nan)
+
+	#Define "average" conditions over the effective layer. For air temp and water vapour,
+	# the pressure-weighted average is used. For height and pressure, use the halfway point. 
+	#If the layer is of one-level depth, use that layer's conditions
+	eff_avg_p = ((np.nanmin(eff_p,axis=0) + np.nanmax(eff_p,axis=0)) / 2).astype(np.float32)
+	eff_avg_hgt = ((np.nanmin(eff_hgt,axis=0) + np.nanmax(eff_hgt,axis=0)) / 2).astype(np.float32)
+	eff_avg_ta = trapz_int3d(sfc_ta, sfc_p_3d, eff_cape_cond).astype(np.float32)
+	eff_avg_q = trapz_int3d(sfc_q, sfc_p_3d, eff_cape_cond).astype(np.float32)
+
+	#So that the wrf-python code behaves nicely, fill the points with no effective layer, using surface conditions.
+	#These points will be masked later
+	eff_avg_p = np.where(np.isnan(eff_avg_p),\
+	       np.ma.masked_where(~((sfc_p_3d==ps)),\
+	       sfc_p_3d).max(axis=0).filled(0)\
+	       ,eff_avg_p).astype(np.float32)
+	eff_avg_hgt = np.where(np.isnan(eff_avg_p),\
+	       np.ma.masked_where(~((sfc_p_3d==ps)),\
+	       sfc_hgt).max(axis=0).filled(0)\
+	       ,eff_avg_hgt).astype(np.float32)
+	eff_avg_ta = np.where(np.isnan(eff_avg_p),\
+	       np.ma.masked_where(~((sfc_p_3d==ps)),\
+	       sfc_ta).max(axis=0).filled(0)\
+	       ,eff_avg_ta).astype(np.float32)
+	eff_avg_q = np.where(np.isnan(eff_avg_p),\
+	       np.ma.masked_where(~((sfc_p_3d==ps)),\
+	       sfc_q).max(axis=0).filled(0)\
+	       ,eff_avg_q).astype(np.float32)
+
+	#Insert the effective layer conditions into the bottom of the 3d arrays pressure-level arrays
+	eff_ta_arr = np.insert(sfc_ta,0,eff_avg_ta,axis=0)
+	eff_q_arr = np.insert(sfc_q,0,eff_avg_q,axis=0)
+	eff_hgt_arr = np.insert(sfc_hgt,0,eff_avg_hgt,axis=0)
+	eff_p3d_arr = np.insert(sfc_p_3d,0,eff_avg_p,axis=0)
+
+	#Sort arrays by ascending pressure
+	a,temp1,temp2 = np.meshgrid(np.arange(eff_p3d_arr.shape[0]) ,\
+		 np.arange(eff_p3d_arr.shape[1]), np.arange(eff_p3d_arr.shape[2]))
+	sort_inds = np.flipud(np.lexsort([np.swapaxes(a,1,0),eff_p3d_arr],axis=0))
+	eff_ta_arr = np.take_along_axis(eff_ta_arr, sort_inds, axis=0)
+	eff_p3d_arr = np.take_along_axis(eff_p3d_arr, sort_inds, axis=0)
+	eff_hgt_arr = np.take_along_axis(eff_hgt_arr, sort_inds, axis=0)
+	eff_q_arr = np.take_along_axis(eff_q_arr, sort_inds, axis=0)
+
+	#Calculate CAPE using wrf-python. 
+	cape3d_effavg = wrf.cape_3d(eff_p3d_arr[:,0,0],eff_ta_arr[:,0,0] + 273.15,\
+		eff_q_arr[:,0,0],eff_hgt_arr[:,0,0],terrain,ps,False,meta=False, missing=0)
+
+	#From the 3d CAPE array, return just the effective layer vaues
+	eff_cape = np.ma.masked_where(~((eff_ta_arr==eff_avg_ta) & \
+		(eff_p3d_arr==eff_avg_p)),cape3d_effavg.data[0]).max(axis=0).filled(0)
+	eff_cin = np.ma.masked_where(~((eff_ta_arr==eff_avg_ta) & \
+		(eff_p3d_arr==eff_avg_p)),cape3d_effavg.data[1]).max(axis=0).filled(0)
+	eff_lfc = np.ma.masked_where(~((eff_ta_arr==eff_avg_ta) & \
+		(eff_p3d_arr==eff_avg_p)),cape3d_effavg.data[2]).max(axis=0).filled(0)
+	eff_lcl = np.ma.masked_where(~((eff_ta_arr==eff_avg_ta) & \
+		(eff_p3d_arr==eff_avg_p)),cape3d_effavg.data[3]).max(axis=0).filled(0)
+	eff_el = np.ma.masked_where(~((eff_ta_arr==eff_avg_ta) & \
+		(eff_p3d_arr==eff_avg_p)),cape3d_effavg.data[4]).max(axis=0).filled(0)
+
+	#Finally, make sure to mask points where there is no effective layer
+	eff_cape[eff_cape_cond.sum(axis=0) == 0] = 0
+	eff_cin[eff_cape_cond.sum(axis=0) == 0] = 0
+	eff_lfc[eff_cape_cond.sum(axis=0) == 0] = 0
+	eff_lcl[eff_cape_cond.sum(axis=0) == 0] = 0
+	eff_el[eff_cape_cond.sum(axis=0) == 0] = 0
+
+	return eff_cape, eff_cin, eff_lfc, eff_lcl, eff_el, eff_hgt, eff_avg_hgt
 
 def get_aus_stn_info():
 
@@ -149,9 +235,7 @@ def read_upperair_obs(start_date,end_date,fout,code="wrfpython"):
 			"daily_aus_full/DC02D_StnDet_999999999643799.txt")
 
 	no_points = []
-	for name, group in groups:
-
-		print(name)
+	for name, group in tqdm.tqdm(groups):
 
 		group.loc[group.dp < -100, "dp"] = np.nan
 
@@ -199,10 +283,11 @@ def read_upperair_obs(start_date,end_date,fout,code="wrfpython"):
 						group.stn_id.unique()), \
 						"Height of station above mean sea level in metres"]\
 						.values[0]
-					group.loc[:,"q"] = mpcalc.mixing_ratio_from_relative_humidity(\
-						(mpcalc.relative_humidity_from_dewpoint(group.ta.values\
+					rh = np.array(mpcalc.relative_humidity_from_dewpoint(group.ta.values\
 						*units.units.degC, \
-						group.dp.values*units.units.degC)*100*units.units.percent), \
+						group.dp.values*units.units.degC)*100)
+					group.loc[:,"q"] = mpcalc.mixing_ratio_from_relative_humidity(\
+						rh*units.units.percent, \
 						group.ta.values*units.units.degC,\
 						group.p.values*units.units.hPa)
 					res = wrf.cape_3d(group.p.values, group.ta.values+273.15, \
@@ -256,6 +341,23 @@ def read_upperair_obs(start_date,end_date,fout,code="wrfpython"):
 					lcl = res[3]
 					el = res[4]
 
+					#Get effective CAPE
+					eff_cape, eff_cin, eff_lfc, eff_lcl, eff_el, eff_hgt, eff_avg_hgt = get_eff_cape(\
+						cape=cape[np.newaxis][np.newaxis].T,\
+						cin=cin[np.newaxis][np.newaxis].T,\
+						sfc_p_3d=group.p.values[np.newaxis][np.newaxis].T,\
+						sfc_ta=group.ta.values[np.newaxis][np.newaxis].T,\
+						sfc_hgt=group.z.values[np.newaxis][np.newaxis].T,\
+						sfc_q=group.q.values[np.newaxis][np.newaxis].T,\
+						ps=group.p.max()[np.newaxis][np.newaxis].T,\
+						terrain=terrain[np.newaxis][np.newaxis].T)
+					eff_cape = np.where(np.isnan(eff_cape), 0, eff_cape)
+					eff_cin = np.where(np.isnan(eff_cin), 0, eff_cin)
+					eff_lfc = np.where(np.isnan(eff_lfc), 0, eff_lfc)
+					eff_lcl = np.where(np.isnan(eff_lcl), 0, eff_lcl)
+					eff_el = np.where(np.isnan(eff_el), 0, eff_el)
+
+
 					#Mass-weighted
 					umean01 = np.squeeze(trapz_int3d( group.ua.values[np.newaxis][np.newaxis].T,\
 						group.p.values[np.newaxis][np.newaxis].T, \
@@ -264,6 +366,14 @@ def read_upperair_obs(start_date,end_date,fout,code="wrfpython"):
 					vmean01 = np.squeeze(trapz_int3d( group.va.values[np.newaxis][np.newaxis].T,\
 						group.p.values[np.newaxis][np.newaxis].T, \
 						np.array((group.z - terrain) <= 1000)[np.newaxis][np.newaxis].T,)\
+						.data)
+					umean06 = np.squeeze(trapz_int3d( group.ua.values[np.newaxis][np.newaxis].T,\
+						group.p.values[np.newaxis][np.newaxis].T, \
+						np.array((group.z - terrain) <= 6000)[np.newaxis][np.newaxis].T,)\
+						.data)
+					vmean06 = np.squeeze(trapz_int3d( group.va.values[np.newaxis][np.newaxis].T,\
+						group.p.values[np.newaxis][np.newaxis].T, \
+						np.array((group.z - terrain) <= 6000)[np.newaxis][np.newaxis].T,)\
 						.data)
 					umean800_600 =\
 						np.squeeze(trapz_int3d( group.ua.values[np.newaxis][np.newaxis].T,\
@@ -287,6 +397,7 @@ def read_upperair_obs(start_date,end_date,fout,code="wrfpython"):
 					#	((group.p - terrain) >= 600)]["va"].mean()
 		
 					Umean01 = np.sqrt( umean01**2 + vmean01**2 )
+					Umean06 = np.sqrt( umean06**2 + vmean06**2 )
 					Umean800_600 = np.sqrt( umean800_600**2 + vmean800_600**2 )
 					u0 = np.interp([0], group.z - terrain, group.ua)[0]
 					v0 = np.interp([0], group.z - terrain, group.va)[0]
@@ -299,6 +410,16 @@ def read_upperair_obs(start_date,end_date,fout,code="wrfpython"):
 					dp850 = np.interp([850], np.flip(group.p) , np.flip(group.dp))[0]
 					c_totals = dp850 - ta500
 					t_totals = c_totals + v_totals
+					z700 = np.interp([700], np.flip(group.p) , np.flip(group.z))
+					z500 = np.interp([500], np.flip(group.p) , np.flip(group.z))
+					lr03 = -((np.interp([3000], (group.z)-terrain , (group.ta))[0]) - (np.interp([0], (group.z)-terrain , (group.ta))[0])) /\
+						((3000-0)/1000)
+					lr13 = -((np.interp([3000], (group.z)-terrain , (group.ta))[0]) - (np.interp([1000], (group.z)-terrain , (group.ta))[0])) /\
+						((3000-1000)/1000)
+					lr700_500 = -((np.interp([z500], (group.z)-terrain , (group.ta))[0]) - (np.interp([z700], (group.z)-terrain , (group.ta))[0])) /\
+						((z500-z700)/1000)
+					rhmin13 = np.min(rh[((group.z)-terrain >= 1000) & ((group.z)-terrain <= 3000)])
+					q_melting = np.interp([0], np.flip(group.ta), np.flip(group.q))[0] * 1000
 					mu_cape = np.max(cape)
 					mu_cin = cin[np.nanargmax(cape)]
 					dcape = np.squeeze(get_dcape(group.p.values[np.newaxis][np.newaxis].T, \
@@ -322,6 +443,49 @@ def read_upperair_obs(start_date,end_date,fout,code="wrfpython"):
 					ta700 = np.interp([700], np.flip(group.p) , np.flip(group.ta))[0]
 					k_index = ta850 - ta500 + (ta850 - dp850) - (ta700-dp700)
 
+					ue = np.interp([np.nanmin(eff_hgt)], group.z - terrain, group.ua)[0]
+					ve = np.interp([np.nanmin(eff_hgt)], group.z - terrain, group.va)[0]
+					um = np.interp([(el[np.nanargmax(cape)] * 0.5)], group.z - terrain, group.ua)[0]
+					vm = np.interp([(el[np.nanargmax(cape)] * 0.5)], group.z - terrain, group.va)[0]
+					ebwd = np.sqrt(np.square(um-ue)+np.square(vm-ve))
+
+					#srhe
+					us6 = u6 - u0
+					vs6 = v6 - v0
+					tmp = 7.5 / (np.sqrt(np.square(us6) + np.square(vs6)))
+					u_storm_right = umean06 + (tmp * vs6)
+					v_storm_right = vmean06 - (tmp * us6)
+					u_storm_left = umean06 - (tmp * vs6)
+					v_storm_left = vmean06 + (tmp * us6)
+					hgt = group.z.values - terrain
+					u = group.ua.values
+					v = group.va.values
+					hgt_bot = np.nanmin(eff_hgt,axis=0)
+					hgt_top = np.nanmax(eff_hgt,axis=0)                                        
+					u_ma = np.ma.masked_where(np.squeeze((hgt < hgt_bot) | (hgt > hgt_top) | (np.isnan(u)) | \
+							(np.isnan(hgt_bot)) | (np.isnan(hgt_top)) | (np.isnan(hgt))), u)
+					v_ma = np.ma.masked_where(np.squeeze((hgt < hgt_bot) | (hgt > hgt_top) | (np.isnan(v)) | \
+							(np.isnan(hgt_bot)) | (np.isnan(hgt_top)) | (np.isnan(hgt))) , v)
+					sru_left = u_ma - u_storm_left
+					srv_left = v_ma - v_storm_left
+					layers_left = (sru_left[1:] * srv_left[:-1]) - (sru_left[:-1] * srv_left[1:])
+					srhe_left = abs(np.sum(layers_left))
+
+					###
+					ebwd = np.where(np.isnan(ebwd), 0, ebwd)
+					srhe_left = np.where(np.isnan(srhe_left), 0, srhe_left)
+					bdsd = np.squeeze(1 / ( 1 + np.exp( -(
+						ebwd * 6.1e-2
+						+ Umean800_600 * 1.5e-1
+						+ lr13 * 9.4e-1
+						+ rhmin13 * 3.9e-2
+						+ srhe_left * 1.7e-2
+						+ q_melting * 3.8e-1
+						+ eff_lcl * 4.7e-4
+						- 1.3e+1) ) ) )
+					eff_sherb = np.squeeze((ebwd / 27.) * (lr03 / 5.2) * (lr700_500 / 5.6))
+					dcp = (dcape / 980.) * (mu_cape / 2000.) * ( (s06*1.944) / 20.) * ((Umean06*1.944) / 16.)
+
 				t =  (group.date.iloc[0].hour + group.date.iloc[0].minute/60.)
 
 				if code == "sharppy":
@@ -342,7 +506,7 @@ def read_upperair_obs(start_date,end_date,fout,code="wrfpython"):
 							"ml_cin":ml_cin,"s06":s06,\
 							"Umean800_600":Umean800_600, "k_index":k_index ,\
 							"Umean01":Umean01,"t_totals":t_totals, "ml_el":ml_el,\
-							"dcape":dcape}, \
+							"dcape":dcape, "bdsd":bdsd, "dcp":dcp, "eff_sherb":eff_sherb}, \
 							index=[group.date.iloc[0].replace(hour=int(t), minute=0)])],\
 						axis=0)
 

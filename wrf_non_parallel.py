@@ -583,13 +583,13 @@ def main():
 		s010 = get_shear_hgt(sfc_ua, sfc_va, np.copy(sfc_hgt), 0, 10000, terrain)
 		s13 = get_shear_hgt(sfc_ua, sfc_va, np.copy(sfc_hgt), 1000, 3000, terrain)
 		s36 = get_shear_hgt(sfc_ua, sfc_va, np.copy(sfc_hgt), 3000, 6000, terrain)
-		ebwd = get_shear_hgt(sfc_ua, sfc_va, np.copy(sfc_hgt), np.nanmin(eff_hgt,axis=0)-terrain,\
+		ebwd = get_shear_hgt(sfc_ua, sfc_va, np.copy(sfc_hgt), np.nanmin(eff_hgt,axis=0),\
 					(mu_el * 0.5), 0)
 		srh01_left, srh01_right = get_srh(sfc_ua, sfc_va, np.copy(sfc_hgt), 0, 1000, terrain)
 		srh03_left, srh03_right = get_srh(sfc_ua, sfc_va, np.copy(sfc_hgt), 0, 3000, terrain)
 		srh06_left, srh06_right = get_srh(sfc_ua, sfc_va, np.copy(sfc_hgt), 0, 6000, terrain)
 		srhe_left, srhe_right = get_srh(sfc_ua, sfc_va, np.copy(sfc_hgt), \
-						np.nanmin(eff_hgt,axis=0), np.nanmax(eff_hgt,axis=0), 0)
+						np.nanmin(eff_hgt,axis=0), np.nanmax(eff_hgt,axis=0), terrain)
 		ust_right, vst_right, ust_left, vst_left = \
 			get_storm_motion(sfc_ua, sfc_va, np.copy(sfc_hgt), terrain)
 		sru01_right = umean01 - ust_right

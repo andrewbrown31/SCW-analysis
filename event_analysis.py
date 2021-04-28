@@ -595,6 +595,8 @@ def create_threshold_variable(variable, threshold, model, event=None, predictors
 		files = glob.glob("/g/data/eg3/ab4502/ExtremeWind/aus/era5/era5*")
 	elif model == "erai":
 		files = glob.glob("/g/data/eg3/ab4502/ExtremeWind/aus/erai/erai*")
+	elif model == "merra2":
+		files = glob.glob("/g/data/eg3/ab4502/ExtremeWind/aus/merra2/merra2*")
 	else:
 		raise ValueError("INVALID MODEL NAME")
 	files.sort()
@@ -2137,7 +2139,7 @@ if __name__ == "__main__":
 		#create_mean_variable("d2m","era5",native=True, native_dir="d2m")
 		#create_threshold_variable("t_totals",50.9,"era5")
 		#create_threshold_variable("dcp",0.91,"era5")
-		create_threshold_variable("mlcape*s06",16000,"era5")
+		#create_threshold_variable("mlcape*s06",16000,"era5")
 		#create_threshold_variable("era5_aws_logit","barra")
 		#create_mean_variable("mu_cape","barpa_erai")
 		#create_mean_variable("mu_cape","erai")
@@ -2148,7 +2150,7 @@ if __name__ == "__main__":
 		#create_mean_variable("srhe_left","era5")
 		#compare_obs_soundings()
 		#diagnostics_aws_compare()
-		#auc_test()
+		auc_test()
 		#optimise_pss("/g/data/eg3/ab4502/ExtremeWind/points/barra_allvars_v3_2005_2018.pkl",T=1000,\
 		#	compute=True, l_thresh=2, is_pss="hss", model_name="barra_mean_v5",time="floor2")
 		#optimise_pss("/g/data/eg3/ab4502/ExtremeWind/points/barra_rad50km_max_v3_2005_2018.pkl",T=1000,\

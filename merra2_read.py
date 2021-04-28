@@ -24,7 +24,7 @@ def read_merra2(domain,times,pres=True,delta_t=1):
 	files_3d = []; files_2d = []
 	for d in date_list:
 		files_3d.append(glob.glob("/g/data/rr7/MERRA2/raw/M2I3NPASM.5.12.4/"+d.strftime("%Y")+"/"+d.strftime("%m")+"/MERRA2*"+d.strftime("%Y%m%d")+"*.nc4")[0])
-		files_2d.append(glob.glob("/scratch/eg3/ab4502/MERRA2*"+d.strftime("%Y%m%d")+"*.nc4")[0])
+		files_2d.append(glob.glob("/g/data/ua8/MERRA2/1hr/M2I1NXASM.5.12.4/"+d.strftime("%Y")+"/"+d.strftime("%m")+"/MERRA2*"+d.strftime("%Y%m%d")+"*.nc4")[0])
 	files_3d = np.unique(files_3d)
 	files_2d = np.unique(files_2d)
 
@@ -32,7 +32,7 @@ def read_merra2(domain,times,pres=True,delta_t=1):
 	f2d = xr.open_mfdataset(files_2d, combine="by_coords").sel({"time":date_list, "lon":slice(domain[2], domain[3]), "lat":slice(domain[0], domain[1])})
 
 	ta_file = f3d["T"]; z_file = f3d["H"]; ua_file = f3d["U"]; va_file = f3d["V"]; hur_file = f3d["RH"]
-	uas_file = f2d["U10M"]; vas_file = f2d["V10M"]; hus_file = f2d["QV10M"]; tas_file = f2d["T10M"]; ps_file = f2d["PS"]
+	uas_file = f2d["U10M"]; vas_file = f2d["V10M"]; hus_file = f2d["QV2M"]; tas_file = f2d["T2M"]; ps_file = f2d["PS"]
 
 	ta = ta_file.values - 273.15
 	ua = ua_file.values
@@ -139,7 +139,6 @@ def to_points_loop(loc_id,points,fname,start_year,end_year,variables=False):
 	#As in to_points(), but by looping over monthly data
 	from dask.diagnostics import ProgressBar
 	import gc
-	#ProgressBar().register()
 
 	dates = []
 	for y in np.arange(start_year,end_year+1):
@@ -152,13 +151,12 @@ def to_points_loop(loc_id,points,fname,start_year,end_year,variables=False):
 	for t in np.arange(len(dates)):
 		print(dates[t])
 		f=xr.open_dataset(glob.glob("/g/data/eg3/ab4502/ExtremeWind/aus/"+\
-			"era5/era5_"+dates[t].strftime("%Y%m")+"*.nc")[0],\
-			chunks={"lat":139, "lon":178, "time":50}, engine="h5netcdf")
+			"merra2/merra2_"+dates[t].strftime("%Y%m")+"*.nc")[0])
 
 		#Setup lsm
 		lat = f.coords.get("lat").values
 		lon = f.coords.get("lon").values
-		lsm = get_mask(lon,lat)
+		lsm = xr.where(xr.open_dataset("/g/data/eg3/ab4502/MERRA2_101.const_2d_asm_Nx.00000000.nc4")["FRLAND"].sel({"lat":lat, "lon":lon}) >= 0.5, 1, 0).values[0]
 		x,y = np.meshgrid(lon,lat)
 		x[lsm==0] = np.nan
 		y[lsm==0] = np.nan
@@ -192,7 +190,6 @@ def to_points_loop(loc_id,points,fname,start_year,end_year,variables=False):
 		gc.collect()
 
 	df.sort_values(["loc_id","time"]).to_pickle("/g/data/eg3/ab4502/ExtremeWind/points/"+fname+".pkl")
-
 
 def get_aus_stn_info():
 	names = ["id", "stn_no", "district", "stn_name", "1", "2", "lat", "lon", "3", "4", "5", "6", "7", "8", \
@@ -251,27 +248,8 @@ if __name__ == "__main__":
 		end_time = int(sys.argv[2])
 
 	loc_id, points = get_aus_stn_info()
-	#loc_id = ['Melbourne', 'Wollongong', 'Gympie', 'Grafton', 'Canberra', 'Marburg', \
-	#	'Adelaide', 'Namoi', 'Perth', 'Hobart']
-	#radar_latitude = [-37.8553, -34.2625, -25.9574, -29.622, -35.6614, -27.608, -34.6169,\
-	#		-31.0236, -32.3917, -43.1122]
-	#radar_longitude = [144.7554, 150.8752, 152.577, 152.951, 149.5122, 152.539, 138.4689, \
-	#		150.1917, 115.867, 147.8057]
-	#points = [(radar_longitude[i], radar_latitude[i]) for i in np.arange(len(radar_latitude))]
 
-	#to_points_loop(loc_id,points,"era5_allvars_v3_"+str(start_time)+"_"+str(end_time),start_time,end_time,variables=False)
-	#to_points_loop_rad(loc_id, points, "era5_rad50km_"+str(start_time)+"_"+str(end_time), \
-	#		start_time, end_time, rad=50, lsm=True, pb=True,\
-	#		variables=["t_totals","eff_sherb","dcp","k_index","gustex","sweat","mucape*s06","mmp","mlcape*s06","scp_fixed","Uwindinf",\
-	#		"effcape*s06","ml_el","ship","ml_cape","eff_lcl","cp","Umeanwindinf","wg10","ebwd","sbcape*s06"])
-
-	#Thunderstorm asthma loc (Laverton airport, Melbourne)
-	#loc_id = ["Melbourne"]
-	#points = [(144.76,-37.86)]
-	#to_points_loop_rad(loc_id,points,"era5_ts_asthma_"+str(start_time),start_time,end_time,rad=75,lsm=True,pb=True)
-
-        #BARRA-AD and BARRA-SY comparison locs
-	to_keep = ["Adelaide","Ceduna","Coffs Harbour","Mount Gambier","Sydney","Wagga Wagga","Williamtown","Woomera"]
+	to_keep = ["Adelaide","Darwin","Sydney","Woomera"]
 	points = np.array(points)[np.in1d(loc_id,to_keep)]
 	loc_id = np.array(loc_id)[np.in1d(loc_id,to_keep)]
-	to_points_loop_wg10(loc_id,points,"era5_wg10_"+str(start_time)+"_"+str(end_time),start_time,end_time)
+	to_points_loop(loc_id,points,"merra2_"+str(start_time)+"_"+str(end_time),start_time,end_time,variables=["bdsd","eff_sherb","dcp","t_totals"])

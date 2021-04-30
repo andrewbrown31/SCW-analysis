@@ -1,17 +1,13 @@
 # Functions for the analysis of extreme wind gusts in Australia from multiple processes, from various data sources
 
-### Including the analysis of measured and reported severe convective winds from reanalysis. For an indication of how these scripts are used in Brown andDowdy (in prep.), see log.md
- 
-*  barra_read.py 
-* era5_read.py 	
-* wrf_non_parallel.py
-* wrf_parallel.py
-* event_analysis.py
-* obs_read.py
-* plot_param.py
-* jobs/barra_wrfpython/
-* jobs/era5_wrfpython/
+### Including the analysis of measured and reported severe convective winds from reanalysis. 
+
+For an indication of how these scripts are used in Brown and Dowdy (2021), see [log.md](https://github.com/andrewbrown31/SCW-analysis/blob/master/log.md)
 	
-### Analysis of severe convective wind environments from the CMIP ensemble
-* cmip/
+### And analysis of severe convective wind environments from the CMIP ensemble
+For method of Brown and Dowdy (in prep.) see [cmip/log.md](https://github.com/andrewbrown31/SCW-analysis/blob/master/cmip/log.md)
         
+
+#### References
+Brown, A., & Dowdy, A., (2021) Severe convection-related winds in Australia and their associated environments. Journal of Southern Hemisphere Earth Systems Science, -. https://doi.org/10.1071/ES19052
+Brown, A., & Dowdy, A., (in prep.) Severe Convective Wind Environments and Future Projected Changes in Australia. JGR-A.

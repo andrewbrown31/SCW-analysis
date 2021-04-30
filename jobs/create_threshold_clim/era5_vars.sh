@@ -16,3 +16,22 @@ python /home/548/ab4502/working/ExtremeWind/event_analysis.py logit 0.83 era5 is
 python /home/548/ab4502/working/ExtremeWind/event_analysis.py dcp 0.15 era5
 
 
+python /home/548/ab4502/working/ExtremeWind/event_analysis.py mu_cape 0 era5
+python /home/548/ab4502/working/ExtremeWind/event_analysis.py dcape 0 era5
+python /home/548/ab4502/working/ExtremeWind/event_analysis.py ebwd 0 era5
+python /home/548/ab4502/working/ExtremeWind/event_analysis.py lr03 0 era5
+python /home/548/ab4502/working/ExtremeWind/event_analysis.py lr700_500 0 era5
+python /home/548/ab4502/working/ExtremeWind/event_analysis.py dp850 0 era5
+python /home/548/ab4502/working/ExtremeWind/event_analysis.py ta850 0 era5
+python /home/548/ab4502/working/ExtremeWind/event_analysis.py ta500 0 era5
+python /home/548/ab4502/working/ExtremeWind/event_analysis.py Umean06 0 era5
+python /home/548/ab4502/working/ExtremeWind/event_analysis.py s06 0 era5
+python /home/548/ab4502/working/ExtremeWind/event_analysis.py Umean800_600 0 era5
+python /home/548/ab4502/working/ExtremeWind/event_analysis.py lr13 0 era5
+python /home/548/ab4502/working/ExtremeWind/event_analysis.py rhmin13 0 era5
+python /home/548/ab4502/working/ExtremeWind/event_analysis.py srhe_left 0 era5
+python /home/548/ab4502/working/ExtremeWind/event_analysis.py q_melting 0 era5
+python /home/548/ab4502/working/ExtremeWind/event_analysis.py eff_lcl 0 era5
+
+
+

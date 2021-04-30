@@ -29,6 +29,8 @@ sh ../jobs/barra_wrfpython/wrfpython_parallel_barra_driver.sh
 sh ../jobs/barra_points/barra_points_driver.sh
 sh ../jobs/merra_wrfpython/wrfpython_nonparallel_merra_driver.sh
 sh ../jobs/merra2_points/merra2_points_driver.sh
+
+#Note for BARRA and ERA5, need to concaternate yearly point data files into one pandas dataframe, for use in next code block
 ```
 
 #### Create observed SCW event datasets, calculate convective diagnostics from radiosondes, and compute skill scores from ERA5 (Table 1)
@@ -54,7 +56,7 @@ sh ../jobs/create_threshold_clim/era5_vars.sh
 sh ../jobs/create_threshold_clim/merra_vars.sh
 ```
 
-#### From monthly data, resample to annual and compute spatial trends (Figure 3)
+#### From monthly reanalysis data, resample to annual and compute spatial trends (Figure 3)
 ```bash
 conda activate wrfpython3.6
 python spatial_hist_trends_era5.py
@@ -125,4 +127,4 @@ python plot_seasonal_freq.py
 #Figure S8
 python logit_components.py
 ```
-[Table S4](https://github.com/andrewbrown31/SCW-analysis/cmip/era5_nrm_trend.ipynb)
+[Table S4](https://github.com/andrewbrown31/SCW-analysis/blob/master/cmip/era5_nrm_trend.ipynb)

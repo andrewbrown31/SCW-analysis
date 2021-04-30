@@ -12,10 +12,7 @@ source activate wrfpython3.6
 
 python /home/548/ab4502/working/ExtremeWind/event_analysis.py t_totals 48.1 era5
 python /home/548/ab4502/working/ExtremeWind/event_analysis.py eff_sherb 0.47 era5
-#python /home/548/ab4502/working/ExtremeWind/event_analysis.py mucape*s06 30768 era5
-#python /home/548/ab4502/working/ExtremeWind/event_analysis.py mu_cape 0 era5
-#python /home/548/ab4502/working/ExtremeWind/event_analysis.py dcape 0 era5
+python /home/548/ab4502/working/ExtremeWind/event_analysis.py logit 0.83 era5 is_conv_aws ebwd,Umean800_600,lr13,rhmin13,srhe_left,q_melting,eff_lcl
 python /home/548/ab4502/working/ExtremeWind/event_analysis.py dcp 0.15 era5
-#python /home/548/ab4502/working/ExtremeWind/event_analysis.py scp_fixed 0.04 era5
 
 

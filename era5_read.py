@@ -423,8 +423,8 @@ def get_pressure(top):
 
 def get_lsm():
 	#Load the ERA-Interim land-sea mask (land = 1)
-	lsm_file = nc.Dataset("/g/data/ub4/era5/netcdf/static_era5.nc")
-	lsm = np.squeeze(lsm_file.variables["lsm"][:])
+	lsm_file = nc.Dataset("/g/data/rt52/era5/single-levels/reanalysis/lsm/1979/lsm_era5_oper_sfc_19790101-19790131.nc")
+	lsm = np.squeeze(lsm_file.variables["lsm"][0])
 	lsm_lon = np.squeeze(lsm_file.variables["longitude"][:])
 	lsm_lat = np.squeeze(lsm_file.variables["latitude"][:])
 	lsm_file.close()

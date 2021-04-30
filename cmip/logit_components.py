@@ -164,4 +164,4 @@ if __name__ == "__main__":
 	#cax2 = plt.axes([0.92,0.3,0.02,0.12])
 	#cb2=plt.colorbar(c2, cax=cax2, orientation="vertical", extend="both" )
 	#cb2.set_label("%")
-	plt.savefig("/g/data/eg3/ab4502/figs/CMIP/logit_components.png", bbox_inches="tight")
+	plt.savefig("/g/data/eg3/ab4502/figs/scw_projections_paper/sfig8.jpeg", quality=95, bbox_inches="tight")

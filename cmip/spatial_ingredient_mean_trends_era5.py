@@ -91,8 +91,6 @@ def load_resampled_era5(p, thresh, mean=False):
 
 if __name__ == "__main__":
 
-	lsm = get_era5_lsm()
-	lsm = np.where(lsm==0, 1, 1)
 	path = "/g/data/eg3/ab4502/ExtremeWind/trends/"
 	cnt=1
 
@@ -169,7 +167,7 @@ if __name__ == "__main__":
 				if season=="DJF":
 					plt.ylabel("MUCAPE")
 				m.drawcoastlines()
-				p=m.contourf(x, y, np.where(lsm==1, f1["era5_trend"], np.nan), levels = np.linspace(vmin["mu_cape"],-vmin["mu_cape"],11),\
+				p=m.contourf(x, y, f1["era5_trend"], levels = np.linspace(vmin["mu_cape"],-vmin["mu_cape"],11),\
 					cmap=plt.get_cmap("RdBu_r"), extend="both")
 				xr.plot.contourf(xr.where(f1["era5_sig"]<=0.1, 1, 0), colors="none", hatches=[None,"////"], levels=[0.5,1.5], add_colorbar=False, add_labels=False)
 				plt.title(season)
@@ -185,7 +183,7 @@ if __name__ == "__main__":
 				if season=="DJF":
 					plt.ylabel("DCAPE")
 				m.drawcoastlines()
-				p=m.contourf(x, y, np.where(lsm==1, f2["era5_trend"], np.nan), levels = np.linspace(vmin["dcape"],-vmin["dcape"],11),\
+				p=m.contourf(x, y, f2["era5_trend"], levels = np.linspace(vmin["dcape"],-vmin["dcape"],11),\
 					cmap=plt.get_cmap("RdBu_r"), extend="both")
 				xr.plot.contourf(xr.where(f2["era5_sig"]<=0.1, 1, 0), colors="none", hatches=[None,"////"], levels=[0.5,1.5], add_colorbar=False, add_labels=False)
 				if season=="SON":
@@ -200,7 +198,7 @@ if __name__ == "__main__":
 				if season=="DJF":
 					plt.ylabel("EBWD")
 				m.drawcoastlines()
-				p=m.contourf(x, y, np.where(lsm==1, f3["era5_trend"], np.nan), levels = np.linspace(vmin["ebwd"],-vmin["ebwd"],11),\
+				p=m.contourf(x, y, f3["era5_trend"], levels = np.linspace(vmin["ebwd"],-vmin["ebwd"],11),\
 					cmap=plt.get_cmap("RdBu_r"), extend="both")
 				xr.plot.contourf(xr.where(f3["era5_sig"]<=0.1, 1, 0), colors="none", hatches=[None,"////"], levels=[0.5,1.5], add_colorbar=False, add_labels=False)
 				if season=="SON":
@@ -215,7 +213,7 @@ if __name__ == "__main__":
 				if season=="DJF":
 					plt.ylabel("LR03")
 				m.drawcoastlines()
-				p=m.contourf(x, y, np.where(lsm==1, f4["era5_trend"], np.nan), levels = np.linspace(vmin["lr03"],-vmin["lr03"],11),\
+				p=m.contourf(x, y, f4["era5_trend"], levels = np.linspace(vmin["lr03"],-vmin["lr03"],11),\
 					cmap=plt.get_cmap("RdBu_r"), extend="both")
 				xr.plot.contourf(xr.where(f4["era5_sig"]<=0.1, 1, 0), colors="none", hatches=[None,"////"], levels=[0.5,1.5], add_colorbar=False, add_labels=False)
 				if season=="SON":
@@ -230,7 +228,7 @@ if __name__ == "__main__":
 				if season=="DJF":
 					plt.ylabel("LR75")
 				m.drawcoastlines()
-				p=m.contourf(x, y, np.where(lsm==1, f5["era5_trend"], np.nan), levels = np.linspace(vmin["lr700_500"],-vmin["lr700_500"],11),\
+				p=m.contourf(x, y, f5["era5_trend"], levels = np.linspace(vmin["lr700_500"],-vmin["lr700_500"],11),\
 					cmap=plt.get_cmap("RdBu_r"), extend="both")
 				xr.plot.contourf(xr.where(f5["era5_sig"]<=0.1, 1, 0), colors="none", hatches=[None,"////"], levels=[0.5,1.5], add_colorbar=False, add_labels=False)
 				if season=="SON":
@@ -245,7 +243,7 @@ if __name__ == "__main__":
 				if season=="DJF":
 					plt.ylabel("DP850")
 				m.drawcoastlines()
-				p=m.contourf(x, y, np.where(lsm==1, f6["era5_trend"], np.nan), levels = np.linspace(vmin["dp850"],-vmin["dp850"],11),\
+				p=m.contourf(x, y, f6["era5_trend"], levels = np.linspace(vmin["dp850"],-vmin["dp850"],11),\
 					cmap=plt.get_cmap("RdBu_r"), extend="both")
 				xr.plot.contourf(xr.where(f6["era5_sig"]<=0.1, 1, 0), colors="none", hatches=[None,"////"], levels=[0.5,1.5], add_colorbar=False, add_labels=False)
 				if season=="SON":
@@ -260,7 +258,7 @@ if __name__ == "__main__":
 				if season=="DJF":
 					plt.ylabel("T850")
 				m.drawcoastlines()
-				p=m.contourf(x, y, np.where(lsm==1, f7["era5_trend"], np.nan), levels = np.linspace(vmin["ta850"],-vmin["ta850"],11),\
+				p=m.contourf(x, y, f7["era5_trend"], levels = np.linspace(vmin["ta850"],-vmin["ta850"],11),\
 					cmap=plt.get_cmap("RdBu_r"), extend="both")
 				xr.plot.contourf(xr.where(f7["era5_sig"]<=0.1, 1, 0), colors="none", hatches=[None,"////"], levels=[0.5,1.5], add_colorbar=False, add_labels=False)
 				if season=="SON":
@@ -275,7 +273,7 @@ if __name__ == "__main__":
 				if season=="DJF":
 					plt.ylabel("T500")
 				m.drawcoastlines()
-				p=m.contourf(x, y, np.where(lsm==1, f8["era5_trend"], np.nan), levels = np.linspace(vmin["ta500"],-vmin["ta500"],11),\
+				p=m.contourf(x, y, f8["era5_trend"], levels = np.linspace(vmin["ta500"],-vmin["ta500"],11),\
 					cmap=plt.get_cmap("RdBu_r"), extend="both")
 				xr.plot.contourf(xr.where(f8["era5_sig"]<=0.1, 1, 0), colors="none", hatches=[None,"////"], levels=[0.5,1.5], add_colorbar=False, add_labels=False)
 				if season=="SON":
@@ -290,7 +288,7 @@ if __name__ == "__main__":
 				if season=="DJF":
 					plt.ylabel("Umean06")
 				m.drawcoastlines()
-				p=m.contourf(x, y, np.where(lsm==1, f9["era5_trend"], np.nan), levels = np.linspace(vmin["Umean06"],-vmin["Umean06"],11),\
+				p=m.contourf(x, y, f9["era5_trend"], levels = np.linspace(vmin["Umean06"],-vmin["Umean06"],11),\
 					cmap=plt.get_cmap("RdBu_r"), extend="both")
 				xr.plot.contourf(xr.where(f9["era5_sig"]<=0.1, 1, 0), colors="none", hatches=[None,"////"], levels=[0.5,1.5], add_colorbar=False, add_labels=False)
 				if season=="SON":
@@ -305,7 +303,7 @@ if __name__ == "__main__":
 				if season=="DJF":
 					plt.ylabel("S06")
 				m.drawcoastlines()
-				p=m.contourf(x, y, np.where(lsm==1, f10["era5_trend"], np.nan), levels = np.linspace(vmin["s06"],-vmin["s06"],11),\
+				p=m.contourf(x, y, f10["era5_trend"], levels = np.linspace(vmin["s06"],-vmin["s06"],11),\
 					cmap=plt.get_cmap("RdBu_r"), extend="both")
 				xr.plot.contourf(xr.where(f10["era5_sig"]<=0.1, 1, 0), colors="none", hatches=[None,"////"], levels=[0.5,1.5], add_colorbar=False, add_labels=False)
 				if season=="SON":
@@ -317,7 +315,7 @@ if __name__ == "__main__":
 
 
 
-		plt.savefig("/g/data/eg3/ab4502/figs/CMIP/spatial_ingredients_mean_trend_era5.png",bbox_inches="tight")
+		plt.savefig("/g/data/eg3/ab4502/figs/scw_projections_paper/sfig4.jpeg", quality=95, bbox_inches="tight")
 
 		#NOW, FOR LOGISTIC MODEL INGREDIENTS
 		fig=plt.figure(figsize=[8,10])
@@ -420,4 +418,4 @@ if __name__ == "__main__":
 
 
 
-		plt.savefig("/g/data/eg3/ab4502/figs/CMIP/spatial_logit_ingredients_mean_trend_era5.png",bbox_inches="tight")
+		plt.savefig("/g/data/eg3/ab4502/figs/scw_projections_paper/sfig5.jpeg", quality=95, bbox_inches="tight")

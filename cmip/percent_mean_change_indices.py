@@ -142,7 +142,7 @@ def plot_boxplot(v_list, models, data_list, cmip6, barpa, nrm_da, spatial_diff, 
 			ax.set_xticklabels(return_months(), rotation=0)
 			ax2.set_xticks([1,2])
 			ax2.set_xticklabels(["Annual\n(BDSD)","Annual\n(all diagnostics)"])
-			ax2.tick_params(axis="x", rotation=45)
+			ax2.tick_params(axis="x", rotation=20)
 		ax.set_yticks([-5,0,5])
 		ax2.set_yticks([-100,-50,0,50,100])
 		ax2.set_ylabel("% Change")
@@ -172,21 +172,30 @@ def plot_boxplot(v_list, models, data_list, cmip6, barpa, nrm_da, spatial_diff, 
 
 		#Plot a map of NRM regions at the bottom of the figure
 		ax.set_title(titles[i])
-		if plot_map:
-			for j in np.arange(4):
-				ax3=plt.subplot2grid((5,5), (4, i), colspan=1, rowspan=1)
-				xr.plot.contour((nrm_da["nrm"].isin([0,1,2,3])), levels=[0.5,1.5], colors="k", ax=ax3, add_labels=False)
-				xr.plot.contourf((nrm_da["nrm"].isin([i])), levels=[0,0.5], colors=["none","grey"],extend="max", ax=ax3,\
-				    add_labels=False, add_colorbar=False)
-				plt.tick_params(axis='both',which='both', bottom=False, top=False, labelbottom=False, left=False,\
-					labelleft=False)
-				plt.xlabel(titles[i][3:])
-	
+		#if plot_map:
+			#for j in np.arange(4):
+				#ax3=plt.subplot2grid((5,5), (4, i), colspan=1, rowspan=1)
+				#xr.plot.contour((nrm_da["nrm"].isin([0,1,2,3])), levels=[0.5,1.5], colors="k", ax=ax3, add_labels=False)
+				#xr.plot.contourf((nrm_da["nrm"].isin([i])), levels=[0,0.5], colors=["none","grey"],extend="max", ax=ax3,\
+				#    add_labels=False, add_colorbar=False)
+				#plt.tick_params(axis='both',which='both', bottom=False, top=False, labelbottom=False, left=False,\
+					#labelleft=False)
+				#plt.xlabel(titles[i][3:])
+	map_ax = [[0.08, 0.02, 0.2, 0.18], [0.29, 0.02, 0.2, 0.18], [0.51, 0.02, 0.2, 0.18], [0.72, 0.02, 0.2, 0.18]]
+	for i in np.arange(4):
+		ax3 = plt.axes(map_ax[i])
+		xr.plot.contour((nrm_da["nrm"].isin([0,1,2,3])), levels=[0.5,1.5], colors="k", ax=ax3, add_labels=False)
+		xr.plot.contourf((nrm_da["nrm"].isin([i])), levels=[0,0.5], colors=["none","grey"],extend="max", ax=ax3,\
+				 add_labels=False, add_colorbar=False)
+		plt.tick_params(axis='both',which='both', bottom=False, top=False, labelbottom=False, left=False,\
+				labelleft=False)
+		plt.xlabel(titles[i][3:])
+    
 	fig.text(0.025, 0.6, "Change in mean values\n(days with SCW environments per month)", rotation=90, va="center" , multialignment='center')
 	#fig.text(0.95, 0.5, "Change in mean values\n(days with SCW environments per year)", rotation=90, va="center", multialignment='center')
-	plt.subplots_adjust(hspace=0.2, top=0.95, right=0.85, left=0.1, bottom=0.01, wspace=0.1)
+	plt.subplots_adjust(hspace=0.3, top=0.95, right=0.85, left=0.1, bottom=0.1, wspace=0.1)
 
-	plt.savefig("/g/data/eg3/ab4502/figs/CMIP/percent_mean_change_indices.png")
+	plt.savefig("/g/data/eg3/ab4502/figs/scw_projections_paper/fig5.jpeg", quality=95, bbox_inches="tight")
 
 def plot_spatial_diffs(v_list, models, nrm_da, spatial_diffs, spatial_diff_sigs, mean_envs, min_envs=1):
 	seasons = ["DJF","MAM","JJA","SON"]
@@ -229,7 +238,7 @@ def plot_spatial_diffs(v_list, models, nrm_da, spatial_diffs, spatial_diff_sigs,
 	cax = plt.axes([0.2, 0.075, 0.6, 0.015])
 	cb = plt.colorbar(c, cax=cax, orientation = "horizontal")
 	cb.set_label("Mean environmental frequency change per season (days)")
-	plt.savefig("/g/data/eg3/ab4502/figs/CMIP/percent_mean_change_indices_map.png")
+	plt.savefig("/g/data/eg3/ab4502/figs/scw_projections_paper/fig4.jpeg", quality=95, bbox_inches="tight")
 
 def plot_lines(models, lr36_diff, mhgt_diff, ml_el_diff, qmean01_diff, srhe_left_diff, \
 	Umean06_diff, logit_aws_diff):
@@ -353,7 +362,7 @@ if __name__ == "__main__":
 
 	#Get NRM shapes with geopandas
 	f2 = geopandas.read_file(geopandas.datasets.get_path("naturalearth_lowres"))
-	f = geopandas.read_file("/home/548/ab4502/NRM_super_clusters/NRM_super_clusters.shp")
+	f = geopandas.read_file("/home/548/ab4502/working/NRM_super_clusters/NRM_super_clusters.shp")
 	shapes = [(shape, n) for n, shape in enumerate(f.geometry)]
 
 	#Load mean netcdf files

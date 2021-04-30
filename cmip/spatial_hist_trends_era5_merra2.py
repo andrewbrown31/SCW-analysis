@@ -73,6 +73,26 @@ def load_logit(model, ensemble, p, rcp=False):
 
 	return model_6hr
 
+def load_resampled_merra2(p, thresh, mean=False):
+	if p == "dcp":
+		var = "dcp"
+	elif p == "scp":
+		var = "scp_fixed"
+	elif p == "cs6":
+		var = "mucape*s06"
+	elif p == "mu_cape":
+		var = "mu_cape"
+	elif p == "logit":
+		var = "bdsd"
+		thresh = {"logit":0.83}
+	else:
+		var = p
+	if mean:
+		da = xr.open_dataset("/g/data/eg3/ab4502/ExtremeWind/aus/threshold_data/merra2_"+var+"_6hr_mean.nc")[var]
+	else:
+		da = xr.open_mfdataset("/g/data/eg3/ab4502/ExtremeWind/aus/threshold_data/merra2_"+var+"_6hr_"+str(thresh[p])+"*daily.nc", concat_dim="time", combine="by_coords")[var]
+	return da
+
 def load_resampled_era5(p, thresh, mean=False):
 	if p == "dcp":
 		var = "dcp"
@@ -92,10 +112,10 @@ def load_resampled_era5(p, thresh, mean=False):
 
 def trend_linear(da, y1, y2, y3, y4, seasons, s, mod, p, N=1000):
 
-	da = (era5.sel({"time":\
-            (np.in1d(era5["time.month"], seasons[s])) &\
-            (era5["time.year"] >= y1) &\
-            (era5["time.year"] <= y4) })).resample({"time":"1Y"}).sum("time")
+	da = (da.sel({"time":\
+            (np.in1d(da["time.month"], seasons[s])) &\
+            (da["time.year"] >= y1) &\
+            (da["time.year"] <= y4) })).resample({"time":"1Y"}).sum("time")
 	da = da.assign_coords({"time":np.arange(len(da["time"]))})
 
 	da_trend = da.polyfit("time",deg=1)["polyfit_coefficients"].sel({"degree":1}).values
@@ -154,80 +174,128 @@ if __name__ == "__main__":
 
 			if freq:
 				era5 = load_resampled_era5(p, thresh).persist()
+				merra2 = load_resampled_merra2(p, thresh).persist()
 			else:
 				era5 = load_resampled_era5(p, thresh, mean=True).persist()
+				merra2 = load_resampled_merra2(p, thresh, mean=True).persist()
 
-			for s in ["DJF","MAM","JJA","SON"]:
-				trend_compsite(era5, y1, y2, y3, y4, seasons, s, "era5", p)
+			for s in ["DJF","SON"]:
+				#trend_linear(era5, y1, y2, y3, y4, seasons, s, "era5", p)
+				trend_linear(merra2, y1, y2, y3, y4, seasons, s, "merra2", p)
 
 	#Now plot
 	if plot_final:
-		#m = Basemap(llcrnrlon=130, llcrnrlat=-45, urcrnrlon=155, \
-			#urcrnrlat=-20,projection="cyl",resolution="i")
+		#Now plot with trend using linear least-squares regression
+		fig=plt.figure(figsize=[8,8])
+		#fig=plt.figure(figsize=[10,12])
 		m = Basemap(llcrnrlon=110, llcrnrlat=-45, urcrnrlon=160, \
 			urcrnrlat=-10,projection="cyl")
-		fig=plt.figure(figsize=[8,8])
-		#fig=plt.figure(figsize=[12,12])
 		a=ord("a"); alph=[chr(i) for i in range(a,a+26)]; alph = [alph[i]+")" for i in np.arange(len(alph))]
-		pos = [1,5,9,13,2,6,10,14,3,7,11,15,4,8,12,16]
-		#pos = [1,5,9,2,6,10,3,7,11,4,8,12]
+		#pos = [1,5,9,13,2,6,10,14,3,7,11,15,4,8,12,16]
+		pos = [1,5,9,13,3,7,11,15,2,6,10,14,4,8,12,16]
 		cnt=1
-		vmin = -9; vmax = 9
+		vmin = -0.4; vmax = 0.4
 		levs=10
 		cmip_scale = 1
-		for season in ["DJF","MAM","JJA","SON"]:
+		for season in ["DJF","SON"]:
 				plt.subplot(4,4,pos[cnt-1])
-				plt.title(season)
-				f4 = xr.open_dataset("/g/data/eg3/ab4502/ExtremeWind/trends/spatial_hist_trend_era5_"+season+"_logit.nc")
+				plt.title(season + " ERA5")
+				f4 = xr.open_dataset("/g/data/eg3/ab4502/ExtremeWind/trends/spatial_hist_trend_linear_era5_"+season+"_logit.nc")
 				x,y = np.meshgrid(f4.lon.values,f4.lat.values)
 				if season=="DJF":
 					plt.ylabel("BDSD")
 				m.drawcoastlines()
 				p=m.contourf(x, y, f4["era5_trend"], levels = np.linspace(vmin,vmax,levs),\
 					cmap=plt.get_cmap("RdBu_r"), extend="both")
-				xr.plot.contourf(xr.where(f4["era5_sig"]<=0.1, 1, 0), colors="none", hatches=[None,"////"], levels=[0.5,1.5], add_colorbar=False, add_labels=False)
+				xr.plot.contourf(xr.where( (f4["era5_sig"]<=0.05) | (f4["era5_sig"]>=0.95), 1, 0), colors="none",\
+				    hatches=[None,"////"], levels=[0.5,1.5], add_colorbar=False, add_labels=False)
 				plt.annotate(alph[pos[cnt-1]-1], xy=(0.05, 0.05), xycoords='axes fraction') 
 				cnt=cnt+1
 
 				plt.subplot(4,4,pos[cnt-1])
-				f1 = xr.open_dataset("/g/data/eg3/ab4502/ExtremeWind/trends/spatial_hist_trend_era5_"+season+"_t_totals.nc")
+				f1 = xr.open_dataset("/g/data/eg3/ab4502/ExtremeWind/trends/spatial_hist_trend_linear_era5_"+season+"_t_totals.nc")
 				if season=="DJF":
 					plt.ylabel("T-Totals")
 				m.drawcoastlines()
 				p=m.contourf(x, y, f1["era5_trend"], levels = np.linspace(vmin,vmax,levs),\
 					cmap=plt.get_cmap("RdBu_r"), extend="both")
-				xr.plot.contourf(xr.where(f1["era5_sig"]<=0.1, 1, 0), colors="none", hatches=[None,"////"], levels=[0.5,1.5], add_colorbar=False, add_labels=False)
+				xr.plot.contourf(xr.where( (f1["era5_sig"]<=0.05) | (f1["era5_sig"]>=0.95), 1, 0), colors="none",\
+				    hatches=[None,"////"], levels=[0.5,1.5], add_colorbar=False, add_labels=False)
 				plt.annotate(alph[pos[cnt-1]-1], xy=(0.05, 0.05), xycoords='axes fraction') 
 				cnt=cnt+1
 
 				plt.subplot(4,4,pos[cnt-1])
-				f2 = xr.open_dataset("/g/data/eg3/ab4502/ExtremeWind/trends/spatial_hist_trend_era5_"+season+"_eff_sherb.nc")
+				f2 = xr.open_dataset("/g/data/eg3/ab4502/ExtremeWind/trends/spatial_hist_trend_linear_era5_"+season+"_eff_sherb.nc")
 				if season=="DJF":
 					plt.ylabel("SHERBE")
 				m.drawcoastlines()
 				p=m.contourf(x, y, f2["era5_trend"], levels = np.linspace(vmin,vmax,levs),\
 					cmap=plt.get_cmap("RdBu_r"), extend="both")
-				xr.plot.contourf(xr.where(f2["era5_sig"]<=0.1, 1, 0), colors="none", hatches=[None,"////"], levels=[0.5,1.5], add_colorbar=False, add_labels=False)
+				xr.plot.contourf(xr.where( (f2["era5_sig"]<=0.05) | (f2["era5_sig"]>=0.95), 1, 0), colors="none",\
+				    hatches=[None,"////"], levels=[0.5,1.5], add_colorbar=False, add_labels=False)
 				plt.annotate(alph[pos[cnt-1]-1], xy=(0.05, 0.05), xycoords='axes fraction') 
 				cnt=cnt+1
 
 				plt.subplot(4,4,pos[cnt-1])
-				f3 = xr.open_dataset("/g/data/eg3/ab4502/ExtremeWind/trends/spatial_hist_trend_era5_"+season+"_dcp.nc")
+				f3 = xr.open_dataset("/g/data/eg3/ab4502/ExtremeWind/trends/spatial_hist_trend_linear_era5_"+season+"_dcp.nc")
 				if season=="DJF":
 					plt.ylabel("DCP")
 				m.drawcoastlines()
 				p=m.contourf(x, y, f3["era5_trend"], levels = np.linspace(vmin,vmax,levs),\
 					cmap=plt.get_cmap("RdBu_r"), extend="both")
-				xr.plot.contourf(xr.where(f3["era5_sig"]<=0.1, 1, 0), colors="none", hatches=[None,"////"], levels=[0.5,1.5], add_colorbar=False, add_labels=False)
+				xr.plot.contourf(xr.where( (f3["era5_sig"]<=0.05) | (f3["era5_sig"]>=0.95), 1, 0), colors="none",\
+				    hatches=[None,"////"], levels=[0.5,1.5], add_colorbar=False, add_labels=False)
+				plt.annotate(alph[pos[cnt-1]-1], xy=(0.05, 0.05), xycoords='axes fraction') 
+				cnt=cnt+1
+
+		for season in ["DJF","SON"]:
+				plt.subplot(4,4,pos[cnt-1])
+				plt.title(season + " MERRA")
+				f4 = xr.open_dataset("/g/data/eg3/ab4502/ExtremeWind/trends/spatial_hist_trend_linear_merra2_"+season+"_logit.nc")
+				x,y = np.meshgrid(f4.lon.values,f4.lat.values)
+				m.drawcoastlines()
+				p=m.contourf(x, y, f4["merra2_trend"], levels = np.linspace(vmin,vmax,levs),\
+					cmap=plt.get_cmap("RdBu_r"), extend="both")
+				xr.plot.contourf(xr.where( (f4["merra2_sig"]<=0.05) | (f4["merra2_sig"]>=0.95), 1, 0), colors="none",\
+				    hatches=[None,"////"], levels=[0.5,1.5], add_colorbar=False, add_labels=False)
+				plt.annotate(alph[pos[cnt-1]-1], xy=(0.05, 0.05), xycoords='axes fraction') 
+				cnt=cnt+1
+
+				plt.subplot(4,4,pos[cnt-1])
+				f1 = xr.open_dataset("/g/data/eg3/ab4502/ExtremeWind/trends/spatial_hist_trend_linear_merra2_"+season+"_t_totals.nc")
+				m.drawcoastlines()
+				p=m.contourf(x, y, f1["merra2_trend"], levels = np.linspace(vmin,vmax,levs),\
+					cmap=plt.get_cmap("RdBu_r"), extend="both")
+				xr.plot.contourf(xr.where( (f1["merra2_sig"]<=0.05) | (f1["merra2_sig"]>=0.95), 1, 0), colors="none",\
+				    hatches=[None,"////"], levels=[0.5,1.5], add_colorbar=False, add_labels=False)
+				plt.annotate(alph[pos[cnt-1]-1], xy=(0.05, 0.05), xycoords='axes fraction') 
+				cnt=cnt+1
+
+				plt.subplot(4,4,pos[cnt-1])
+				f2 = xr.open_dataset("/g/data/eg3/ab4502/ExtremeWind/trends/spatial_hist_trend_linear_merra2_"+season+"_eff_sherb.nc")
+				m.drawcoastlines()
+				p=m.contourf(x, y, f2["merra2_trend"], levels = np.linspace(vmin,vmax,levs),\
+					cmap=plt.get_cmap("RdBu_r"), extend="both")
+				xr.plot.contourf(xr.where( (f2["merra2_sig"]<=0.05) | (f2["merra2_sig"]>=0.95), 1, 0), colors="none",\
+				    hatches=[None,"////"], levels=[0.5,1.5], add_colorbar=False, add_labels=False)
+				plt.annotate(alph[pos[cnt-1]-1], xy=(0.05, 0.05), xycoords='axes fraction') 
+				cnt=cnt+1
+
+				plt.subplot(4,4,pos[cnt-1])
+				f3 = xr.open_dataset("/g/data/eg3/ab4502/ExtremeWind/trends/spatial_hist_trend_linear_merra2_"+season+"_dcp.nc")
+				m.drawcoastlines()
+				p=m.contourf(x, y, f3["merra2_trend"], levels = np.linspace(vmin,vmax,levs),\
+					cmap=plt.get_cmap("RdBu_r"), extend="both")
+				xr.plot.contourf(xr.where( (f3["merra2_sig"]<=0.05) | (f3["merra2_sig"]>=0.95), 1, 0), colors="none",\
+				    hatches=[None,"////"], levels=[0.5,1.5], add_colorbar=False, add_labels=False)
 				plt.annotate(alph[pos[cnt-1]-1], xy=(0.05, 0.05), xycoords='axes fraction') 
 				cnt=cnt+1
 
 
 		cax = plt.axes([0.2,0.25,0.6,0.02])
 		c=plt.colorbar(p, cax=cax, orientation="horizontal", extend="max" )
-		c.set_label("Seasonal frequency (days)")
+		c.set_label("Linear trend (days per year)")
+		c.ax.set_xticklabels([ "{:0.2f}".format(x) for x in  np.linspace(vmin,vmax,levs)])
 		plt.subplots_adjust(top=0.9, bottom=0.3, wspace=0.1,left=0.1, hspace=0.3)
 
-		plt.savefig("/g/data/eg3/ab4502/figs/scw_projections_paper/fig3.jpeg", quality=95, bbox_inches="tight")
-		plt.close()
-
+		plt.savefig("/g/data/eg3/ab4502/figs/scw_projections_paper/sfig6.jpeg",quality=95,bbox_inches="tight")

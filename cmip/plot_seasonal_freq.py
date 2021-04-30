@@ -134,7 +134,6 @@ def plot_mean_spatial_freq_v2(data, p, models, lon, lat, outname, vmin=None, vma
 	fig.text(0.05,0.55,"SHERBE",ha="center",size=16, va="center",rotation=90)
 	fig.text(0.05,0.4,"DCP",ha="center",size=16, va="center",rotation=90)        
 	fig.text(0.05,0.85,"BDSD",ha="center",size=16, va="center",rotation=90)        
-	plt.savefig("/g/data/eg3/ab4502/figs/CMIP/"+outname+".png", bbox_inches="tight")
 
 def plot_mean_spatial_freq(data, p, models, lon, lat, outname, vmin=None, vmax=None):
 
@@ -188,7 +187,6 @@ def plot_mean_spatial_freq(data, p, models, lon, lat, outname, vmin=None, vmax=N
 	c=plt.colorbar(p, cax=cax, orientation="horizontal", extend="max" )
 	c.set_label("Seasonal frequency")
 	plt.subplots_adjust(top=0.95, bottom=0.3, wspace=0.1)
-	plt.savefig("/g/data/eg3/ab4502/figs/CMIP/"+outname+".png", bbox_inches="tight")
 
 if __name__ == "__main__":
 
@@ -220,6 +218,7 @@ if __name__ == "__main__":
 		plot_mean_spatial_freq_v2(hist, p, models,\
 			hist[0][0].lon.values, hist[0][0].lat.values,\
 			"seasonal_freq_multiple_p", vmin=0, vmax=90)
+		plt.savefig("/g/data/eg3/ab4502/figs/scw_projections_paper/sfig7.jpeg", quality=95, bbox_inches="tight")
 
 	else:
 		models = [ ["ERA5",""] ,\

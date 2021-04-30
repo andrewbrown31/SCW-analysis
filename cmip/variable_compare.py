@@ -137,7 +137,6 @@ def plot_mean(models, hist_y1, hist_y2, outname, variables, qm=True):
 			#cnt=cnt+1
 
 	plt.subplots_adjust(hspace=0.2, wspace=0.2)
-	plt.savefig("/g/data/eg3/ab4502/figs/CMIP/"+outname+".png", bbox_inches="tight")
 
 if __name__ == "__main__":
 
@@ -160,8 +159,12 @@ if __name__ == "__main__":
 
 	plot_mean(models, hist_y1, hist_y2,\
 		"mean_index_variable_compare",["eff_sherb","t_totals","dcp"], qm=False)
+	plt.savefig("/g/data/eg3/ab4502/figs/CMIP/"+"mean_index_variable_compare"+".png", bbox_inches="tight"); plt.close()
+    
 	plot_mean(models, hist_y1, hist_y2,\
 		"mean_logit_variable_compare",["Umean800_600","lr13","rhmin13","srhe_left","q_melting","eff_lcl"], qm=False)
+	plt.savefig("/g/data/eg3/ab4502/figs/scw_projections_paper/sfig3.jpeg", quality=95, bbox_inches="tight"); plt.close()
+
 	plot_mean(models, hist_y1, hist_y2,\
 		"mean_variable_compare",["mu_cape","dcape", "ebwd", "lr03", "lr700_500", "dp850", "ta850", "ta500", "Umean06", "s06"], qm=False)
-
+	plt.savefig("/g/data/eg3/ab4502/figs/scw_projections_paper/sfig2.jpeg", quality=95, bbox_inches="tight"); plt.close()

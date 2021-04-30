@@ -170,4 +170,4 @@ plt.subplots_adjust(hspace=0.5, wspace=0.4, bottom=0.2)
 fig.text(0.025, 0.5, "Number of environments", ha="center", va="center", rotation=90, color=c1)
 fig.text(0.975, 0.5, "Number of events", ha="center", va="center", rotation=90, color=c2)
 
-plt.savefig("/g/data/eg3/ab4502/figs/ExtremeWind/era5_variability.png", bbox_inches="tight")
+plt.savefig("/g/data/eg3/ab4502/figs/scw_projections_paper/fig2.jpeg", quality=95, bbox_inches="tight")

@@ -1630,6 +1630,10 @@ def nc_attributes(param):
 		units = ""
 		long_name = "derecho_composite_parameter"
 		least_significant_digit = 8
+	elif param == "mod_cin":
+		units = "J/kg"
+		long_name = "model_cin"
+		least_significant_digit = 1
 	elif param == "mod_cape":
 		units = "J/kg"
 		long_name = "model_cape"
@@ -1958,10 +1962,6 @@ def nc_attributes(param):
 		units = "degC"
 		long_name = "temperature_at_850hPa"
 		least_significant_digit = 3
-	elif param == "ta700":
-		units = "degC"
-		long_name = "temperature_at_700hPa"
-		least_significant_digit = 3
 	elif param == "t500":
 		units = "degC"
 		long_name = "temperature_at_500hPa"
@@ -2238,17 +2238,65 @@ def nc_attributes(param):
 		units = "s-1 * 1e5"
 		long_name = "horizontal_velocity_gradient_tensor_magnitude_10m"
 		least_significant_digit = 8
+	elif param == "ta1000":
+		units = "degC"
+		long_name = "air_temp_1000hPa"
+		least_significant_digit = 2
 	elif param == "ta850":
 		units = "degC"
-		long_name = "air_temp_850"
+		long_name = "air_temp_850hPa"
+		least_significant_digit = 2
+	elif param == "ta700":
+		units = "degC"
+		long_name = "air_temp_700hPa"
 		least_significant_digit = 2
 	elif param == "ta500":
 		units = "degC"
-		long_name = "air_temp_500"
+		long_name = "air_temp_500hPa"
 		least_significant_digit = 2
 	elif param == "dp850":
 		units = "degC"
 		long_name = "dewpoint_850"
+		least_significant_digit = 2
+	elif param == "u500":
+		units = "m/s"
+		long_name = "uwind500hpa"
+		least_significant_digit = 2
+	elif param == "z500":
+		units = "m^2/s^2"
+		long_name = "geopotential500hpa"
+		least_significant_digit = 2
+	elif param == "v500":
+		units = "m/s"
+		long_name = "vwind500hpa"
+		least_significant_digit = 2
+	elif param == "hus1000":
+		units = "g/kg"
+		long_name = "specific_humidity1000hPa"
+		least_significant_digit = 7
+	elif param == "hus850":
+		units = "g/kg"
+		long_name = "specific_humidity850hPa"
+		least_significant_digit = 7
+	elif param == "hus700":
+		units = "g/kg"
+		long_name = "specific_humidity700hPa"
+		least_significant_digit = 7
+	elif param == "hus500":
+		units = "g/kg"
+		long_name = "specific_humidity500hPa"
+		least_significant_digit = 7
+	elif param == "mag_tfp":
+		units = "100 km^-3"
+		long_name = "magnitude_of_the_gradient_of_the_thermal_front_parameter"
+		least_significant_digit = 12
+	elif param == "tfp":
+		units = "100 km^-2"
+		long_name = "thermal_front_parameter"
+		least_significant_digit = 12
+	elif param == "mslp":
+		units = "hPa"
+		long_name = "mean_sea_level_pressure"
 		least_significant_digit = 2
 	elif param == "bdsd":
 		units = ""

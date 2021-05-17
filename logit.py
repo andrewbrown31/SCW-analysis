@@ -808,6 +808,71 @@ def plot_roc():
 	plot_roc_fn(era5_sta, "dcp", "is_sta", -1000, 750, -200, 200, 2, 2, 4, "ERA5 Reported", "DCP")
 	plt.savefig("figA5.eps", bbox_inches="tight", dpi=300)
 
+def add_logit(df,preds,outname,cv=True):
+	logit = LogisticRegression(class_weight="balanced", solver="liblinear",\
+		max_iter=1000)
+	if cv:
+		df.loc[:,outname] = logit.fit(df.iloc[0:int(df.shape[0]/2)][preds], df.iloc[0:int(df.shape[0]/2)]["is_conv_aws"]).predict_proba(df[preds])[:,1]
+	else:
+		df.loc[:,outname] = logit.fit(df[preds], df["is_conv_aws"]).predict_proba(df[preds])[:,1]
+		
+	return df
+
+def temp_roc_plot(df,p,col,cv=True):
+	print("Plotting ROC curve and calculating optimal HSS for "+p)
+	pool = multiprocessing.Pool()
+	test_thresh = np.linspace(df.loc[:,p].min(), np.percentile(df.loc[:,p],99.95), 1000)
+	if cv:
+		iterable = itertools.product(test_thresh, [df.iloc[int(df.shape[0]/2)+1:-1]], [p], ["is_conv_aws"], ["hss"], [0.67])
+		res = pool.map(pss, iterable)
+		hss_str=np.max([res[i][0] for i in np.arange(len(res))])
+		fpr, tpr, thresh = roc_curve(df.iloc[int(df.shape[0]/2)+1:-1]["is_conv_aws"], df.iloc[int(df.shape[0]/2)+1:-1][p])
+	else:
+		iterable = itertools.product(test_thresh, [df], [p], ["is_conv_aws"], ["hss"], [0.67])
+		res = pool.map(pss, iterable)
+		hss_str=np.max([res[i][0] for i in np.arange(len(res))])
+		fpr, tpr, thresh = roc_curve(df["is_conv_aws"], df[p])
+	roc_auc = auc(fpr, tpr)
+	plt.plot(fpr, tpr, color=col,
+		 lw=2, label='ROC curve '+p+' (area = %0.2f, HSS=%0.3f)' % (roc_auc, hss_str))
+	plt.plot([0, 1], [0, 1], color='k', lw=2, linestyle='--')
+	plt.xlim([0.0, 1.0])
+	plt.ylim([0.0, 1.05])
+	pool.close()
+
+def plot_roc_barra_logit_aws(cv=True):
+
+	_, barra_aws, barra_sta = optimise_pss("/g/data/eg3/ab4502/ExtremeWind/points/"+\
+			"barra_allvars_v3_2005_2018.pkl", T=1000, compute=False, l_thresh=2,\
+			is_pss="hss", model_name="barra_fc_v5")
+
+	barra_aws = add_logit(barra_aws, ["ebwd"], "EBWD",cv)
+	barra_aws = add_logit(barra_aws, ["ebwd","lr13"], "EBWD+LR13",cv)
+	barra_aws = add_logit(barra_aws, ["ebwd","lr13","ml_el"], "EBWD+LR13+MLEL",cv)
+	barra_aws = add_logit(barra_aws, ["ebwd","lr13","ml_el","Umean03"], "EBWD+LR13+MLEL+Umean03",cv)
+	barra_aws = add_logit(barra_aws, ["ebwd","lr13","ml_el","Umean03","rhmin03"], "EBWD+LR13+MLEL+Umean03+RHMIN03",cv)
+	barra_aws = add_logit(barra_aws, ["ebwd","lr13","Umean03"], "EBWD+LR13+Umean03",cv)
+
+	plt.figure(figsize=[10,8]); 
+	matplotlib.rcParams.update({'font.size': 12})
+	temp_roc_plot(barra_aws,"EBWD",plt.get_cmap("Blues")(0.3),cv)
+	temp_roc_plot(barra_aws,"EBWD+LR13",plt.get_cmap("Blues")(0.45),cv)
+	temp_roc_plot(barra_aws,"EBWD+LR13+MLEL",plt.get_cmap("Blues")(0.6),cv)
+	temp_roc_plot(barra_aws,"EBWD+LR13+MLEL+Umean03",plt.get_cmap("Blues")(0.75),cv)
+	temp_roc_plot(barra_aws,"EBWD+LR13+MLEL+Umean03+RHMIN03",plt.get_cmap("Blues")(0.9),cv)
+	temp_roc_plot(barra_aws,"EBWD+LR13+Umean03",plt.get_cmap("Blues")(0.99),cv)
+	temp_roc_plot(barra_aws,"mlcape*s06",plt.get_cmap("Reds")(0.2),cv)
+	temp_roc_plot(barra_aws,"eff_sherb",plt.get_cmap("Reds")(0.4),cv)
+	temp_roc_plot(barra_aws,"dcp",plt.get_cmap("Reds")(0.6),cv)
+	temp_roc_plot(barra_aws,"t_totals",plt.get_cmap("Reds")(0.8),cv)
+    
+	plt.legend(loc="lower right", fontsize="x-small")
+	plt.axhline(0.667, color="k", linestyle="--")
+	if cv:
+		plt.savefig("roc_cv.jpg", bbox_inches="tight", quality=95)
+	else:
+		plt.savefig("roc.jpg", bbox_inches="tight", quality=95)
+
 def plot_roc_fn(df, p, event, end_p, step_p, end_logit, step_logit, rows, cols, subplot_no, title, pname):
 
 	plt.subplot(2,2,subplot_no)
@@ -845,12 +910,11 @@ def plot_roc_fn(df, p, event, end_p, step_p, end_logit, step_logit, rows, cols, 
 if __name__ == "__main__":
 
 	#run_logit()
-	#TODO: As well as choosing models by the HSS, use bootstrapping to decide if it is a statistically significant increase?
 	#fwd_selection("era5", "is_sta", False)
 	#fwd_selection("barra", "is_sta", False)
 	#fwd_selection("barra", "is_conv_aws", False)
 	#fwd_selection("era5", "is_conv_aws", False)
 
 	#logit_explicit_cv("logit_cv_skill_v3.csv")
-	plot_roc()
+	plot_roc_barra_logit_aws(cv=False)
 	#colin_test()

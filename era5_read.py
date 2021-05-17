@@ -195,28 +195,28 @@ def read_era5_rt52(domain,times,pres=True,delta_t=1):
 			hur_file = nc.Dataset(glob.glob("/g/data/rt52/era5/pressure-levels/reanalysis/r/"+date[0:4]+\
 				"/r_era5_oper_pl_"+date+"*.nc")[0])
 
-		uas_file = nc.Dataset(glob.glob("/g/data/ub4/era5/netcdf/surface/u10/"+date[0:4]+\
-			"/u10_era5_global_"+date+"*.nc")[0])
-		vas_file = nc.Dataset(glob.glob("/g/data/ub4/era5/netcdf/surface/v10/"+date[0:4]+\
-			"/v10_era5_global_"+date+"*.nc")[0])
-		ta2d_file = nc.Dataset(glob.glob("/g/data/ub4/era5/netcdf/surface/d2m/"+date[0:4]+\
-			"/d2m_era5_global_"+date+"*.nc")[0])
-		tas_file = nc.Dataset(glob.glob("/g/data/ub4/era5/netcdf/surface/t2m/"+date[0:4]+\
-			"/t2m_era5_global_"+date+"*.nc")[0])
-		ps_file = nc.Dataset(glob.glob("/g/data/ub4/era5/netcdf/surface/sp/"+date[0:4]+\
-			"/sp_era5_global_"+date+"*.nc")[0])
-		cape_file = nc.Dataset(glob.glob("/g/data/ub4/era5/netcdf/surface/cape/"+date[0:4]+\
-			"/cape_era5_global_"+date+"*.nc")[0])
-		cp_file = xr.open_dataset(glob.glob("/g/data/ub4/era5/netcdf/surface/cp/"+date[0:4]+\
-			"/cp_era5_global_"+date+"*.nc")[0]).isel({"longitude":sfc_lon_ind, "latitude":sfc_lat_ind})\
+		uas_file = nc.Dataset(glob.glob("/g/data/rt52/era5/single-levels/reanalysis/10u/"+date[0:4]+\
+			"/10u_era5_oper_sfc_"+date+"*.nc")[0])
+		vas_file = nc.Dataset(glob.glob("/g/data/rt52/era5/single-levels/reanalysis/10v/"+date[0:4]+\
+			"/10v_era5_oper_sfc_"+date+"*.nc")[0])
+		ta2d_file = nc.Dataset(glob.glob("/g/data/rt52/era5/single-levels/reanalysis/2d/"+date[0:4]+\
+			"/2d_era5_oper_sfc_"+date+"*.nc")[0])
+		tas_file = nc.Dataset(glob.glob("/g/data/rt52/era5/single-levels/reanalysis/2t/"+date[0:4]+\
+			"/2t_era5_oper_sfc_"+date+"*.nc")[0])
+		ps_file = nc.Dataset(glob.glob("/g/data/rt52/era5/single-levels/reanalysis/sp/"+date[0:4]+\
+			"/sp_era5_oper_sfc_"+date+"*.nc")[0])
+		cape_file = nc.Dataset(glob.glob("/g/data/rt52/era5/single-levels/reanalysis/cape/"+date[0:4]+\
+			"/cape_era5_oper_sfc_"+date+"*.nc")[0])
+		cp_file = (xr.open_dataset(glob.glob("/g/data/rt52/era5/single-levels/reanalysis/mcpr/"+date[0:4]+\
+			"/mcpr_era5_oper_sfc_"+date+"*.nc")[0]).isel({"longitude":sfc_lon_ind, "latitude":sfc_lat_ind}) * 3600)\
 			    .resample(indexer={"time":str(delta_t)+"H"},\
-			    label="right",closed="right").sum("time")["cp"][1:,:,:]
-		tp_file = xr.open_dataset(glob.glob("/g/data/ub4/era5/netcdf/surface/tp/"+date[0:4]+\
-			"/tp_era5_global_"+date+"*.nc")[0]).isel({"longitude":sfc_lon_ind, "latitude":sfc_lat_ind})\
+			    label="right",closed="right").sum("time")["mcpr"][1:,:,:]
+		tp_file = (xr.open_dataset(glob.glob("/g/data/rt52/era5/single-levels/reanalysis/mtpr/"+date[0:4]+\
+			"/mtpr_era5_oper_sfc_"+date+"*.nc")[0]).isel({"longitude":sfc_lon_ind, "latitude":sfc_lat_ind}) * 3600)\
 			    .resample(indexer={"time":str(delta_t)+"H"},\
-			    label="right",closed="right").sum("time")["tp"][1:,:,:]
-		wg10_file = nc.Dataset(glob.glob("/g/data/ub4/era5/netcdf/surface/fg10/"+date[0:4]+\
-			"/fg10_era5_global_"+date+"*.nc")[0])
+			    label="right",closed="right").sum("time")["mtpr"][1:,:,:]
+		wg10_file = nc.Dataset(glob.glob("/g/data/rt52/era5/single-levels/reanalysis/10fg/"+date[0:4]+\
+			"/10fg_era5_oper_sfc_"+date+"*.nc")[0])
 
 		#Get times to load in from file
 		if pres:
@@ -414,8 +414,8 @@ def read_era5(domain,times,pres=True,delta_t=1):
 
 def get_pressure(top):
 	#Returns [no of levels, levels, indices below "top"]
-	ta_file = nc.Dataset(glob.glob("/g/data/ub4/era5/netcdf/pressure/t/2012/"+\
-"t_era5_aus_"+"201201"+"*.nc")[0])
+	ta_file = nc.Dataset(glob.glob("/g/data/rt52/era5/pressure-levels/reanalysis/t/2012/"+\
+"t_era5_oper_pl_"+"201201"+"*.nc")[0])
 	p =ta_file["level"][:]
 	p_ind = np.where(p>=top)[0]
 	ta_file.close()
@@ -443,8 +443,8 @@ def reform_lsm(lon,lat):
 
 def get_terrain():
 	#Load the ERA-Interim surface geopetential height as terrain height
-	terrain_file = nc.Dataset("/g/data/ub4/era5/netcdf/static_era5.nc")
-	terrain = np.squeeze(terrain_file.variables["z"][:])/9.8
+	terrain_file = nc.Dataset("/g/data/rt52/era5/single-levels/reanalysis/z/1979/z_era5_oper_sfc_19790101-19790131.nc")
+	terrain = np.squeeze(terrain_file.variables["z"][0])/9.8
 	terrain_lon = np.squeeze(terrain_file.variables["longitude"][:])
 	terrain_lat = np.squeeze(terrain_file.variables["latitude"][:])
 	terrain_file.close()
@@ -465,8 +465,8 @@ def format_dates(x):
 	return dt.datetime.strftime(x,"%Y") + dt.datetime.strftime(x,"%m")
 
 def get_lat_lon_sfc():
-	uas_file = nc.Dataset(glob.glob("/g/data/ub4/era5/netcdf/surface/u10/2012/"+\
-"u10_era5_global_"+"201201"+"*.nc")[0])
+	uas_file = nc.Dataset(glob.glob("/g/data/rt52/era5/single-levels/reanalysis/10u/2012/"+\
+"10u_era5_oper_sfc_"+"201201"+"*.nc")[0])
 	lon = uas_file["longitude"][:]
 	lat = uas_file["latitude"][:]
 	uas_file.close()

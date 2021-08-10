@@ -134,7 +134,7 @@ def main():
 	elif model == "era5":
 		if era5_proj == "rt52":
 			ta,temp1,hur,hgt,terrain,p,ps,ua,va,uas,vas,tas,ta2d,\
-				cp,tp,wg10,mod_cape,lon,lat,date_list = \
+				cp,tp,wg10,mod_cape,sst,lon,lat,date_list = \
 				read_era5_rt52(domain,time,delta_t=delta_t)
 		elif era5_proj == "eg3":
 			ta,temp1,hur,hgt,terrain,p,ps,ua,va,uas,vas,tas,ta2d,\

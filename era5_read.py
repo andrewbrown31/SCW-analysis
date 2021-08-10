@@ -171,6 +171,7 @@ def read_era5_rt52(domain,times,pres=True,delta_t=1):
 		wap = np.empty((len(date_list),no_p,len(lat_ind),len(lon_ind)))
 	uas = np.empty((len(date_list),len(sfc_lat_ind),len(sfc_lon_ind)))
 	vas = np.empty((len(date_list),len(sfc_lat_ind),len(sfc_lon_ind)))
+	sst = np.empty((len(date_list),len(sfc_lat_ind),len(sfc_lon_ind)))    
 	ps = np.empty((len(date_list),len(sfc_lat_ind),len(sfc_lon_ind)))
 	cp = np.zeros(ps.shape) * np.nan
 	tp = np.zeros(ps.shape) * np.nan
@@ -199,6 +200,8 @@ def read_era5_rt52(domain,times,pres=True,delta_t=1):
 			"/10u_era5_oper_sfc_"+date+"*.nc")[0])
 		vas_file = nc.Dataset(glob.glob("/g/data/rt52/era5/single-levels/reanalysis/10v/"+date[0:4]+\
 			"/10v_era5_oper_sfc_"+date+"*.nc")[0])
+		sst_file = nc.Dataset(glob.glob("/g/data/rt52/era5/single-levels/reanalysis/sst/"+date[0:4]+\
+			"/sst_era5_oper_sfc_"+date+"*.nc")[0])        
 		ta2d_file = nc.Dataset(glob.glob("/g/data/rt52/era5/single-levels/reanalysis/2d/"+date[0:4]+\
 			"/2d_era5_oper_sfc_"+date+"*.nc")[0])
 		tas_file = nc.Dataset(glob.glob("/g/data/rt52/era5/single-levels/reanalysis/2t/"+date[0:4]+\
@@ -248,21 +251,21 @@ def read_era5_rt52(domain,times,pres=True,delta_t=1):
 			dp[date_ind,:,:,:] = get_dp(ta[date_ind,:,:,:],hur[date_ind,:,:,:])
 		uas[date_ind,:,:] = uas_file["u10"][time_ind,sfc_lat_ind,sfc_lon_ind]
 		vas[date_ind,:,:] = vas_file["v10"][time_ind,sfc_lat_ind,sfc_lon_ind]
+		sst[date_ind,:,:] = sst_file["sst"][time_ind,sfc_lat_ind,sfc_lon_ind] - 273.15        
 		tas[date_ind,:,:] = tas_file["t2m"][time_ind,sfc_lat_ind,sfc_lon_ind] - 273.15
 		ta2d[date_ind,:,:] = ta2d_file["d2m"][time_ind,sfc_lat_ind,sfc_lon_ind] - 273.15
 		ps[date_ind,:,:] = ps_file["sp"][time_ind,sfc_lat_ind,sfc_lon_ind] / 100
 		fc_date_ind = np.in1d(date_list, nc.num2date(wg10_file["time"][fc_time_ind], wg10_file["time"].units))
 		tp_date_ind = np.in1d([np.datetime64(date_list[i]) for i in np.arange(len(date_list))],tp_file.time.values)
-		#cp[fc_date_ind,:,:] = cp_file["cp"][fc_time_ind,sfc_lat_ind,sfc_lon_ind]
-		#tp[fc_date_ind,:,:] = tp_file["tp"][fc_time_ind,sfc_lat_ind,sfc_lon_ind]
-		cp[tp_date_ind,:,:] = cp_file.isel({"time":tp_time_ind}).values * 1000
-		tp[tp_date_ind,:,:] = tp_file.isel({"time":tp_time_ind}).values * 1000
+		cp[tp_date_ind,:,:] = cp_file.isel({"time":tp_time_ind}).values
+		tp[tp_date_ind,:,:] = tp_file.isel({"time":tp_time_ind}).values
 		cape[fc_date_ind,:,:] = cape_file["cape"][fc_time_ind,sfc_lat_ind,sfc_lon_ind]
 		wg10[fc_date_ind,:,:] = wg10_file["fg10"][fc_time_ind,sfc_lat_ind,sfc_lon_ind]
 
 		if pres:
 			ta_file.close();z_file.close();ua_file.close();va_file.close();hur_file.close()
 		uas_file.close();vas_file.close();tas_file.close();ta2d_file.close();ps_file.close()
+		sst_file.close()
 
 	if pres:
 		p = np.flip(p)
@@ -272,7 +275,7 @@ def read_era5_rt52(domain,times,pres=True,delta_t=1):
 		hgt = np.flip(hgt, axis=1)
 		ua = np.flip(ua, axis=1)
 		va = np.flip(va, axis=1)
-		return [ta,dp,hur,hgt,terrain,p,ps,ua,va,uas,vas,tas,ta2d,cp,tp,wg10,cape,lon,lat,date_list]
+		return [ta,dp,hur,hgt,terrain,p,ps,ua,va,uas,vas,tas,ta2d,cp,tp,wg10,cape,sst,lon,lat,date_list]
 	else:
 		return [ps,uas,vas,tas,ta2d,cp,tp,wg10,cape,sfc_lon,sfc_lat,date_list]
 

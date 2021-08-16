@@ -1,10 +1,10 @@
 # Log for reproducability
 
 This text file contains a basic reconstructed log of the functions and software called to produce the 
-results in Brown and Dowdy (in prep.)
+results in Brown, A., & Dowdy, A., (2021) Severe convection-related winds in Australia and their associated environments. Journal of Southern Hemisphere Earth Systems Science, -. https://doi.org/10.1071/ES19052
 
  This is a working repository, and so it is not guaranteed that the scripts appear exactly as was used
- to generate the abovementioned paper. Although previous states can be accessed through navagating commits.
+ to generate the abovementioned paper. [This commit](https://github.com/andrewbrown31/SCW-analysis/tree/9870e80a04e47c437914c62a5770b314f2d3a97c) was used for the final version of that paper.
 
 #### Set up python environment using conda
 ```bash

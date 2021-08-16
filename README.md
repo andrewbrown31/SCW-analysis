@@ -11,4 +11,4 @@ For method of Brown and Dowdy (2021b) see [cmip/log.md](https://github.com/andre
 #### References
 Brown, A., & Dowdy, A., (2021a) Severe convection-related winds in Australia and their associated environments. Journal of Southern Hemisphere Earth Systems Science, -. https://doi.org/10.1071/ES19052
 
-Brown, A., & Dowdy, A. (2021). Severe Convective Wind Environments and Future Projected Changes in Australia. Journal of Geophysical Research: Atmospheres, 126, e2021JD034633. https://doi.org/10.1029/2021JD034633
+Brown, A., & Dowdy, A. (2021b). Severe Convective Wind Environments and Future Projected Changes in Australia. Journal of Geophysical Research: Atmospheres, 126, e2021JD034633. https://doi.org/10.1029/2021JD034633

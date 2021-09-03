@@ -1,10 +1,10 @@
 # Log for reproducability
 
 This text file contains a basic reconstructed log of the functions and software called to produce the 
-results in Brown and Dowdy, Severe Convective Wind Environments and Future Projected Changes in Australia (in prep.) JGR-Atmopheres
+results in Brown, A., & Dowdy, A. (2021). Severe Convective Wind Environments and Future Projected Changes in Australia. Journal of Geophysical Research: Atmospheres, 126, e2021JD034633. https://doi.org/10.1029/2021JD034633
 
 This is a working repository, and so it is not guaranteed that the scripts appear exactly as was used
-to generate the abovementioned paper. Although previous states can be accessed through navagating commits.
+to generate the abovementioned paper. [This commit](https://github.com/andrewbrown31/SCW-analysis/tree/fd99a62eb9a35dc6de01dee3f8da2d18d54884f3) was used for the final version of that paper. 
  
 #### Set up main python environment for convective diagnostics using conda
 ```bash

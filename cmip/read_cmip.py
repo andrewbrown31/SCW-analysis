@@ -233,32 +233,33 @@ def read_cmip(model, experiment, ensemble, year, domain, cmip_ver=5, group = "",
 		orog = hus.orog.values
 		q = hus.hus / (1 - hus.hus)
 		tv = ta.ta * ( ( q + 0.622) / (0.622 * (1+q) ) )
-		p = np.swapaxes(np.swapaxes(ps.ps * np.exp( -9.8*z / (287*tv)), 3, 2), 2, 1)
 		if ((model in ["ACCESS1-3","ACCESS1-0","ACCESS-CM2","ACCESS-ESM1-5"])):
 			z = np.swapaxes(z, 0, 1).values
 			orog = orog[0]
 		else:
 			z = np.tile(z.values.astype("float32"), [ta.ta.shape[0], 1, 1, 1], )
+		p = hypsometric_p(ps.ps.values, z, tv.values, np.tile(orog[np.newaxis], (ta.ta.shape[0],1,1)))
 	elif np.any(np.in1d(["p0","ap"], names)):
 		#If the model has been stored on a hybrid pressure coordinate, it should have the
 		#   variable "p0". Convert hybrid pressure coordinate to pressure, and calculate 
 		#   height via the hydrostatic equation
 		if "p0" in names:
-			p = (hus.a * hus.p0 + hus.b * hus.ps).transpose("time","lev","lat","lon")
+			p = (hus.a * hus.p0 + hus.b * hus.ps).transpose("time","lev","lat","lon").values
 		elif "ap" in names:
-			p = (hus.ap + hus.b * hus.ps).transpose("time","lev","lat","lon")
+			p = (hus.ap + hus.b * hus.ps).transpose("time","lev","lat","lon").values
 		else:
 			raise ValueError("Check the hybrid-pressure coordinate of this model")
 		q = hus.hus / (1 - hus.hus)
 		tv = ta.ta * ( ( q + 0.622) / (0.622 * (1+q) ) )
-		z = (-287 * tv * (np.log( p / ps.ps)).transpose("time","lev","lat","lon") ) / 9.8
+		#z = (-287 * tv * (np.log( p / ps.ps)).transpose("time","lev","lat","lon") ) / 9.8
 		orog = xr.open_dataset(glob.glob("/g/data/r87/DRSv3/CMIP5/"+\
 		    model+"/historical/fx/atmos/r0i0p0/orog/latest/orog*.nc")[0])
 		if orog.lon.values.max() >= 350:
 			orog.coords['lon'] = (orog.coords['lon'] + 180) % 360 - 180; orog = orog.sortby(orog.lon)
 		orog = trim_cmip5(orog.orog, domain, year).values
 		orog[orog<0] = 0
-		z = (z + orog).values
+		#z = (z + orog).values
+		z = hypsometric_z(ps.ps.values, p, tv.values, np.tile(orog[np.newaxis], (ta.ta.shape[0],1,1)))
 	else:
 		raise ValueError("Check the vertical coordinate of this model")
 
@@ -266,21 +267,23 @@ def read_cmip(model, experiment, ensemble, year, domain, cmip_ver=5, group = "",
 	# missing a temperature level, and so that level will have zero pressure. Ignore sanity check for this model.
 	if (z.min() < -1000) | (z.max() > 100000):
 		raise ValueError("Potentially erroneous Z values (less than -1000 or greater than 100,000 km")
-	if (p.max().values > 200000) | (p.min().values < 0):
+	if (p.max() > 200000) | (p.min() < 0):
 		if model != "ACCESS-CM2":
 			raise ValueError("Potentially erroneous pressure (less than 0 or greater than 200,000 Pa")
 
 	#Convert quantities into those expected by wrf_(non)_parallel.py
+	lon = ta.lon.values
+	lat = ta.lat.values
+	date_list = ta.time.values
+	date_list = np.array([dt.datetime.strptime(date_list[t].strftime(), "%Y-%m-%d %H:%M:%S") for t in np.arange(len(date_list))]) 
 	ta = ta.ta.values - 273.15
 	hur = mpcalc.relative_humidity_from_specific_humidity(hus.hus.values, \
-		    ta*units.units.degC, p.values*units.units.pascal) * 100
-	pres = p.values / 100.
+		    ta*units.units.degC, p*units.units.pascal) * 100
+	pres = p / 100.
 	sfc_pres = ps.ps.values / 100.
 	tas = tas.tas.values - 273.15
 	ta2d = mpcalc.dewpoint_from_specific_humidity(huss.huss.values, tas*units.units.degC, \
 		    ps.ps.values*units.units.pascal)
-	lon = p.lon.values
-	lat = p.lat.values
 
 	ua=ua.values
 	va=va.values
@@ -307,8 +310,6 @@ def read_cmip(model, experiment, ensemble, year, domain, cmip_ver=5, group = "",
 		ua[pres < 100] = np.nan
 		va[pres < 100] = np.nan
 
-	date_list = p.time.values
-	date_list = np.array([dt.datetime.strptime(date_list[t].strftime(), "%Y-%m-%d %H:%M:%S") for t in np.arange(len(date_list))]) 
 
 	return [ta, hur, z, orog, pres, sfc_pres, ua, va, uas, vas, tas, ta2d, pr, lon,\
 		    lat, date_list]
@@ -479,6 +480,34 @@ def get_lsm(model, experiment, cmip_ver=5, group = "", al33=False):
 
 	return lsm
 	
+def hypsometric_p(p_sfc, z, tv, terrain):
+
+	#TODO Sort out the axis/shape. Check this works on ERA5. Check this works on hybrid-pressure level data (to calculate Z)
+
+	#Get the difference in height between each level. Need to give this function the height axis
+	zdiff = np.diff(z, axis=1, prepend=terrain[:,np.newaxis,:,:])
+	#Calculate the second term of the hypsometric equation
+	T2 = np.exp( (-9.8 * zdiff) / (287 * (tv) ) )
+	#Initialise the full pressure array
+	p_full = np.empty(tv.shape)
+	p_full[:,0,:,:] = p_sfc * T2[:,0,:,:]
+	for i in np.arange(1,p_full.shape[1]):
+		p_full[:,i,:,:] = p_full[:,i-1,:,:] * T2[:,i,:,:]
+	
+	return p_full	
+
+def hypsometric_z(p_sfc, p, tv, terrain):
+
+        #Calculate the second term of the hypsometric equation
+        T2 = (287 * tv) / 9.8 
+        
+        #Initialise the full pressure array
+        z_full = np.empty(tv.shape)
+        z_full[:,0,:,:] = np.log(p_sfc / p[:,0,:,:]) * T2[:,0,:,:] + terrain
+        for i in np.arange(1,z_full.shape[1]):
+                z_full[:,i,:,:] = np.log(p[:,i-1,:,:]/p[:,i,:,:]) * T2[:,i,:,:] + z_full[:,i-1,:,:]
+                        
+        return z_full
 
 if __name__ == "__main__":
 

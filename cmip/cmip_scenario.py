@@ -787,14 +787,14 @@ def create_qm_combined(era5_da, model_da_hist, model_da_scenario, \
 			(("time", "lat", "lon"), mod_xhat_hist)},\
                     coords={"time":model_da_hist.time.values,\
 			"lat":model_da_hist.lat, "lon":model_da_hist.lon}).\
-                    to_netcdf(hist_fname, mode="w",engine="h5netcdf",\
-			    encoding={p:{"zlib":True, "complevel":9, "least_significant_digit":8}})
+                    to_netcdf(hist_fname, mode="w",\
+			    encoding={p:{"zlib":True, "complevel":9, "least_significant_digit":4}})
         xr.Dataset(data_vars={p:\
 	    (("time", "lat", "lon"), mod_xhat_scenario)},\
 		    coords={"time":model_da_scenario.time.values,\
 			"lat":model_da_scenario.lat, "lon":model_da_scenario.lon}).\
-		    to_netcdf(scenario_fname, mode="w",engine="h5netcdf",\
-			encoding={p:{"zlib":True, "complevel":9}})
+		    to_netcdf(scenario_fname, mode="w",\
+			encoding={p:{"zlib":True, "complevel":9, "least_significant_digit":4}})
 
         return mod_xhat_hist, mod_xhat_scenario
 

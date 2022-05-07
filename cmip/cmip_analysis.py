@@ -2,7 +2,7 @@ import glob
 from era5_read import get_mask
 from numba import jit
 import argparse
-from mpl_toolkits.basemap import Basemap
+#from mpl_toolkits.basemap import Basemap
 import pandas as pd
 import warnings
 warnings.simplefilter("ignore")
@@ -272,7 +272,7 @@ def load_model_data(models, p, era5_data=None, save=True, domain="aus",\
 	era5_lsm = get_era5_lsm(domain=domain)
 	if models[0][0] == "ERA5":
 		if era5_data is None:
-			era5 = load_era5(p, era5_regrid,domain=domain)
+			era5 = load_era5(p, era5_y1, era5_y2, era5_regrid,domain=domain)
 			era5_data = era5.sel({"time":(era5["time.year"] <= era5_y2) & \
 					    (era5["time.year"] >= era5_y1)})
 			if lsm:
@@ -471,7 +471,7 @@ def load_barpa(p, y1, y2, regrid=False):
 
 	return barpa_lsm
 
-def load_era5(p, regrid=False, domain="aus"):
+def load_era5(p, y1, y2, regrid=False, domain="aus"):
 
 	#Regrid ERA5 convective diagnostics to a 1.5 degree, 6 hourly grid over the Aus region, by
 	# taking the mean over each 1.5 degree region.
@@ -484,19 +484,23 @@ def load_era5(p, regrid=False, domain="aus"):
 	fname = "/g/data/eg3/ab4502/ExtremeWind/"+domain+"/regrid_1.5/"+\
 		"era5_"+p+".nc"
 
+	files = np.sort(glob.glob("/g/data/eg3/ab4502/ExtremeWind/"+domain+"/era5/era5_*"))
+	file_years = np.array([int(f.split("/")[-1].split("_")[1][0:4]) for f in files])
+	files = files[(file_years >= y1) & (file_years <= y2)]
+
 	if regrid:
 		if (os.path.isfile(fname)):
 			era5_coarse = xr.open_dataset(fname)["__xarray_dataarray_variable__"]
 		else:
 			print("Regridding ERA5 to a 1.5 degree grid...")
 			ProgressBar().register()
-			era5 = xr.open_mfdataset("/g/data/eg3/ab4502/ExtremeWind/"+domain+"/era5/era5_*")
+			era5 = xr.open_mfdataset(files)
 			era5_sub = era5[p].sel({"time":np.in1d(era5["time.hour"], [0,6,12,18])})
 			era5_coarse = era5_sub.coarsen({"lat":6, "lon":6}, boundary="trim", side="left").\
 					mean()
 	else:
 			print("Loading ERA5...")
-			era5 = xr.open_mfdataset("/g/data/eg3/ab4502/ExtremeWind/"+domain+"/era5/era5_*")
+			era5 = xr.open_mfdataset(files)
 			era5_coarse = era5[p].sel({"time":np.in1d(era5["time.hour"], [0,6,12,18])})
 
 	return era5_coarse

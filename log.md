@@ -29,8 +29,8 @@ read_upperair_obs(dt.datetime(2005,1,1),dt.datetime(2018,12,31),"UA_wrfpython", 
 ```
 ```python
 from event_analysis import optimise_pss
-optimise_pss("/g/data/eg3/ab4502/ExtremeWind/points/era5_allvars_2005_2018.pkl",T=1000, compute=True, l_thresh=2, is_pss="hss", model_name="era5",time="floor")
-optimise_pss("/g/data/eg3/ab4502/ExtremeWind/points/era5_allvars_2005_2018.pkl",T=1000, compute=True, l_thresh=2, is_pss="hss", model_name="era5",time="ceil")
+optimise_pss("/g/data/eg3/ab4502/ExtremeWind/points/era5_allvars_v3_2005_2018.pkl",T=1000, compute=True, l_thresh=2, is_pss="hss", model_name="era5",time="floor")
+optimise_pss("/g/data/eg3/ab4502/ExtremeWind/points/era5_allvars_v3_2005_2018.pkl",T=1000, compute=True, l_thresh=2, is_pss="hss", model_name="era5",time="ceil")
 optimise_pss("/g/data/eg3/ab4502/ExtremeWind/points/barra_allvars_2005_2018_2.pkl",T=1000, compute=True, l_thresh=2, is_pss="hss", model_name="barra_fc",time="ceil")
 optimise_pss("/g/data/eg3/ab4502/ExtremeWind/points/barra_allvars_2005_2018_2.pkl",T=1000, compute=True, l_thresh=2, is_pss="hss", model_name="barra_fc",time="floor")
 ```

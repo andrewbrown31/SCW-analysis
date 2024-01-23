@@ -2,7 +2,7 @@
 
 #PBS -P eg3 
 #PBS -q hugemem
-#PBS -l walltime=48:00:00,mem=512GB 
+#PBS -l walltime=48:00:00,mem=1024GB 
 #PBS -l ncpus=1
 #PBS -o /home/548/ab4502/working/ExtremeWind/jobs/messages/wrf_python_GFDL-CM3_historical.o 
 #PBS -e /home/548/ab4502/working/ExtremeWind/jobs/messages/wrf_python_GFDL-CM3_historical.e 
@@ -12,7 +12,7 @@
 source activate wrfpython3.6 
 
 d=1960-01-01
-while [ "$d" != 2010-01-01 ]; do
+while [ "$d" != 1990-01-01 ]; do
 
 	start_time=$(date -d "$d" +%Y)"010100"
 	end_time=$(date -d "$d + 9 year"  +%Y)"123118"

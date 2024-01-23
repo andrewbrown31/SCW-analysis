@@ -11,7 +11,7 @@
 #Set up conda/shell environments 
 source activate wrfpython3.6 
 
-d=2081-01-01
+d=2096-01-01
 while [ "$d" != 2101-01-01 ]; do
 
 	start_time=$(date -d "$d" +%Y)"010100"

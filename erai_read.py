@@ -323,7 +323,7 @@ def reform_lsm(lon,lat):
 
 def get_terrain():
 	#Load the ERA-Interim surface geopetential height as terrain height
-	terrain_file = nc.Dataset("/g/data/eg3/ab4502/erai_sfc_geopt.nc")
+	terrain_file = nc.Dataset("/g/data/eg3/ab4502/erai_static/erai_sfc_geopt.nc")
 	terrain = np.squeeze(terrain_file.variables["z"][:])/9.8
 	terrain_lon = np.squeeze(terrain_file.variables["longitude"][:])
 	terrain_lat = np.squeeze(terrain_file.variables["latitude"][:])

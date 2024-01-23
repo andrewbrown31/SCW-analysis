@@ -168,7 +168,7 @@ def main():
 		if ub4:
 			raise ValueError("ub4 now depreciated")
 		else:
-			ta,temp1,hur,hgt,terrain,p,ps,ua,va,uas,vas,tas,ta2d,\
+			ta,temp1,hur,hgt,terrain,p,ps,msl,ua,va,uas,vas,tas,ta2d,\
 				cp,tp,wg10,mod_cape,sst,lon,lat,date_list = \
 				read_era5_rt52(domain,time,delta_t=delta_t)
 		cp = cp.astype("float32", order="C")
@@ -236,7 +236,11 @@ def main():
 
 	gc.collect()
 
-	param = np.array(["mu_cape", "eff_cape","ncape","mu_cin", "muq", "s06", "s0500", "lr700_500", "mhgt", "ta500","tp","cp","laplacian","t_totals"])
+	#This param list was originally given to AD for ERA5 global lightning report
+	#param = np.array(["mu_cape", "eff_cape","ncape","mu_cin", "muq", "s06", "s0500", "lr700_500", "mhgt", "ta500","tp","cp","laplacian","t_totals"])
+	#This param list is intended for application to GCMs based on AD ERA5 lightning report
+	param = np.array(["mu_cape","s06","laplacian","t_totals","ta850","ta500","dp850","tp",\
+		"muq","lr700_500","mhgt","z500","ncape","eff_cape","mu_cin"])
 
 	if model in ["erai","era5"]:
 		param = np.concatenate([param, ["mod_cape","sst"]])
@@ -357,7 +361,6 @@ def main():
 		rho850 = np.array(get_var_p_lvl(np.array(rho), sfc_p_3d, 850))
 		rho700 = np.array(get_var_p_lvl(np.array(rho), sfc_p_3d, 700))
 		ta850 = get_var_p_lvl(np.copy(sfc_ta), sfc_p_3d, 850)
-		ta500 = get_var_p_lvl(np.copy(sfc_ta), sfc_p_3d, 500)
 		dp850 = get_var_p_lvl(np.copy(sfc_dp), sfc_p_3d, 850)
 		v_totals = ta850 - ta500
 		c_totals = dp850 - ta500
@@ -365,16 +368,15 @@ def main():
 		#Winds
 		winds_start = dt.datetime.now()
 		s06 = get_shear_hgt(sfc_ua, sfc_va, np.copy(sfc_hgt), 0, 6000, terrain)
-		s0500 = get_shear_p(ua[t], va[t], p_3d, "sfc", 500, p, uas=uas[t], vas=vas[t])
 
 		#WAP
 		if model in ["erai","era5"]:
 			sfc_w = mpcalc.vertical_velocity( wap[t] * (units.units.pascal / units.units.second),\
 				np.array(p_3d) * (units.units.hectopascal), \
 				ta[t] * units.units.degC,  q_unit)
-		w925 = np.array(get_var_p_lvl(np.array(sfc_w), p_3d, 925))
-		w850 = np.array(get_var_p_lvl(np.array(sfc_w), p_3d, 850))
-		w700 = np.array(get_var_p_lvl(np.array(sfc_w), p_3d, 700))
+			w925 = np.array(get_var_p_lvl(np.array(sfc_w), p_3d, 925))
+			w850 = np.array(get_var_p_lvl(np.array(sfc_w), p_3d, 850))
+			w700 = np.array(get_var_p_lvl(np.array(sfc_w), p_3d, 700))
 
 		#Convergence
 		x, y = np.meshgrid(lon,lat)
@@ -388,7 +390,12 @@ def main():
 		conv925 = -1e5*np.array(mpcalc.divergence(u925 * (units.units.meter / units.units.second), v925  * (units.units.meter / units.units.second), dx, dy))
 		conv850 = -1e5*np.array(mpcalc.divergence(u850 * (units.units.meter / units.units.second), v850  * (units.units.meter / units.units.second), dx, dy))
 		conv700 = -1e5*np.array(mpcalc.divergence(u700 * (units.units.meter / units.units.second), v700  * (units.units.meter / units.units.second), dx, dy))
-		laplacian = np.array(mpcalc.laplacian(uniform_filter(np.squeeze(hgt[t,p==500]), 4),deltas=[dy,dx])*1e9)
+		if mdl_lvl:
+			z500 = get_var_p_lvl(hgt[t], p_3d, 500)
+			laplacian = np.array(mpcalc.laplacian(z500,deltas=[dy,dx])*1e9)
+		else:
+			z500 = np.squeeze(hgt[t,p==500])
+			laplacian = np.array(mpcalc.laplacian(uniform_filter(z500, 4),deltas=[dy,dx])*1e9)
         
 		#CS6
 		mucs6 = mu_cape * np.power(s06, 1.67)
@@ -400,14 +407,17 @@ def main():
 		output = fill_output(output, t, param, ps, "mu_cin", mu_cin)
 		output = fill_output(output, t, param, ps, "muq", muq)
 		output = fill_output(output, t, param, ps, "s06", s06)
-		output = fill_output(output, t, param, ps, "s0500", s0500)
+		#output = fill_output(output, t, param, ps, "s0500", s0500)
 		output = fill_output(output, t, param, ps, "lr700_500", lr700_500)
 		output = fill_output(output, t, param, ps, "ta500", ta500)
+		output = fill_output(output, t, param, ps, "ta850", ta850)
+		output = fill_output(output, t, param, ps, "dp850", dp850)
 		output = fill_output(output, t, param, ps, "mhgt", melting_hgt)
 		output = fill_output(output, t, param, ps, "tp", tp[t])
-		output = fill_output(output, t, param, ps, "cp", cp[t])
+		#output = fill_output(output, t, param, ps, "cp", cp[t])
 		output = fill_output(output, t, param, ps, "laplacian", laplacian)
 		output = fill_output(output, t, param, ps, "t_totals", t_totals)
+		output = fill_output(output, t, param, ps, "z500", z500)
 		if (model == "erai") | (model == "era5"):
 			output = fill_output(output, t, param, ps, "mod_cape", mod_cape[t])
 			output = fill_output(output, t, param, ps, "sst", np.where(sst[t]<-9999, np.nan, sst[t]))         

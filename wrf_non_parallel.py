@@ -54,6 +54,7 @@ def main():
 	parser.add_argument("-t1",help="Time start YYYYMMDDHH",required=True)
 	parser.add_argument("-t2",help="Time end YYYYMMDDHH",required=True)
 	parser.add_argument("-e", help="CMIP5 experiment name (not required if using era5, erai or barra)", default="")
+	parser.add_argument("-barpa_experiment", help="BARPA secondary experiment name. Either era or cmip5.", default="era")
 	parser.add_argument("--barpa_forcing_mdl", help="BARPA forcing model (erai or ACCESS1-0). Default erai.", default="erai")
 	parser.add_argument("--ens", help="CMIP5 ensemble name (not required if using era5, erai or barra)", default="r1i1p1")
 	parser.add_argument("--group", help="CMIP6 modelling group name", default="")
@@ -87,6 +88,7 @@ def main():
 	is_dcape = args.is_dcape
 	barpa_forcing_mdl = args.barpa_forcing_mdl
 	experiment = args.e
+	barpa_experiment = args.barpa_experiment
 	ensemble = args.ens
 	group = args.group
 	project = args.project
@@ -133,7 +135,7 @@ def main():
 		mod_cape = mod_cape.astype("float32", order="C")
 	elif model == "era5":
 		if era5_proj == "rt52":
-			ta,temp1,hur,hgt,terrain,p,ps,ua,va,uas,vas,tas,ta2d,\
+			ta,temp1,hur,hgt,terrain,p,ps,msl,ua,va,uas,vas,tas,ta2d,\
 				cp,tp,wg10,mod_cape,sst,lon,lat,date_list = \
 				read_era5_rt52(domain,time,delta_t=delta_t)
 		elif era5_proj == "eg3":
@@ -157,7 +159,7 @@ def main():
 			read_barra_fc(domain,time)
 	elif model == "barpa":
 		ta,hur,hgt,terrain,p,ps,ua,va,uas,vas,tas,ta2d,wg10,lon,lat,date_list = \
-			read_barpa(domain, time, experiment, barpa_forcing_mdl, ensemble)
+			read_barpa(domain, time, barpa_experiment, experiment, barpa_forcing_mdl, ensemble)
 		wap = np.zeros(hgt.shape)
 		temp1 = None
 	elif model == "barra_ad":
@@ -218,8 +220,10 @@ def main():
 			"ml_lcl", "mu_lcl", "sb_lcl", "eff_cape", "eff_cin", "eff_lcl",\
 			"lr01", "lr03", "lr13", "lr36", "lr24", "lr_freezing","lr_subcloud","lr700_500",\
 			"qmean01", "qmean03", "qmean06", "muq", "ta500","ta850","dp850",\
+			#NEW VARIABLES FOR ETSA TESTING
+			"qmean0500","q2m",\
 			"qmeansubcloud", "q_melting", "q1", "q3", "q6",\
-			"rhmin01", "rhmin03", "rhmin13", \
+			"rhmin01", "rhmin03", "rhmin13", "rhmean01",\
 			"rhminsubcloud", "tei", "wbz", \
 			"mhgt", "mu_el", "ml_el", "sb_el", "eff_el", \
 			"pwat", "v_totals", "c_totals", "t_totals", \
@@ -268,13 +272,15 @@ def main():
 
 				])
 	elif params == "min":
-		param = np.array(["mu_cape", "mu_cin", "muq", "s06", "lr700_500", "mhgt", "ta500"])
+		param = np.array(["mu_cape", "mu_cin", "s06","wg10","dcape","convgust_dry","convgust_wet","gustex",\
+				    "bdsd","qmean01","Umean06","lr13","mucape*s06"])
+		#param = np.array(["lr13","rhmin13","q_melting"])
 
 
-	if model not in ["era5","erai"]:
+	if (model not in ["era5","erai"]) & (params == "full"):
 		param = np.concatenate([param, ["omega01", "omega03", "omega06", \
 			"maxtevv", "mosh", "moshe"]])
-	else:
+	elif (model in ["era5","erai"]):
 		param = np.concatenate([param, ["mod_cape","cp","mod_cape*s06"]])
 
 	#Set output array
@@ -461,6 +467,7 @@ def main():
 		rhmean13 = get_mean_var_hgt(np.copy(sfc_hur),np.copy(sfc_hgt),1000,3000,terrain,True,np.copy(sfc_p_3d))
 		rhmean36 = get_mean_var_hgt(np.copy(sfc_hur),np.copy(sfc_hgt),3000,6000,terrain,True,np.copy(sfc_p_3d))
 		rhmeansubcloud = get_mean_var_hgt(np.copy(sfc_hur),np.copy(sfc_hgt),0,ml_lcl,terrain,True,np.copy(sfc_p_3d))
+		qmean0500 = get_mean_var_hgt(np.copy(sfc_q),np.copy(sfc_hgt),0,500,terrain,True,np.copy(sfc_p_3d)) * 1000
 		qmean01 = get_mean_var_hgt(np.copy(sfc_q),np.copy(sfc_hgt),0,1000,terrain,True,np.copy(sfc_p_3d)) * 1000
 		qmean03 = get_mean_var_hgt(np.copy(sfc_q),np.copy(sfc_hgt),0,3000,terrain,True,np.copy(sfc_p_3d)) * 1000
 		qmean06 = get_mean_var_hgt(np.copy(sfc_q),np.copy(sfc_hgt),0,6000,terrain,True,np.copy(sfc_p_3d)) * 1000
@@ -473,6 +480,7 @@ def main():
 		q1 = get_var_hgt_lvl(np.copy(sfc_q), np.copy(sfc_hgt), 1000, terrain) * 1000
 		q3 = get_var_hgt_lvl(np.copy(sfc_q), np.copy(sfc_hgt), 3000, terrain) * 1000
 		q6 = get_var_hgt_lvl(np.copy(sfc_q), np.copy(sfc_hgt), 6000, terrain) * 1000
+		q2m = get_var_hgt_lvl(np.copy(sfc_q), np.copy(sfc_hgt), 2, terrain) * 1000
 		rhmin01 = get_min_var_hgt(np.copy(sfc_hur), np.copy(sfc_hgt), 0, 1000, terrain)
 		rhmin03 = get_min_var_hgt(np.copy(sfc_hur), np.copy(sfc_hgt), 0, 3000, terrain)
 		rhmin06 = get_min_var_hgt(np.copy(sfc_hur), np.copy(sfc_hgt), 0, 6000, terrain)
@@ -644,7 +652,7 @@ def main():
 		dmi[dmi<0] = 0
 		hmi[hmi<0] = 0
 		wmsi_ml[wmsi_ml<0] = 0
-		mwpi_ml[wmsi_ml<0] = 0
+		mwpi_ml[mwpi_ml<0] = 0
 		stp_fixed_left, stp_cin_left = get_tornado_pot( np.copy(ml_cin), np.copy(ml_lcl)\
 					, np.copy(sb_lcl), np.copy(s06), np.copy(ebwd), \
 					np.copy(sb_cape), np.copy(ml_cape), np.copy(srh01_left), \
@@ -692,17 +700,30 @@ def main():
 		if (params == "min") | (params == "full") | (params == "reduced"):
 			output = fill_output(output, t, param, ps, "mu_cape", mu_cape)
 			output = fill_output(output, t, param, ps, "mu_cin", mu_cin)
-			output = fill_output(output, t, param, ps, "muq", muq)
 			output = fill_output(output, t, param, ps, "s06", s06)
-			output = fill_output(output, t, param, ps, "lr700_500", lr700_500)
-			output = fill_output(output, t, param, ps, "ta500", ta500)
-			output = fill_output(output, t, param, ps, "mhgt", melting_hgt)
+			output = fill_output(output, t, param, ps, "wg10", wg10[t])
+			output = fill_output(output, t, param, ps, "bdsd", bdsd)
+			output = fill_output(output, t, param, ps, "qmean01", qmean01)
+			output = fill_output(output, t, param, ps, "Umean06", Umean06)
+			output = fill_output(output, t, param, ps, "lr13", lr13)
+			output = fill_output(output, t, param, ps, "mucape*s06", mucs6)
+			output = fill_output(output, t, param, ps, "dcape", dcape)
+			output = fill_output(output, t, param, ps, "gustex", gustex)
+			output = fill_output(output, t, param, ps, "convgust_wet", convgust_wet)
+			output = fill_output(output, t, param, ps, "convgust_dry", convgust_dry)
+			#output = fill_output(output, t, param, ps, "rhmin13", rhmin13)
+			#output = fill_output(output, t, param, ps, "q_melting", q_melting)
+
 			if (model == "erai") | (model == "era5"):
 				output = fill_output(output, t, param, ps, "cp", cp[t])
 				output = fill_output(output, t, param, ps, "mod_cape", mod_cape[t])
 				output = fill_output(output, t, param, ps, "mod_cape*s06", cs6)
 
 		if (params == "reduced") | (params == "full"):
+			output = fill_output(output, t, param, ps, "muq", muq)
+			output = fill_output(output, t, param, ps, "lr700_500", lr700_500)
+			output = fill_output(output, t, param, ps, "ta500", ta500)
+			output = fill_output(output, t, param, ps, "mhgt", melting_hgt)
 			output = fill_output(output, t, param, ps, "ml_cape", ml_cape)
 			output = fill_output(output, t, param, ps, "eff_cape", eff_cape)
 			output = fill_output(output, t, param, ps, "sb_cape", sb_cape)
@@ -717,48 +738,39 @@ def main():
 			output = fill_output(output, t, param, ps, "mu_el", mu_el)
 			output = fill_output(output, t, param, ps, "eff_el", eff_el)
 			output = fill_output(output, t, param, ps, "sb_el", sb_el)
-			output = fill_output(output, t, param, ps, "lr13", lr13)
 			output = fill_output(output, t, param, ps, "lr36", lr36)
 			output = fill_output(output, t, param, ps, "muq", muq)
-			output = fill_output(output, t, param, ps, "qmean01", qmean01)
 			output = fill_output(output, t, param, ps, "pwat", pwat)
-			output = fill_output(output, t, param, ps, "dcape", dcape)
 			output = fill_output(output, t, param, ps, "srh01_left", srh01_left)
 			output = fill_output(output, t, param, ps, "srhe_left", srhe_left)
 			output = fill_output(output, t, param, ps, "s03", s03)
 			output = fill_output(output, t, param, ps, "ebwd", ebwd)
-			output = fill_output(output, t, param, ps, "Umean06", Umean06)
 			output = fill_output(output, t, param, ps, "Umean800_600", Umean800_600)
-			output = fill_output(output, t, param, ps, "wg10", wg10[t])
 			output = fill_output(output, t, param, ps, "U10", U10)
 			output = fill_output(output, t, param, ps, "stp_cin_left", stp_cin_left)
 			output = fill_output(output, t, param, ps, "stp_fixed_left", stp_fixed_left)
 			output = fill_output(output, t, param, ps, "windex", windex)
-			output = fill_output(output, t, param, ps, "gustex", gustex)
 			output = fill_output(output, t, param, ps, "ship", ship)
 			output = fill_output(output, t, param, ps, "scp", scp)
 			output = fill_output(output, t, param, ps, "scp_fixed", scp_fixed)
 			output = fill_output(output, t, param, ps, "k_index", k_index)
 			output = fill_output(output, t, param, ps, "mlcape*s06", mlcs6)
-			output = fill_output(output, t, param, ps, "mucape*s06", mucs6)
 			output = fill_output(output, t, param, ps, "sbcape*s06", sbcs6)
 			output = fill_output(output, t, param, ps, "effcape*s06", effcs6)
 			output = fill_output(output, t, param, ps, "wndg", wndg)
 			output = fill_output(output, t, param, ps, "sweat", sweat)
 			output = fill_output(output, t, param, ps, "mmp", mmp)
-			output = fill_output(output, t, param, ps, "convgust_wet", convgust_wet)
-			output = fill_output(output, t, param, ps, "convgust_dry", convgust_dry)
 			output = fill_output(output, t, param, ps, "dcp", dcp)
 			output = fill_output(output, t, param, ps, "dmgwind", dmgwind)
 			output = fill_output(output, t, param, ps, "dmgwind_fixed", dmgwind_fixed)
 			output = fill_output(output, t, param, ps, "t_totals", t_totals)
+			output = fill_output(output, t, param, ps, "rhmean01", rhmean01)
 			output = fill_output(output, t, param, ps, "rhmin01", rhmin01)
 			output = fill_output(output, t, param, ps, "rhmin03", rhmin03)
 			output = fill_output(output, t, param, ps, "dpd700", dpd700)
 			output = fill_output(output, t, param, ps, "scld", scld)
 			output = fill_output(output, t, param, ps, "Umean03", Umean03)
 			output = fill_output(output, t, param, ps, "U1", U1)
-			output = fill_output(output, t, param, ps, "bdsd", bdsd)
 	    
 		if params == "full":
 			output = fill_output(output, t, param, ps, "lr_freezing", lr_freezing)
@@ -768,9 +780,11 @@ def main():
 			output = fill_output(output, t, param, ps, "lr03", lr03)
 			output = fill_output(output, t, param, ps, "lr24", lr24)
 			output = fill_output(output, t, param, ps, "wbz", hwb0)
+			output = fill_output(output, t, param, ps, "qmean0500", qmean0500)
 			output = fill_output(output, t, param, ps, "qmean03", qmean03)
 			output = fill_output(output, t, param, ps, "qmean06", qmean06)
 			output = fill_output(output, t, param, ps, "q_melting", q_melting)
+			output = fill_output(output, t, param, ps, "q2m", q2m)
 			output = fill_output(output, t, param, ps, "q1", q1)
 			output = fill_output(output, t, param, ps, "q3", q3)
 			output = fill_output(output, t, param, ps, "q6", q6)
@@ -837,10 +851,10 @@ def main():
 		temp_data = output_data[:,:,:,np.where(param==param_name)[0][0]]
 		param_out.append(temp_data)
 
-	#If the mhgt variable is zero everywhere, then it is likely that data has not been read.
+	#If the s06 variable is zero everywhere, then it is likely that data has not been read.
 	#In this case, all values are missing, set to zero.
 	for t in np.arange(param_out[0].shape[0]):
-		if param_out[np.where(param=="mhgt")[0][0]][t].max() == 0:
+		if param_out[np.where(param=="lr13")[0][0]][t].max() == 0:
 			for p in np.arange(len(param_out)):
 				param_out[p][t] = np.nan
 

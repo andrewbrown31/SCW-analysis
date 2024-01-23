@@ -9,7 +9,7 @@ import matplotlib
 import pandas as pd
 import numpy as np
 from scipy.stats import spearmanr as spr
-from mpl_toolkits.basemap import Basemap
+#from mpl_toolkits.basemap import Basemap
 import matplotlib.pyplot as plt
 from sklearn.linear_model import LogisticRegression
 from sklearn.model_selection import train_test_split
@@ -19,7 +19,7 @@ from sklearn.utils import resample
 import multiprocessing
 import glob
 import xarray as xr
-from obs_read import read_clim_ind
+#from obs_read import read_clim_ind
 
 def auc_test():
 

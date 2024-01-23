@@ -6,7 +6,7 @@
 #PBS -l ncpus=1
 #PBS -o /home/548/ab4502/working/ExtremeWind/jobs/messages/barra_fc_wrf_python_YEAR_MMstart.o 
 #PBS -e /home/548/ab4502/working/ExtremeWind/jobs/messages/barra_fc_wrf_python_YEAR_MMstart.e 
-#PBS -l storage=gdata/eg3+gdata/ub4+gdata/ma05
+#PBS -l storage=gdata/eg3+gdata/ub4+gdata/ma05+gdata/cj37
 #PBS -N YEAR_MMstart
  
 #Set up conda/shell environments 

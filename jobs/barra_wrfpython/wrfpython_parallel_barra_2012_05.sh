@@ -2,11 +2,11 @@
 
 #PBS -P eg3 
 #PBS -q normal
-#PBS -l walltime=24:00:00,mem=64GB 
+#PBS -l walltime=06:00:00,mem=64GB 
 #PBS -l ncpus=1
 #PBS -o /home/548/ab4502/working/ExtremeWind/jobs/messages/barra_fc_wrf_python_2012_05.o 
 #PBS -e /home/548/ab4502/working/ExtremeWind/jobs/messages/barra_fc_wrf_python_2012_05.e 
-#PBS -l storage=gdata/eg3+gdata/ub4+gdata/ma05
+#PBS -l storage=gdata/eg3+gdata/ub4+gdata/ma05+gdata/cj37
 #PBS -N 2012_05
  
 #Set up conda/shell environments 

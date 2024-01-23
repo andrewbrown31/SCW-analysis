@@ -1594,6 +1594,14 @@ def nc_attributes(param):
 		units = ""
 		long_name = "non-supercell_significant_tornado_parameter"
 		least_significant_digit = 8
+	elif param=="vo700":
+		units = "s^-1 * 1e5"
+		long_name = "relative_vorticity_700hPa"
+		least_significant_digit = 5
+	elif param=="vo500":
+		units = "s^-1 * 1e5"
+		long_name = "relative_vorticity_500hPa"
+		least_significant_digit = 5
 	elif param=="vo10":
 		units = "s^-1 * 1e5"
 		long_name = "relative_vorticity_10m"
@@ -2258,12 +2266,24 @@ def nc_attributes(param):
 		units = "degC"
 		long_name = "dewpoint_850"
 		least_significant_digit = 2
+	elif param == "u850":
+		units = "m/s"
+		long_name = "uwind850hpa"
+		least_significant_digit = 2
+	elif param == "v850":
+		units = "m/s"
+		long_name = "vwind850hpa"
+		least_significant_digit = 2
 	elif param == "u500":
 		units = "m/s"
 		long_name = "uwind500hpa"
 		least_significant_digit = 2
+	elif param == "z700":
+		units = "m"
+		long_name = "geopotential700hpa"
+		least_significant_digit = 2
 	elif param == "z500":
-		units = "m^2/s^2"
+		units = "m"
 		long_name = "geopotential500hpa"
 		least_significant_digit = 2
 	elif param == "v500":
@@ -2286,6 +2306,10 @@ def nc_attributes(param):
 		units = "g/kg"
 		long_name = "specific_humidity500hPa"
 		least_significant_digit = 7
+	elif param == "mag_wb":
+		units = ""
+		long_name = "magnitude_of_the_gradient_of_850hPa_wetbulb"
+		least_significant_digit = 3
 	elif param == "mag_tfp":
 		units = "100 km^-3"
 		long_name = "magnitude_of_the_gradient_of_the_thermal_front_parameter"
@@ -2298,10 +2322,22 @@ def nc_attributes(param):
 		units = "hPa"
 		long_name = "mean_sea_level_pressure"
 		least_significant_digit = 2
+	elif param == "laplacian":
+		units = ""
+		long_name = "laplacian_operator_applied_to_z500"
+		least_significant_digit = 2
+	elif param == "sst":
+		units = "degC"
+		long_name = "sea_sfc_temp"
+		least_significant_digit = 2
 	elif param == "bdsd":
 		units = ""
 		long_name = "brown_dowdy_stat_diag"
 		least_significant_digit = 2
+	elif param == "ncape":
+		units = "m s^-2"
+		long_name = "mu_cape_normalised_by_depth"
+		least_significant_digit = 3
 	else:
 		units = ""
 		long_name = ""

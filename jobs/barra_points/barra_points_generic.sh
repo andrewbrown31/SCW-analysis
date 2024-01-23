@@ -6,7 +6,7 @@
 #PBS -l ncpus=1
 #PBS -o /home/548/ab4502/working/ExtremeWind/jobs/messages/barra_points_YEAR.o 
 #PBS -e /home/548/ab4502/working/ExtremeWind/jobs/messages/barra_points_YEAR.e 
-#PBS -lstorage=gdata/eg3+gdata/ma05
+#PBS -lstorage=gdata/eg3+gdata/ma05+gdata/cj37
  
 #Set up conda/shell environments 
 source activate wrfpython3.6 

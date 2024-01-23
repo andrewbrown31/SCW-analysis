@@ -6,7 +6,7 @@
 #PBS -l ncpus=1
 #PBS -o /home/548/ab4502/working/ExtremeWind/jobs/messages/q_melting_scenario_cmip5_rcp85_2081_2100.o 
 #PBS -e /home/548/ab4502/working/ExtremeWind/jobs/messages/q_melting_scenario_cmip5_rcp85_2081_2100.e 
-#PBS -l storage=gdata/eg3+gdata/ub4+gdata/ma05+gdata/du7+gdata/rr3+gdata/r87+gdata/fs38
+#PBS -l storage=gdata/eg3+gdata/ub4+gdata/ma05+gdata/du7+gdata/rr3+gdata/r87+gdata/fs38+gdata/rt52
 
 source activate wrfpython3.6 
 

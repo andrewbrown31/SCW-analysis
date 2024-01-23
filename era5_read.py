@@ -173,6 +173,7 @@ def read_era5_rt52(domain,times,pres=True,delta_t=1):
 	vas = np.empty((len(date_list),len(sfc_lat_ind),len(sfc_lon_ind)))
 	sst = np.empty((len(date_list),len(sfc_lat_ind),len(sfc_lon_ind)))    
 	ps = np.empty((len(date_list),len(sfc_lat_ind),len(sfc_lon_ind)))
+	msl = np.empty((len(date_list),len(sfc_lat_ind),len(sfc_lon_ind)))
 	cp = np.zeros(ps.shape) * np.nan
 	tp = np.zeros(ps.shape) * np.nan
 	cape = np.zeros(ps.shape) * np.nan
@@ -206,6 +207,8 @@ def read_era5_rt52(domain,times,pres=True,delta_t=1):
 			"/2d_era5_oper_sfc_"+date+"*.nc")[0])
 		tas_file = nc.Dataset(glob.glob("/g/data/rt52/era5/single-levels/reanalysis/2t/"+date[0:4]+\
 			"/2t_era5_oper_sfc_"+date+"*.nc")[0])
+		msl_file = nc.Dataset(glob.glob("/g/data/rt52/era5/single-levels/reanalysis/msl/"+date[0:4]+\
+			"/msl_era5_oper_sfc_"+date+"*.nc")[0])
 		ps_file = nc.Dataset(glob.glob("/g/data/rt52/era5/single-levels/reanalysis/sp/"+date[0:4]+\
 			"/sp_era5_oper_sfc_"+date+"*.nc")[0])
 		cape_file = nc.Dataset(glob.glob("/g/data/rt52/era5/single-levels/reanalysis/cape/"+date[0:4]+\
@@ -255,6 +258,7 @@ def read_era5_rt52(domain,times,pres=True,delta_t=1):
 		tas[date_ind,:,:] = tas_file["t2m"][time_ind,sfc_lat_ind,sfc_lon_ind] - 273.15
 		ta2d[date_ind,:,:] = ta2d_file["d2m"][time_ind,sfc_lat_ind,sfc_lon_ind] - 273.15
 		ps[date_ind,:,:] = ps_file["sp"][time_ind,sfc_lat_ind,sfc_lon_ind] / 100
+		msl[date_ind,:,:] = msl_file["msl"][time_ind,sfc_lat_ind,sfc_lon_ind] / 100
 		fc_date_ind = np.in1d(date_list, nc.num2date(wg10_file["time"][fc_time_ind], wg10_file["time"].units))
 		tp_date_ind = np.in1d([np.datetime64(date_list[i]) for i in np.arange(len(date_list))],tp_file.time.values)
 		cp[tp_date_ind,:,:] = cp_file.isel({"time":tp_time_ind}).values
@@ -265,7 +269,7 @@ def read_era5_rt52(domain,times,pres=True,delta_t=1):
 		if pres:
 			ta_file.close();z_file.close();ua_file.close();va_file.close();hur_file.close()
 		uas_file.close();vas_file.close();tas_file.close();ta2d_file.close();ps_file.close()
-		sst_file.close()
+		sst_file.close(); msl_file.close()
 
 	if pres:
 		p = np.flip(p)
@@ -275,9 +279,9 @@ def read_era5_rt52(domain,times,pres=True,delta_t=1):
 		hgt = np.flip(hgt, axis=1)
 		ua = np.flip(ua, axis=1)
 		va = np.flip(va, axis=1)
-		return [ta,dp,hur,hgt,terrain,p,ps,ua,va,uas,vas,tas,ta2d,cp,tp,wg10,cape,sst,lon,lat,date_list]
+		return [ta,dp,hur,hgt,terrain,p,ps,msl,ua,va,uas,vas,tas,ta2d,cp,tp,wg10,cape,sst,lon,lat,date_list]
 	else:
-		return [ps,uas,vas,tas,ta2d,cp,tp,wg10,cape,sfc_lon,sfc_lat,date_list]
+		return [ps,msl,uas,vas,tas,ta2d,cp,tp,wg10,cape,sfc_lon,sfc_lat,date_list]
 
 def read_era5(domain,times,pres=True,delta_t=1):
 	#Open ERA5 netcdf files and extract variables needed for a range of times 
@@ -596,6 +600,7 @@ def to_points_loop_rad(loc_id,points,fname,start_year,end_year,rad=50,lsm=True,\
 
 	#Initialise dataframe for point data
 	max_df = pd.DataFrame()
+	min_df = pd.DataFrame()
 	mean_df = pd.DataFrame()
 
 	#For each month from start_year to end_year
@@ -627,15 +632,19 @@ def to_points_loop_rad(loc_id,points,fname,start_year,end_year,rad=50,lsm=True,\
 		#Subset netcdf data based on lat and lon, and convert to a dataframe
 		#Get all points (regardless of LSM) within 100 km radius
 		max_temp_df = pd.DataFrame()
+		min_temp_df = pd.DataFrame()
 		mean_temp_df = pd.DataFrame()
 		for i in np.arange(len(loc_id)):
 			a,b = np.where(dist_km[i] <= rad)
 			subset = f.isel_points("points",lat=a, lon=b).persist()
 			max_point_df = subset.max("points").to_dataframe()
+			min_point_df = subset.min("points").to_dataframe()
 			mean_point_df = subset.mean("points").to_dataframe()
 			max_point_df["points"] = i
+			min_point_df["points"] = i
 			mean_point_df["points"] = i
 			max_temp_df = pd.concat([max_temp_df, max_point_df], axis=0)
+			min_temp_df = pd.concat([min_temp_df, min_point_df], axis=0)
 			mean_temp_df = pd.concat([mean_temp_df, mean_point_df], axis=0)
 
 		#Manipulate dataframe for nice output
@@ -651,6 +660,12 @@ def to_points_loop_rad(loc_id,points,fname,start_year,end_year,rad=50,lsm=True,\
 		mean_temp_df = mean_temp_df.drop("points",axis=1)
 		mean_df = pd.concat([mean_df, mean_temp_df])
 
+		min_temp_df = min_temp_df.reset_index()
+		for p in np.arange(len(loc_id)):
+			min_temp_df.loc[min_temp_df.points==p,"loc_id"] = loc_id[p]
+		min_temp_df = min_temp_df.drop("points",axis=1)
+		min_df = pd.concat([min_df, min_temp_df])
+
 		#Clean up
 		f.close()
 		gc.collect()
@@ -658,6 +673,7 @@ def to_points_loop_rad(loc_id,points,fname,start_year,end_year,rad=50,lsm=True,\
 	#Save point output to disk
 	max_df.sort_values(["loc_id","time"]).to_pickle("/g/data/eg3/ab4502/ExtremeWind/points/"+fname+"_max.pkl")
 	mean_df.sort_values(["loc_id","time"]).to_pickle("/g/data/eg3/ab4502/ExtremeWind/points/"+fname+"_mean.pkl")
+	min_df.sort_values(["loc_id","time"]).to_pickle("/g/data/eg3/ab4502/ExtremeWind/points/"+fname+"_min.pkl")
 
 def to_points_loop(loc_id,points,fname,start_year,end_year,variables=False):
 
@@ -903,7 +919,14 @@ if __name__ == "__main__":
 		start_time = int(sys.argv[1])
 		end_time = int(sys.argv[2])
 
-	loc_id, points = get_aus_stn_info()
+	#loc_id, points = get_aus_stn_info()
+	#to_keep = ["Amberley","Melbourne","Oakey","Sydney","Woomera"]
+	#points = np.array(points)[np.in1d(loc_id,to_keep)]
+	#loc_id = np.array(loc_id)[np.in1d(loc_id,to_keep)]
+	#to_points_loop_rad(loc_id, points, "era5_rad50km_case_study_"+str(start_time)+"_"+str(end_time), \
+	#		start_time, end_time, rad=50, lsm=True, pb=True,\
+	#		variables=["mu_cape","s06","dcape","Umean06","lr13","qmean01"])
+
 	#loc_id = ['Melbourne', 'Wollongong', 'Gympie', 'Grafton', 'Canberra', 'Marburg', \
 	#	'Adelaide', 'Namoi', 'Perth', 'Hobart']
 	#radar_latitude = [-37.8553, -34.2625, -25.9574, -29.622, -35.6614, -27.608, -34.6169,\
@@ -919,12 +942,12 @@ if __name__ == "__main__":
 	#		"effcape*s06","ml_el","ship","ml_cape","eff_lcl","cp","Umeanwindinf","wg10","ebwd","sbcape*s06"])
 
 	#Thunderstorm asthma loc (Laverton airport, Melbourne)
-	#loc_id = ["Melbourne"]
-	#points = [(144.76,-37.86)]
-	#to_points_loop_rad(loc_id,points,"era5_ts_asthma_"+str(start_time),start_time,end_time,rad=75,lsm=True,pb=True)
+	loc_id = ["Melbourne"]
+	points = [(144.76,-37.86)]
+	to_points_loop_rad(loc_id,points,"era5_ts_asthma_"+str(start_time),start_time,end_time,rad=75,lsm=True,pb=True)
 
         #BARRA-AD and BARRA-SY comparison locs
-	to_keep = ["Adelaide","Ceduna","Coffs Harbour","Mount Gambier","Sydney","Wagga Wagga","Williamtown","Woomera"]
-	points = np.array(points)[np.in1d(loc_id,to_keep)]
-	loc_id = np.array(loc_id)[np.in1d(loc_id,to_keep)]
-	to_points_loop_wg10(loc_id,points,"era5_wg10_"+str(start_time)+"_"+str(end_time),start_time,end_time)
+	#to_keep = ["Adelaide","Ceduna","Coffs Harbour","Mount Gambier","Sydney","Wagga Wagga","Williamtown","Woomera"]
+	#points = np.array(points)[np.in1d(loc_id,to_keep)]
+	#loc_id = np.array(loc_id)[np.in1d(loc_id,to_keep)]
+	#to_points_loop_wg10(loc_id,points,"era5_wg10_"+str(start_time)+"_"+str(end_time),start_time,end_time)

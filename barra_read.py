@@ -201,17 +201,17 @@ def read_barra_fc(domain,times,mslp=False):
 
 		if temp_time.year >= 1990:
 
-			temp_fname_prs = glob.glob("/g/data/ma05/BARRA_R/v1/forecast/prs/air_temp/"+\
+			temp_fname_prs = glob.glob("/g/data/cj37/BARRA/BARRA_R/v1/forecast/prs/air_temp/"+\
 				temp_time.strftime("%Y")+"/"+temp_time.strftime("%m")+\
 				"/air_temp-fc-prs-PT1H-BARRA_R-v1*"+temp_time.strftime("%Y")+\
 				temp_time.strftime("%m")+temp_time.strftime("%d")+"T"+\
 				temp_time.strftime("%H")+"*.sub.nc")[0]
-			temp_fname_slv = glob.glob("/g/data/ma05/BARRA_R/v1/forecast/slv/dewpt_scrn/"+\
+			temp_fname_slv = glob.glob("/g/data/cj37/BARRA/BARRA_R/v1/forecast/slv/dewpt_scrn/"+\
 				temp_time.strftime("%Y")+"/"+temp_time.strftime("%m")+\
 				"/dewpt_scrn-fc-slv-PT1H-BARRA_R-v1*"+temp_time.strftime("%Y")+\
 				temp_time.strftime("%m")+temp_time.strftime("%d")+"T"+\
 				temp_time.strftime("%H")+"*.sub.nc")[0]
-			temp_fname_spec = glob.glob("/g/data/ma05/BARRA_R/v1/forecast/spec/uwnd10m/"+\
+			temp_fname_spec = glob.glob("/g/data/cj37/BARRA/BARRA_R/v1/forecast/spec/uwnd10m/"+\
 				temp_time.strftime("%Y")+"/"+temp_time.strftime("%m")+\
 				"/uwnd10m-fc-spec-PT1H-BARRA_R-v1*"+temp_time.strftime("%Y")+\
 				temp_time.strftime("%m")+temp_time.strftime("%d")+"T"+\
@@ -501,7 +501,7 @@ def get_pressure(top, date):
 	hour = dt.datetime.strftime(date,"%H")
 
 	#Load BARRA analysis files
-	ta_file = nc.Dataset(glob.glob("/g/data/ma05/BARRA_R/v1/analysis/prs/air_temp/"\
+	ta_file = nc.Dataset(glob.glob("/g/data/cj37/BARRA/BARRA_R/v1/analysis/prs/air_temp/"\
 +year+"/"+month+"/air_temp-an-prs-PT0H-BARRA_R-v1*"+year+month+day+"T"+hour+"*.nc")[0])
 
 	p =ta_file["pressure"][:]
@@ -509,14 +509,14 @@ def get_pressure(top, date):
 	return [len(p_ind), p, p_ind]
 
 def get_lat_lon():
-	ta_file = nc.Dataset(glob.glob("/g/data/ma05/BARRA_R/v1/analysis/prs/air_temp/"\
+	ta_file = nc.Dataset(glob.glob("/g/data/cj37/BARRA/BARRA_R/v1/analysis/prs/air_temp/"\
 	+"2012"+"/"+"12"+"/air_temp-an-prs-PT0H-BARRA_R-v1-"+"2012"+"12"+"01"+"T"+"00"+"*.nc")[0])
 	lon = ta_file["longitude"][:]
 	lat = ta_file["latitude"][:]
 	return [lon,lat]
 
 def get_lat_lon_inds(points,lon,lat):
-	lsm = nc.Dataset("/g/data/ma05/BARRA_R/v1/static/lnd_mask-an-slv-PT0H-BARRA_R-v1.nc").variables["lnd_mask"][:]
+	lsm = nc.Dataset("/g/data/cj37/BARRA/BARRA_R/v1/static/lnd_mask-an-slv-PT0H-BARRA_R-v1.nc").variables["lnd_mask"][:]
 	x,y = np.meshgrid(lon,lat)
 	x[lsm==0] = np.nan
 	y[lsm==0] = np.nan
@@ -535,7 +535,7 @@ def get_lat_lon_inds(points,lon,lat):
 	return [lon_ind, lat_ind, lon_used, lat_used]
 
 def get_terrain(lat_ind,lon_ind):
-	terrain_file = nc.Dataset("/g/data/ma05/BARRA_R/v1/static/topog-an-slv-PT0H-BARRA_R-v1.nc")
+	terrain_file = nc.Dataset("/g/data/cj37/BARRA/BARRA_R/v1/static/topog-an-slv-PT0H-BARRA_R-v1.nc")
 	terrain = terrain_file.variables["topog"][lat_ind,lon_ind]
 	terrain_file.close()
 	return terrain
@@ -546,7 +546,7 @@ def get_mask(lon,lat):
 	nat_lon,nat_lat = get_lat_lon()
 	lon_ind = np.where((nat_lon >= lon[0]) & (nat_lon <= lon[-1]))[0]
 	lat_ind = np.where((nat_lat >= lat[0]) & (nat_lat <= lat[-1]))[0]
-	lsm = nc.Dataset("/g/data/ma05/BARRA_R/v1/static/lnd_mask-an-slv-PT0H-BARRA_R-v1.nc").variables["lnd_mask"][:]
+	lsm = nc.Dataset("/g/data/cj37/BARRA/BARRA_R/v1/static/lnd_mask-an-slv-PT0H-BARRA_R-v1.nc").variables["lnd_mask"][:]
 	lsm_domain = lsm[lat_ind[0]:lat_ind[-1]+1,lon_ind[0]:lon_ind[-1]+1]
 	
 	return lsm_domain
@@ -1012,7 +1012,7 @@ def to_points_loop_ctk(loc_id,points,fname,start_year,end_year,variable):
 			"s06":"132"}
 
 	#Load BARRA-R LSM
-	lsm = nc.Dataset("/g/data/ma05/BARRA_R/v1/static/lnd_mask-an-slv-PT0H-BARRA_R-v1.nc").\
+	lsm = nc.Dataset("/g/data/cj37/BARRA/BARRA_R/v1/static/lnd_mask-an-slv-PT0H-BARRA_R-v1.nc").\
 		variables["lnd_mask"][:]
 
 	#Loop over monthly dates, read netcdf data and extract point time series
@@ -1020,7 +1020,7 @@ def to_points_loop_ctk(loc_id,points,fname,start_year,end_year,variable):
 
 		#Load grib files
 		print(dates[t])
-		files = glob.glob("/g/data/ma05/BARRA_R/v1/products/ctk/"+
+		files = glob.glob("/g/data/cj37/BARRA/BARRA_R/v1/products/ctk/"+
 			dates[t].strftime("%Y")+"/"+dates[t].strftime("%m")+"/*.grib2")
 		files.sort()
 		f=xr.open_mfdataset(files, engine="cfgrib", backend_kwargs={"read_keys":["parameterName"], \
@@ -1140,6 +1140,18 @@ def get_dp(ta,hur,dp_mask=True):
 		dp[np.isnan(dp)] = -85.
 		return dp
 
+def preprocess_barra_xx_lightning(ds):
+	#During open_mfdataset, perform the following pre-process step. Drop all non-relevant variables, take the difference in accumulations
+	return ds.assign_coords({"dim0":ds["time_bnds"].values[:,1]}).\
+		    drop_vars(["forecast_period","forecast_reference_time","time_bnds","forecast_period_bnds","latitude_longitude","time"]).\
+		    diff(dim="dim0", n=1, label="upper")
+
+def load_barra_xx_lightning():
+	barra = xr.open_mfdataset("/g/data/cj37/BARRA/prod/BARRA_AD/v1/forecast/spec/n_lightning_fl/2016/09/n_lightning_fl-fc-spec-PT10M-BARRA_AD-v1-20160928*",
+                    preprocess=preprocess_barra_xx_lightning)
+	return barra
+	
+
 if __name__ == "__main__":
 
 	if len(sys.argv) > 1:
@@ -1161,11 +1173,11 @@ if __name__ == "__main__":
 	#points = [(radar_longitude[i], radar_latitude[i]) for i in np.arange(len(radar_latitude))]
 
 	#Thunderstorm asthma loc (Laverton airport, Melbourne)
-	#loc_id = ["Melbourne"]
-	#points = [(144.76,-37.86)]
+	loc_id = ["Melbourne"]
+	points = [(144.76,-37.86)]
 
 	#to_points_loop(loc_id,points,"barra_allvars_v3_"+str(start_year),start_year,end_year,variables=False)
-	#to_points_loop_rad(loc_id,points,"barra_ts_asthma_"+str(start_year),start_year,end_year,rad=75,lsm=True,pb=True)
+	to_points_loop_rad(loc_id,points,"barra_ts_asthma_"+str(start_year),start_year,end_year,rad=75,lsm=True,pb=True)
 
 #	to_points_loop_rad(loc_id, points, "barra_rad50km_"+str(start_year)+"_"+str(end_year), \
 #			start_year, end_year, rad=50, lsm=True, pb=True,\
@@ -1183,7 +1195,7 @@ if __name__ == "__main__":
 	#to_points_loop_wg10(loc_id,points,"barra_wg10_djf_1990_2005",1990,2005)
 
 	#BARRA-AD and BARRA-SY comparison locs
-	to_keep = ["Adelaide","Ceduna","Coffs Harbour","Mount Gambier","Sydney","Wagga Wagga","Williamtown","Woomera"]
-	points = np.array(points)[np.in1d(loc_id,to_keep)]
-	loc_id = np.array(loc_id)[np.in1d(loc_id,to_keep)]
-	to_points_loop_wg10(loc_id,points,"barra_wg10_"+str(start_year)+"_"+str(end_year),start_year,end_year)
+	#to_keep = ["Adelaide","Ceduna","Coffs Harbour","Mount Gambier","Sydney","Wagga Wagga","Williamtown","Woomera"]
+	#points = np.array(points)[np.in1d(loc_id,to_keep)]
+	#loc_id = np.array(loc_id)[np.in1d(loc_id,to_keep)]
+	#to_points_loop_wg10(loc_id,points,"barra_wg10_"+str(start_year)+"_"+str(end_year),start_year,end_year)

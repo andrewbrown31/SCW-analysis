@@ -11,8 +11,8 @@
 #Set up conda/shell environments 
 source activate wrfpython3.6 
 
-d=1960-01-01
-while [ "$d" != 2010-01-01 ]; do
+d=1970-01-01
+while [ "$d" != 1980-01-01 ]; do
 
 	start_time=$(date -d "$d" +%Y)"010100"
 	end_time=$(date -d "$d + 9 year"  +%Y)"123118"

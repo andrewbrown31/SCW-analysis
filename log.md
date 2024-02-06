@@ -6,11 +6,31 @@ results in Brown, A., & Dowdy, A., (2021) Severe convection-related winds in Aus
  This is a working repository, and so it is not guaranteed that the scripts appear exactly as was used
  to generate the abovementioned paper. [This commit](https://github.com/andrewbrown31/SCW-analysis/tree/9870e80a04e47c437914c62a5770b314f2d3a97c) was used for the final version of that paper.
 
-#### Set up python environment using conda
+#### Set up python environment using conda (tested on Gadi, 6 Feb 2024)
 ```bash
-conda create --name wrfpython3.6 --file requirements.txt
-conda activate wrfpython3.6
-sh wrf-python/compile_wrf_python.sh
+#Create the conda environment
+conda create --name wrfpython_test -c conda-forge python=3.6 metpy=0.10.2 wrf-python=1.3.2 netcdf4=1.5.1.2 tqdm dask=2.3.0 pint=0.9
+conda activate wrfpython_test
+
+#Now download the source code for wrf-python
+cd /g/data/w40/ab4502/
+wget https://files.pythonhosted.org/packages/72/ad/e836d18cd1b06c58a2f22559700f23c45e00ca4c36c23b4ffe2a35e718c7/wrf-python-1.3.1.tar.gz
+tar -xvf wrf-python-1.3.1.tar.gz
+
+#From our github repo, copy an edited version of rip_cape fortran code to the wrf-python source directory, as well as some manually edited wrapper functions
+cd wrf-python-1.3.1/
+cp SCW-analysis/wrf-python/rip_cape.f90 fortran/rip_cape.f90
+cp SCW-analysis/wrf-python/specialdec.py src/wrf/specialdec.py
+cp SCW-analysis/wrf-python/extension.py src/wrf/extension.py
+cp SCW-analysis/wrf-python/metadecorators.py src/wrf/metadecorators.py
+
+#Build the wrf-python code. Need to first uninstall the existing wrf-python package from the conda env
+pip uninstall wrf-python
+cd build_scripts/
+sh gnu_omp.sh
+
+#Now can run the code
+python SCW-analysis/wrf_non_parallel.py -m era5 -t1 2016092800 -t2 2016092806 --issave True
 ```
 
 #### Calculating convective diagnostics from reanalyses

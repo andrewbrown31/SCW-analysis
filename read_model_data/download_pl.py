@@ -35,5 +35,5 @@ c.retrieve(
             160,
         ],
     },
-    '/g/data/eg3/ab4502/era5_download/dandenong_pl.nc')
+    'data/era5_pl.nc')
 

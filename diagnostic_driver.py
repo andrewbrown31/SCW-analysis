@@ -1,6 +1,4 @@
-import argparse
 from SkewT import get_dcape
-import gc
 import warnings
 import numpy as np
 import datetime as dt

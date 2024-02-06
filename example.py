@@ -1,5 +1,4 @@
 from read_model_data.era5_read import read_era5_rt52
-from read_model_data.barra_read import read_barra
 import datetime as dt
 from diagnostic_driver import run_diagnostics
 

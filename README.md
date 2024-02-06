@@ -1,7 +1,7 @@
 # Calculating SCW diagnostics
 This is a clean branch containing the minimum amount of code needed to compute a suite of convective diagnostics, as used by Brown and Dowdy (2021). This code relies heavily on [wrf-python](https://wrf-python.readthedocs.io/en/latest/), [SkewT](https://github.com/tjlang/SkewT), and [metpy](https://unidata.github.io/MetPy/latest/index.html).
 
-Below shows how to set up the python environment, and how to run an example computation on ERA5 data (either on Gadi or by downloading some ERA5 data from the ECMWF CDS).
+Below shows how to set up the python environment, and how to run an example computation on ERA5 data.
 
 ## Installation
 The recommended installation is to use conda. However, we also need to compile wrf-python from source, as we will make some changes to the source code. This requires a fortran compiler.
@@ -35,18 +35,18 @@ sh gnu_omp.sh
 
 ## Example
 
-An example is included here in example.py based on ERA5 data. This has the option to use data from the rt52 project on Gadi, or data downloaded from the ECMWF CDS.
-The latter option requires an [API key from CDS](https://cds.climate.copernicus.eu/api-how-to).
-Output from this example is saved as read_model_data/data/era5_20160928_20160928.nc.
+An example is included here in `example.py` based on ERA5 data in the `read_model_data/data/` directory, downloaded from the ECMWF CDS as shown below (this requires an [API key from CDS](https://cds.climate.copernicus.eu/api-how-to)).
+`example.py` also has the option to use data from the rt52 project on Gadi.
 
+Output from this example is saved as `read_model_data/data/era5_20160928_20160928.nc`.
 ```bash
-#Download some ERA5 data for example.py (unless on Gadi, in which case this can be skipped, and the appropriate option can be changed in example.py)
+#(Optional) Download some ERA5 data for example.py
 #
 cd ../../read_model_data/
 python download_sfc.py
 python download_pl.py
 
-#Now can run the code.
+#Run the diagnostic code.
 cd ..
 python example.py
 ```

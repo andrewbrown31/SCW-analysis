@@ -40,9 +40,9 @@ An example is included here in `example.py` based on ERA5 data in the `read_mode
 
 Output from this example is saved as `read_model_data/data/era5_20160928_20160928.nc`.
 ```bash
+cd ../../read_model_data/
 #(Optional) Download some ERA5 data for example.py
 #
-cd ../../read_model_data/
 python download_sfc.py
 python download_pl.py
 

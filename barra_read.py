@@ -9,7 +9,7 @@ import glob
 import pandas as pd
 import xarray as xr
 
-from metpy.calc import vertical_velocity_pressure as omega
+#from metpy.calc import vertical_velocity_pressure as omega
 import metpy.calc as mpcalc
 from metpy.units import units
 

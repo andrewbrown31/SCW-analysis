@@ -1,6 +1,7 @@
 figs/
 SHARPpy/
 jobs/messages/
+.vscode/
 *.csv
 *.pyc
 *.swp

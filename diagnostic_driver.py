@@ -151,6 +151,23 @@ def run_diagnostics(ta,hur,hgt,terrain,p,ps,ua,va,uas,vas,tas,ta2d,wg10,lon,lat,
 		param = np.array(["mu_cape", "mu_cin", "s06","wg10","dcape","convgust_dry","convgust_wet","gustex",\
 				    "bdsd","qmean01","Umean06","lr13","mucape*s06"])
 
+	#Convert input to float32. This is because to ensure that == operations work between variables 
+	ta = ta.astype("float32", order="C")
+	hur = hur.astype("float32", order="C")
+	hgt = hgt.astype("float32", order="C")
+	terrain = terrain.astype("float32", order="C")
+	p = p.astype("float32", order="C")
+	ps = ps.astype("float32", order="C")
+	ua = ua.astype("float32", order="C")
+	va = va.astype("float32", order="C")
+	uas = uas.astype("float32", order="C")
+	vas = vas.astype("float32", order="C")
+	tas= tas.astype("float32", order="C")
+	ta2d = ta2d.astype("float32", order="C")
+	wg10 = wg10.astype("float32", order="C")
+	lon = lon.astype("float32", order="C")
+	lat = lat.astype("float32", order="C")
+
 	#Set output array
 	output_data = np.zeros((ps.shape[0], ps.shape[1], ps.shape[2], len(param)))
 

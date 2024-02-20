@@ -5,6 +5,7 @@ import datetime as dt
 import glob
 import xarray as xr
 from metpy.units import units
+from utils import get_dp
 
 def read_barra(domain,times):
 	#Open BARRA netcdf files and extract variables needed for a range of times and given
@@ -38,7 +39,6 @@ def read_barra(domain,times):
 	dp = np.empty((len(date_list),no_p,len(lat_ind),len(lon_ind)))
 	hur = np.empty((len(date_list),no_p,len(lat_ind),len(lon_ind)))
 	hgt = np.empty((len(date_list),no_p,len(lat_ind),len(lon_ind)))
-	wap = np.empty((len(date_list),no_p,len(lat_ind),len(lon_ind)))
 	ua = np.empty((len(date_list),no_p,len(lat_ind),len(lon_ind)))
 	va = np.empty((len(date_list),no_p,len(lat_ind),len(lon_ind)))
 	uas = np.empty((len(date_list),len(lat_ind),len(lon_ind)))
@@ -92,9 +92,6 @@ def read_barra(domain,times):
 		temp_hur[temp_hur<0] = 0
 		temp_hur[temp_hur>100] = 100
 		temp_dp = get_dp(temp_ta,temp_hur)
-		temp_wap = omega( w_file["vertical_wnd"][p_ind,lat_ind,lon_ind] * (units.metre / units.second),\
-			p_3d * (units.hPa), \
-			temp_ta * units.degC )
 		uas[t,:,:] = uas_file["uwnd10m"][lat_ind,lon_ind]
 		vas[t,:,:] = vas_file["vwnd10m"][lat_ind,lon_ind]
 		tas[t,:,:] = tas_file["temp_scrn"][lat_ind,lon_ind] - 273.15
@@ -106,7 +103,6 @@ def read_barra(domain,times):
 		dp[t,:,:,:] = np.flipud(temp_dp)
 		hur[t,:,:,:] = np.flipud(temp_hur)
 		hgt[t,:,:,:] = np.flipud(temp_hgt)
-		wap[t,:,:,:] = np.flipud(temp_wap)
 		ua[t,:,:,:] = np.flipud(temp_ua)
 		va[t,:,:,:] = np.flipud(temp_va)
 
@@ -132,7 +128,7 @@ def read_barra(domain,times):
 		
 	p = np.flipud(pres)
 
-	return [ta,dp,hur,hgt,terrain,p,ps,wap,ua,va,uas,vas,tas,ta2d,wg10,lon,lat,date_list]
+	return [ta,dp,hur,hgt,terrain,p,ps,ua,va,uas,vas,tas,ta2d,wg10,lon,lat,date_list]
 	
 def read_barra_fc(domain,times,mslp=False):
 	#If mslp=True, then replace ps with mslp
@@ -162,7 +158,6 @@ def read_barra_fc(domain,times,mslp=False):
 	dp = np.empty((len(date_list),no_p,len(lat_ind),len(lon_ind)))
 	hur = np.empty((len(date_list),no_p,len(lat_ind),len(lon_ind)))
 	hgt = np.empty((len(date_list),no_p,len(lat_ind),len(lon_ind)))
-	wap = np.empty((len(date_list),no_p,len(lat_ind),len(lon_ind)))
 	ua = np.empty((len(date_list),no_p,len(lat_ind),len(lon_ind)))
 	va = np.empty((len(date_list),no_p,len(lat_ind),len(lon_ind)))
 	uas = np.empty((len(date_list),len(lat_ind),len(lon_ind)))
@@ -266,20 +261,12 @@ def read_barra_fc(domain,times,mslp=False):
 			temp_hur[temp_hur<0] = 0
 			temp_hur[temp_hur>100] = 100
 			temp_dp = get_dp(temp_ta,temp_hur)
-			temp_wap = omega( w_file["vertical_wnd"][np.in1d(times, date_list),\
-				(np.in1d(w_file["pressure"][:].astype(np.float32), \
-					pres_full.astype(np.float32))) \
-				& (w_file["pressure"][:] >= 100),\
-				lat_ind,lon_ind] * (units.metre / units.second),\
-				p_3d * (units.hPa), \
-				temp_ta * units.degC )
 
 			#Flip pressure axes for compatibility with SHARPpy
 			ta[np.in1d(date_list, times),:,:,:] = np.flip(temp_ta, axis=1)
 			dp[np.in1d(date_list, times),:,:,:] = np.flip(temp_dp, axis=1)
 			hur[np.in1d(date_list, times),:,:,:] = np.flip(temp_hur, axis=1)
 			hgt[np.in1d(date_list, times),:,:,:] = np.flip(temp_hgt, axis=1)
-			wap[np.in1d(date_list, times),:,:,:] = np.flip(temp_wap, axis=1)
 			ua[np.in1d(date_list, times),:,:,:] = np.flip(temp_ua, axis=1)
 			va[np.in1d(date_list, times),:,:,:] = np.flip(temp_va, axis=1)
 
@@ -290,7 +277,6 @@ def read_barra_fc(domain,times,mslp=False):
 			dp[np.in1d(date_list, times),:,:,:] = np.nan
 			hur[np.in1d(date_list, times),:,:,:] = np.nan
 			hgt[np.in1d(date_list, times),:,:,:] = np.nan
-			wap[np.in1d(date_list, times),:,:,:] = np.nan
 			ua[np.in1d(date_list, times),:,:,:] = np.nan
 			va[np.in1d(date_list, times),:,:,:] = np.nan
 
@@ -315,7 +301,7 @@ def read_barra_fc(domain,times,mslp=False):
 		
 	p = np.flipud(pres)
 
-	return [ta,dp,hur,hgt,terrain,p,ps,wap,ua,va,uas,vas,tas,ta2d,wg10,lon,lat,date_list]
+	return [ta,dp,hur,hgt,terrain,p,ps,ua,va,uas,vas,tas,ta2d,wg10,lon,lat,date_list]
 
 def date_seq(times,delta_type,delta):
 	start_time = times[0]

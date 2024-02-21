@@ -11,7 +11,7 @@ if __name__ == "__main__":
     time = [dt.datetime.strptime(t1,"%Y%m%d%H"),dt.datetime.strptime(t2,"%Y%m%d%H")]
 
     gadi = True #Can be set to True if working on Gadi
-    model = "barra_r"
+    model = "era5"
 
     if gadi:
         #This code loads ERA5 data from Gadi, using the read_era5_rt52() function
@@ -32,7 +32,7 @@ if __name__ == "__main__":
                 "read_model_data/data/era5_pl.nc", 
                 "read_model_data/data/era5_sfc.nc", 
                 domain,time,delta_t=6)
-        elif model in ["barra","barra_sy"]:
+        elif model == "barra":
             print("For barra, set Gadi=True")
 
     #Run the diagnostic suite and save the output

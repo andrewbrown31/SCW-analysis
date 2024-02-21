@@ -36,7 +36,7 @@ sh gnu_omp.sh
 ## Example
 
 An example is included here in `example.py` based on ERA5 data in the `read_model_data/data/` directory, downloaded from the ECMWF CDS as shown below (this requires an [API key from CDS](https://cds.climate.copernicus.eu/api-how-to)).
-`example.py` also has the option to use data from the rt52 project on Gadi.
+`example.py` also has the option to use data from the rt52 project on Gadi, or BARRA data from cj37.
 
 Output from this example is saved as `read_model_data/data/era5_20160928_20160928.nc`.
 ```bash

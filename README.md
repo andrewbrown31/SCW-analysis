@@ -4,7 +4,7 @@ This is a clean branch containing the minimum amount of code needed to compute a
 Below shows how to set up the python environment, and how to run an example computation on ERA5 data.
 
 ## Installation
-The recommended installation is to use conda. However, we also need to compile wrf-python from source, as we will make some changes to the source code. This requires a fortran compiler.
+The recommended installation is to use [conda](https://conda.io/projects/conda/en/latest/index.html). However, we also need to compile wrf-python from source, as we will make some changes to the source code. This requires a fortran compiler.
 
 ```bash
 #Download the code
@@ -40,14 +40,13 @@ An example is included here in `example.py` based on ERA5 data in the `read_mode
 
 Output from this example is saved as `read_model_data/data/era5_20160928_20160928.nc`.
 ```bash
-cd ../../read_model_data/
 #(Optional) Download some ERA5 data for example.py
-#
-python download_sfc.py
-python download_pl.py
+#cd ../../read_model_data/
+#python download_sfc.py
+#python download_pl.py
+#cd ..
 
 #Run the diagnostic code.
-cd ..
 python example.py
 ```
 

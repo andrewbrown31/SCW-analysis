@@ -37,24 +37,25 @@ def run_diagnostics(ta,hur,hgt,terrain,p,ps,ua,va,uas,vas,tas,ta2d,wg10,lon,lat,
 	"""
 	This function calculates and saves a suite of environmental diagnostics relevant for thunderstorms 
 	and severe convective gusts. Some of these parameters (wg10) can be set to zero if unknown.
+	Vertical coordinate can be pressure or height (see below)
 
 	Parameters
 	----------
-	ta : (time,height,lat,lon) 'numpy.array'
+	ta : (time,vertical,lat,lon) 'numpy.array'
 		Air temperature (degrees C)
-	hur : (time,height,lat,lon) 'numpy.array'
+	hur : (time,vertical,lat,lon) 'numpy.array'
 		Relative humidity (percent)
-	hgt : (time,height,lat,lon) 'numpy.array'
+	hgt : (time,vertical,lat,lon) 'numpy.array'
 		Geopotential height (meters)
 	terrain : (lat,lon) 'numpy.array'
 		Model terrain height above sea level (meters)
-	p : (height) or (time,height,lat,lon) 'numpy.array'
-		Air pressure (hPa). If one-dimensional, this corresponds to the height coordinate of other data,
+	p : (vertical) or (time,vertical,lat,lon) 'numpy.array'
+		Air pressure (hPa). If one-dimensional, this corresponds to the vertical coordinate of other data (default),
 		and mdl_lvl should be False. If multi-dimensional, then the input data is probably on model levels,
 		so mdl_lvl should be true.
 	ps : (time,lat,lon) 'numpy.array'
 		Surface air pressure (hPa)
-	ua : (time,height,lat,lon) 'numpy.array'
+	ua : (time,vertical,lat,lon) 'numpy.array'
 		Zonal wind component (m/s)
 	va : (time,height,lat,lon) 'numpy.array'
 		Meridional wind component (m/s)		

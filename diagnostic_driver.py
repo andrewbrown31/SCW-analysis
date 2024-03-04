@@ -123,6 +123,9 @@ def run_diagnostics(ta,hur,hgt,terrain,p,ps,ua,va,uas,vas,tas,ta2d,wg10,lon,lat,
 			"wndg","mburst","sweat","k_index","wmpi","bdsd",\
 			\
 			"F10", "Fn10", "Fs10", "icon10", "vgt10", "conv10", "vo10",\
+			#New variables for Greeshma
+			"ta600","ta700","ta800","ta900","ta925","ta950","ta975","rh900","rh850",\
+			"sfc_ta","sfc_dp","inverted_v"
 				])
 	elif params == "reduced":
 		param = np.array(["ml_cape", "mu_cape", "sb_cape", "ml_cin", "sb_cin", "mu_cin",\
@@ -366,9 +369,21 @@ def run_diagnostics(ta,hur,hgt,terrain,p,ps,ua,va,uas,vas,tas,ta2d,wg10,lon,lat,
 		rhmin13 = get_min_var_hgt(np.copy(sfc_hur), np.copy(sfc_hgt), 1000, 3000, terrain)
 		rhmin36 = get_min_var_hgt(np.copy(sfc_hur), np.copy(sfc_hgt), 3000, 6000, terrain)
 		rhminsubcloud = get_min_var_hgt(np.copy(sfc_hur), np.copy(sfc_hgt), 0, ml_lcl, terrain)
+		ta975 = get_var_p_lvl(np.copy(sfc_ta), sfc_p_3d, 975)
+		ta950 = get_var_p_lvl(np.copy(sfc_ta), sfc_p_3d, 950)
+		ta925 = get_var_p_lvl(np.copy(sfc_ta), sfc_p_3d, 925)
+		ta900 = get_var_p_lvl(np.copy(sfc_ta), sfc_p_3d, 900)
 		ta850 = get_var_p_lvl(np.copy(sfc_ta), sfc_p_3d, 850)
+		ta800 = get_var_p_lvl(np.copy(sfc_ta), sfc_p_3d, 800)
+		ta700 = get_var_p_lvl(np.copy(sfc_ta), sfc_p_3d, 700)
+		ta600 = get_var_p_lvl(np.copy(sfc_ta), sfc_p_3d, 600)
 		ta500 = get_var_p_lvl(np.copy(sfc_ta), sfc_p_3d, 500)
+		dp925 = get_var_p_lvl(np.copy(sfc_dp), sfc_p_3d, 925)
 		dp850 = get_var_p_lvl(np.copy(sfc_dp), sfc_p_3d, 850)
+		dp700 = get_var_p_lvl(np.copy(sfc_dp), sfc_p_3d, 700)
+		dp600 = get_var_p_lvl(np.copy(sfc_dp), sfc_p_3d, 600)
+		rh900 = get_var_p_lvl(np.copy(sfc_hur), sfc_p_3d, 900)
+		rh850 = get_var_p_lvl(np.copy(sfc_hur), sfc_p_3d, 850)
 		v_totals = ta850 - ta500
 		c_totals = dp850 - ta500
 		t_totals = v_totals + c_totals
@@ -561,6 +576,8 @@ def run_diagnostics(ta,hur,hgt,terrain,p,ps,ua,va,uas,vas,tas,ta2d,wg10,lon,lat,
 		dcp = (dcape / 980.) * (mu_cape / 2000.) * ( (s06*1.944) / 20.) * ((Umean06*1.944) / 16.)
 		z = (ebwd * 6.1e-2) + (Umean800_600 * 1.5e-1) + (lr13 * 9.4e-1) + (rhmin13 * 3.9e-2) + (srhe_left.data * 1.7e-2) + (q_melting * 3.8e-1) + (eff_lcl * 4.7e-4) - 1.3e+1
 		bdsd = 1. / ( 1. + np.exp( -z ) )
+
+		inverted_v = (ta850 + ta700) - (ta600 + ta500) + (dp700 + dp600) - (dp925 + dp850)
 	
 		#Fill output
 		if (params == "min") | (params == "full") | (params == "reduced"):
@@ -692,6 +709,19 @@ def run_diagnostics(ta,hur,hgt,terrain,p,ps,ua,va,uas,vas,tas,ta2d,wg10,lon,lat,
 			output = fill_output(output, t, param, ps, "wmpi", wmpi)
 			output = fill_output(output, t, param, ps, "eff_sherb", eff_sherb)
 			output = fill_output(output, t, param, ps, "sherb", sherb)
+
+			output = fill_output(output, t, param, ps, "sfc_ta", tas[t])
+			output = fill_output(output, t, param, ps, "sfc_dp", ta2d[t])
+			output = fill_output(output, t, param, ps, "ta600", ta600)
+			output = fill_output(output, t, param, ps, "ta700", ta700)
+			output = fill_output(output, t, param, ps, "ta800", ta800)
+			output = fill_output(output, t, param, ps, "ta900", ta900)
+			output = fill_output(output, t, param, ps, "ta925", ta925)
+			output = fill_output(output, t, param, ps, "ta950", ta950)
+			output = fill_output(output, t, param, ps, "ta975", ta975)
+			output = fill_output(output, t, param, ps, "rh900", rh900)
+			output = fill_output(output, t, param, ps, "rh850", rh850)
+			output = fill_output(output, t, param, ps, "inverted_v", inverted_v)
 
 		output_data[t] = output
 

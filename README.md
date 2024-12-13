@@ -50,5 +50,8 @@ Output from this example is saved as `read_model_data/data/era5_20160928_2016092
 python example.py
 ```
 
+## Citing
+If you use this code you can cite it using [![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.14433710.svg)](https://doi.org/10.5281/zenodo.14433710)
+
 ## References
 Brown, A., & Dowdy, A., (2021a) Severe convection-related winds in Australia and their associated environments. Journal of Southern Hemisphere Earth Systems Science, -. https://doi.org/10.1071/ES19052

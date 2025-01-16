@@ -51,7 +51,7 @@ python example.py
 ```
 
 ## Citing
-If you use this code you can cite it using [![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.14433710.svg)](https://doi.org/10.5281/zenodo.14433710)
+If you'd like to aknowledge the use of this code in a publication, you can cite it with [![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.14433710.svg)](https://doi.org/10.5281/zenodo.14433710)
 
 ## References
 Brown, A., & Dowdy, A., (2021a) Severe convection-related winds in Australia and their associated environments. Journal of Southern Hemisphere Earth Systems Science, -. https://doi.org/10.1071/ES19052
